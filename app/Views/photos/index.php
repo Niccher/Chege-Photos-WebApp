@@ -2,11 +2,24 @@
 
 <?= $this->section('content') ?>
 
+<?php
+use App\Libraries\SmartAlbumRules;
+
+$smartRulesEdit = null;
+if (isset($album) && ! empty($album['is_smart'])) {
+    $smartRulesEdit = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
+}
+?>
+
 <?php if (isset($title)): ?>
     <div class="mb-4">
         <h2 class="h4 mb-0"><?= esc($title) ?></h2>
         <?php if (isset($subtitle)): ?>
             <p class="text-muted small mb-0"><?= esc($subtitle) ?></p>
+        <?php endif; ?>
+        <?php if (isset($album) && ! empty($album['is_smart'])): ?>
+            <p class="text-white small mb-2 mt-2"><i class="bi bi-stars me-1"></i> Smart album — membership updates automatically when photos match your rules.</p>
+            <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editSmartAlbumModal">Edit rules</button>
         <?php endif; ?>
     </div>
 <?php endif; ?>
@@ -84,6 +97,70 @@
     <div class="d-none">
         <?= $pager->links() ?>
     </div>
+<?php endif; ?>
+
+<?php if ($smartRulesEdit !== null): ?>
+<div class="modal fade" id="editSmartAlbumModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark text-white border-0 shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold">Edit smart album</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formEditSmartAlbum" data-album-id="<?= (int) $album['id'] ?>">
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Name</label>
+                        <input type="text" name="name" class="form-control bg-black border-secondary text-white" value="<?= esc($album['name']) ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Description (optional)</label>
+                        <textarea name="description" class="form-control bg-black border-secondary text-white" rows="2"><?= esc($album['description'] ?? '') ?></textarea>
+                    </div>
+                    <p class="small text-white-50 mb-3">Photos must match <strong>all</strong> of the rules you enable below (dates, camera text, GPS, favorites, and type combine with AND).</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small">Taken on or after</label>
+                            <input type="date" name="date_from" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['date_from'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Taken on or before</label>
+                            <input type="date" name="date_to" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['date_to'] ?? '') ?>">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Camera (matches EXIF text, e.g. Canon or iPhone)</label>
+                            <input type="text" name="camera_contains" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['camera_contains'] ?? '') ?>" placeholder="Leave empty to ignore">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="has_gps" value="1" id="editHasGps" <?= ! empty($smartRulesEdit['has_gps']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="editHasGps">Has GPS location</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="favorite_only" value="1" id="editFavOnly" <?= ! empty($smartRulesEdit['favorite_only']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="editFavOnly">Favorites only</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Media type</label>
+                            <select name="mime_kind" class="form-select bg-black border-secondary text-white">
+                                <?php $mk = $smartRulesEdit['mime_kind'] ?? SmartAlbumRules::MIME_ANY; ?>
+                                <option value="<?= esc(SmartAlbumRules::MIME_ANY) ?>" <?= $mk === SmartAlbumRules::MIME_ANY ? 'selected' : '' ?>>Photos and videos</option>
+                                <option value="<?= esc(SmartAlbumRules::MIME_IMAGE) ?>" <?= $mk === SmartAlbumRules::MIME_IMAGE ? 'selected' : '' ?>>Photos only</option>
+                                <option value="<?= esc(SmartAlbumRules::MIME_VIDEO) ?>" <?= $mk === SmartAlbumRules::MIME_VIDEO ? 'selected' : '' ?>>Videos only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary fw-bold">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <?= $this->endSection() ?>

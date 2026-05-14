@@ -277,6 +277,11 @@ body {
 .crop-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
 .crop-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
 
+/* Sidebar: albums dropdown — fixed positioning + high z-index so it is not clipped by .sidebar overflow or hidden under .main-content */
+#sidebarMenu .sidebar-albums-dropdown.dropdown-menu {
+    z-index: 1070 !important;
+}
+
 #cropOverlay {
     pointer-events: auto;
 }

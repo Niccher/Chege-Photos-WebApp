@@ -53,11 +53,19 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('albums',                 'Photos::albums');
     $routes->get('albums/(:num)',          'Photos::viewAlbum/$1');
     $routes->post('albums/create',         'Photos::createAlbum');
+    $routes->post('albums/update-smart/(:num)', 'Photos::updateSmartAlbum/$1');
     $routes->post('albums/add-photo',      'Photos::addPhotoToAlbum');
     $routes->post('photos/favorite/(:num)','Photos::toggleFavorite/$1');
     $routes->post('bulk-action', 'Photos::bulkAction');
 
     $routes->get('users/search',           'Photos::searchUsers');
+
+    $routes->get('settings', 'Settings::index');
+    $routes->post('settings/profile', 'Settings::updateProfile');
+    $routes->post('settings/avatar', 'Settings::updateAvatar');
+    $routes->post('settings/avatar/remove', 'Settings::removeAvatar');
+    $routes->post('settings/password', 'Settings::updatePassword');
+    $routes->post('settings/theme', 'Settings::updateTheme');
 });
 
 // Public Sharing Routes

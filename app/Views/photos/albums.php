@@ -1,7 +1,5 @@
 <?php
-/**
- * Albums List View
- */
+use App\Libraries\SmartAlbumRules;
 ?>
 <?= $this->extend('layouts/main') ?>
 
@@ -40,7 +38,12 @@
                         </div>
                         <div class="card-body p-3">
                             <h6 class="text-white mb-1 text-truncate"><?= esc($album['name']) ?></h6>
-                            <span class="text-white small"><?= $album['count'] ?> items</span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <?php if (! empty($album['is_smart'])): ?>
+                                    <span class="badge bg-info text-dark">Smart</span>
+                                <?php endif; ?>
+                                <span class="text-white small"><?= (int) $album['count'] ?> items</span>
+                            </div>
                         </div>
                     </div>
                 </a>
@@ -60,12 +63,56 @@
             <div class="modal-body p-4">
                 <form id="formCreateAlbum">
                     <div class="mb-3">
+                        <label class="form-label small text-white text-uppercase fw-bold">Album type</label>
+                        <select name="album_type" id="createAlbumType" class="form-select bg-black border-secondary text-white">
+                            <option value="standard">Standard — you choose photos</option>
+                            <option value="smart">Smart — photos match rules</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label small text-white text-uppercase fw-bold">Album Name</label>
                         <input type="text" name="name" class="form-control bg-black border-secondary text-white p-2" placeholder="e.g. Summer Trip 2025" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small text-white text-uppercase fw-bold">Description (Optional)</label>
                         <textarea name="description" class="form-control bg-black border-secondary text-white p-2" rows="3"></textarea>
+                    </div>
+                    <div id="createSmartRuleFields" class="d-none border border-secondary rounded p-3 mb-3">
+                        <p class="small text-white-50 mb-3">Choose at least one rule. All enabled rules apply together (AND).</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small">Taken on or after</label>
+                                <input type="date" name="date_from" class="form-control bg-black border-secondary text-white">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Taken on or before</label>
+                                <input type="date" name="date_to" class="form-control bg-black border-secondary text-white">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Camera (matches EXIF, e.g. Canon or iPhone)</label>
+                                <input type="text" name="camera_contains" class="form-control bg-black border-secondary text-white" placeholder="Optional substring">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="has_gps" value="1" id="createHasGps">
+                                    <label class="form-check-label" for="createHasGps">Has GPS location</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="favorite_only" value="1" id="createFavOnly">
+                                    <label class="form-check-label" for="createFavOnly">Favorites only</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Media type</label>
+                                <select name="mime_kind" class="form-select bg-black border-secondary text-white">
+                                    <option value="<?= esc(SmartAlbumRules::MIME_ANY) ?>">Photos and videos</option>
+                                    <option value="<?= esc(SmartAlbumRules::MIME_IMAGE) ?>">Photos only</option>
+                                    <option value="<?= esc(SmartAlbumRules::MIME_VIDEO) ?>">Videos only</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="d-grid mt-4">
                         <button type="submit" class="btn btn-primary p-2 fw-bold">Create Album</button>
@@ -91,5 +138,18 @@
     transform: scale(1.05);
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var type = document.getElementById('createAlbumType');
+    var fields = document.getElementById('createSmartRuleFields');
+    if (!type || !fields) return;
+    function sync() {
+        fields.classList.toggle('d-none', type.value !== 'smart');
+    }
+    type.addEventListener('change', sync);
+    sync();
+});
+</script>
 
 <?= $this->endSection() ?>

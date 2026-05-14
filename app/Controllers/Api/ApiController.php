@@ -80,23 +80,37 @@ class ApiController extends BaseController
         try {
             $userId = auth()->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return $this->response->setJSON(['status' => 'error', 'message' => 'User not authenticated'])->setStatusCode(401);
             }
 
-            $db = \Config\Database::connect();
-            $photos = $db->table('album_photos')
-                         ->select('photos.*')
-                         ->join('photos', 'photos.id = album_photos.photo_id')
-                         ->where('album_photos.album_id', $albumId)
-                         ->where('photos.user_id', $userId)
-                         ->where('photos.is_archived', false)
-                         ->orderBy('photos.taken_at', 'DESC')
-                         ->get()->getResultArray();
+            $albumModel = new \App\Models\AlbumModel();
+            $album      = $albumModel->where('user_id', $userId)->find($albumId);
+            if (! $album) {
+                return $this->response->setJSON(['status' => 'error', 'message' => 'Album not found'])->setStatusCode(404);
+            }
+
+            if (! empty($album['is_smart'])) {
+                $rules      = \App\Libraries\SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
+                $photoModel = new \App\Models\PhotoModel();
+                $photoModel->where('user_id', $userId);
+                \App\Libraries\SmartAlbumRules::apply($photoModel, $rules);
+                $photos = $photoModel->orderBy('taken_at', 'DESC')->findAll();
+            } else {
+                $db     = \Config\Database::connect();
+                $photos = $db->table('album_photos')
+                    ->select('photos.*')
+                    ->join('photos', 'photos.id = album_photos.photo_id')
+                    ->where('album_photos.album_id', $albumId)
+                    ->where('photos.user_id', $userId)
+                    ->where('photos.is_archived', false)
+                    ->orderBy('photos.taken_at', 'DESC')
+                    ->get()->getResultArray();
+            }
 
             return $this->response->setJSON([
                 'status' => 'success',
-                'photos' => $photos
+                'photos' => $photos,
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['status' => 'error', 'message' => $e->getMessage()])->setStatusCode(500);

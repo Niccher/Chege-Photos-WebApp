@@ -407,13 +407,14 @@ $(document).ready(function () {
 
         $.get(BASE_URL + 'albums', { json: 1 }, function (res) {
             if (res.albums) {
-                if (res.albums.length === 0) {
-                    $container.html('<div class="text-center p-3 text-muted small">No albums found. Create one first!</div>');
+                const manual = res.albums.filter(function (a) { return !parseInt(a.is_smart, 10); });
+                if (manual.length === 0) {
+                    $container.html('<div class="text-center p-3 text-muted small">No standard albums yet. Smart albums are filled automatically from rules—create a standard album to add photos manually.</div>');
                     return;
                 }
 
                 let html = '';
-                res.albums.forEach(album => {
+                manual.forEach(album => {
                     html += `<button type="button" class="list-group-item list-group-item-action bg-transparent text-white border-secondary small py-2 btn-confirm-add" data-album-id="${album.id}">${album.name}</button>`;
                 });
                 $container.html(html);
@@ -438,6 +439,25 @@ $(document).ready(function () {
         e.preventDefault();
         $.post(BASE_URL + 'albums/create', $(this).serialize(), function (res) {
             if (res.status === 'success') {
+                location.reload();
+            } else {
+                showToast(res.message, 'danger');
+            }
+        });
+    });
+
+    $(document).on('submit', '#formEditSmartAlbum', function (e) {
+        e.preventDefault();
+        const $form = $(this);
+        const id = $form.data('album-id');
+        $.post(BASE_URL + 'albums/update-smart/' + id, $form.serialize(), function (res) {
+            if (res.status === 'success') {
+                const el = document.getElementById('editSmartAlbumModal');
+                if (el) {
+                    const inst = bootstrap.Modal.getInstance(el);
+                    if (inst) inst.hide();
+                }
+                showToast('Smart album saved', 'success');
                 location.reload();
             } else {
                 showToast(res.message, 'danger');
@@ -771,13 +791,14 @@ $(document).ready(function () {
 
         $.get(BASE_URL + 'albums', { json: 1 }, function (res) {
             if (res.albums) {
-                if (res.albums.length === 0) {
-                    $container.html('<div class="text-center p-3 text-muted small">No albums found.</div>');
+                const manual = res.albums.filter(function (a) { return !parseInt(a.is_smart, 10); });
+                if (manual.length === 0) {
+                    $container.html('<div class="text-center p-3 text-muted small">No standard albums. Create a standard album to add photos manually.</div>');
                     return;
                 }
 
                 let html = '';
-                res.albums.forEach(album => {
+                manual.forEach(album => {
                     html += `<button type="button" class="list-group-item list-group-item-action bg-transparent text-white border-secondary small py-2 btn-confirm-bulk-add" data-album-id="${album.id}">${album.name}</button>`;
                 });
                 $container.html(html);
@@ -794,6 +815,8 @@ $(document).ready(function () {
         }, function (res) {
             if (res.status === 'success') {
                 location.reload();
+            } else {
+                showToast(res.message || 'Could not add to album', 'danger');
             }
         });
     });
@@ -842,7 +865,12 @@ $(document).ready(function () {
         e.preventDefault();
         const $this = $(this);
         $this.removeClass('bg-primary text-white rounded');
-        
+
+        if ($this.attr('data-is-smart') === '1') {
+            showToast('Smart albums follow rules automatically. Use a standard album to add photos by drag and drop.', 'warning');
+            return;
+        }
+
         const photoId = e.originalEvent.dataTransfer.getData('text/plain');
         const albumId = $this.data('album-id');
 

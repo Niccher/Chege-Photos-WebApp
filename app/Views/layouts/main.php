@@ -260,19 +260,31 @@
                 <i class="bi bi-cloud-upload"></i> <span class="d-none d-md-inline">Upload</span>
             </button>
             <?php if (auth()->loggedIn()): ?>
+            <?php $navUser = auth()->user(); $navAvatar = $navUser->avatar ?? null; ?>
             <div class="dropdown">
                 <button class="btn btn-link p-0 d-flex align-items-center text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+                    <?php if ($navAvatar && is_string($navAvatar) && str_starts_with($navAvatar, 'uploads/')): ?>
+                        <img src="<?= base_url($navAvatar) ?>" alt="" class="rounded-circle border border-secondary border-opacity-25" width="34" height="34" style="object-fit:cover;">
+                    <?php else: ?>
                     <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
                          style="width:34px;height:34px;background:linear-gradient(135deg,#4285f4,#00c6ff);font-size:0.85rem;cursor:pointer;">
-                        <?= strtoupper(substr(auth()->user()->username ?? auth()->user()->email, 0, 1)) ?>
+                        <?= strtoupper(substr(($navUser->username ?? $navUser->email ?? 'U'), 0, 1)) ?>
                     </div>
+                    <?php endif; ?>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width:200px;">
                     <li class="px-3 py-2">
-                        <div class="fw-semibold" style="font-size:0.9rem;"><?= esc(auth()->user()->username ?? '') ?></div>
-                        <div class="text-muted" style="font-size:0.78rem;"><?= esc(auth()->user()->email) ?></div>
+                        <div class="fw-semibold" style="font-size:0.9rem;"><?= esc($navUser->name ?: ($navUser->username ?? '')) ?></div>
+                        <div class="text-muted" style="font-size:0.78rem;"><?= esc($navUser->username ?? '') ?></div>
+                        <div class="text-muted" style="font-size:0.72rem;"><?= esc($navUser->email) ?></div>
                     </li>
                     <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2" href="<?= base_url('settings') ?>">
+                            <i class="bi bi-gear"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
                     <li>
                         <a class="dropdown-item d-flex align-items-center gap-2" href="<?= url_to('logout') ?>">
                             <i class="bi bi-box-arrow-right text-danger"></i>
@@ -315,26 +327,50 @@
                     </a>
                 </li>
 
-                <!-- ALBUMS SECTION -->
-                <li class="sidebar-section-title">Albums</li>
-                <li class="nav-item">
-                    <a class="nav-link <?= (url_is('albums')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('albums') ?>">
-                        <span><i class="bi bi-journal-album"></i> All Albums</span>
-                        <span class="badge rounded-pill bg-light text-dark opacity-75 small fw-normal"><?= $counts['albums'] ?? 0 ?></span>
+                <!-- ALBUMS (dropdown; fixed Popper strategy escapes sidebar overflow clipping) -->
+                <li class="nav-item dropdown dropend">
+                    <a class="nav-link dropdown-toggle d-flex justify-content-between align-items-center gap-2 <?= str_starts_with((string) (uri_string() ?: ''), 'albums') ? 'active' : '' ?>"
+                       href="#"
+                       id="sidebarAlbumsDropdown"
+                       role="button"
+                       data-bs-toggle="dropdown"
+                       data-bs-auto-close="true"
+                       aria-expanded="false"
+                       aria-haspopup="true"
+                       aria-controls="sidebarAlbumsMenu">
+                        <span class="text-truncate"><i class="bi bi-journal-album me-2"></i>Albums</span>
+                        <span class="badge rounded-pill bg-light text-dark opacity-75 small fw-normal flex-shrink-0"><?= $counts['albums'] ?? 0 ?></span>
                     </a>
-                </li>
-                <?php if (!empty($counts['recent_albums'])): ?>
-                    <?php foreach ($counts['recent_albums'] as $album): ?>
-                        <li class="nav-item">
-                            <a class="nav-link py-2 ps-5 album-dropzone" href="<?= base_url('albums/'.$album['id']) ?>" data-album-id="<?= $album['id'] ?>">
-                                <i class="bi bi-folder me-2" style="font-size: 1rem; opacity: 0.6;"></i> <?= esc($album['name']) ?>
+                    <ul class="dropdown-menu dropdown-menu-dark shadow border border-secondary py-1 sidebar-albums-dropdown" id="sidebarAlbumsMenu" aria-labelledby="sidebarAlbumsDropdown" style="min-width: 240px; max-height: min(70vh, 360px); overflow-y: auto;">
+                        <li>
+                            <a class="dropdown-item rounded-1 <?= (uri_string() === 'albums') ? 'active' : '' ?>" href="<?= base_url('albums') ?>">
+                                <i class="bi bi-grid-3x3-gap me-2 opacity-75"></i>All albums
                             </a>
                         </li>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                        <?php if (! empty($counts['sidebar_albums'])): ?>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <?php foreach ($counts['sidebar_albums'] as $album): ?>
+                                <li>
+                                    <a class="dropdown-item rounded-1 album-dropzone text-truncate <?= (uri_string() === 'albums/' . (int) $album['id']) ? 'active' : '' ?>"
+                                       href="<?= base_url('albums/' . $album['id']) ?>"
+                                       data-album-id="<?= $album['id'] ?>"
+                                       data-is-smart="<?= ! empty($album['is_smart']) ? '1' : '0' ?>"
+                                       title="<?= esc($album['name']) ?>">
+                                        <i class="bi <?= ! empty($album['is_smart']) ? 'bi-stars' : 'bi-folder' ?> me-2 flex-shrink-0"></i><?= esc($album['name']) ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </li>
 
                 <!-- TOOLS SECTION -->
                 <li class="sidebar-section-title">Tools</li>
+                <li class="nav-item">
+                    <a class="nav-link <?= (uri_string() === 'settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
+                        <span><i class="bi bi-gear"></i> Settings</span>
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link <?= (url_is('sharing')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('sharing') ?>">
                         <span><i class="bi bi-share"></i> Sharing</span>
@@ -625,6 +661,19 @@
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 Bundle JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('sidebarAlbumsDropdown');
+        if (!el || typeof bootstrap === 'undefined' || !bootstrap.Dropdown) return;
+        var existing = bootstrap.Dropdown.getInstance(el);
+        if (existing) existing.dispose();
+        new bootstrap.Dropdown(el, {
+            popperConfig: { strategy: 'fixed' }
+        });
+    });
+})();
+</script>
 <!-- Dropzone JS -->
 <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
 <script>
@@ -632,5 +681,6 @@
 </script>
 <!-- Custom JS -->
 <script src="<?= base_url('js/app.js') ?>"></script>
+<?= $this->renderSection('scripts') ?>
 </body>
 </html>

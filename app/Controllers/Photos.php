@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Libraries\SmartAlbumRules;
 use CodeIgniter\HTTP\ResponseInterface;
 
 class Photos extends BaseController
@@ -81,16 +82,6 @@ class Photos extends BaseController
         ];
 
         return view('photos/explore', $data);
-    }
-
-    private function formatBytes($bytes, $precision = 2)
-    {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-        $pow = min($pow, count($units) - 1);
-        $bytes /= pow(1024, $pow);
-        return round($bytes, $precision) . ' ' . $units[$pow];
     }
 
     public function scan()
@@ -500,12 +491,21 @@ class Photos extends BaseController
         $album = $albumModel->where('user_id', auth()->id())->find($id);
         if (!$album) throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
 
-        // Convert to builder for pagination
         $photoModel = new \App\Models\PhotoModel();
-        $query = $photoModel->select('photos.*, album_photos.added_at as album_added_at')
-                            ->join('album_photos', 'album_photos.photo_id = photos.id')
-                            ->where('album_photos.album_id', $id)
-                            ->orderBy('album_photos.added_at', 'DESC');
+        $userId = auth()->id();
+
+        if (! empty($album['is_smart'])) {
+            $rules = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
+            $photoModel->where('user_id', $userId);
+            SmartAlbumRules::apply($photoModel, $rules);
+            $query = $photoModel->select('photos.*')
+                ->orderBy('taken_at', 'DESC');
+        } else {
+            $query = $photoModel->select('photos.*, album_photos.added_at as album_added_at')
+                ->join('album_photos', 'album_photos.photo_id = photos.id')
+                ->where('album_photos.album_id', $id)
+                ->orderBy('album_photos.added_at', 'DESC');
+        }
 
         $data = [
             'title'    => $album['name'],
@@ -513,40 +513,111 @@ class Photos extends BaseController
             'album'    => $album,
             'photos'   => $query->paginate(100),
             'pager'    => $photoModel->pager,
-            'counts'   => $this->getSidebarCounts()
+            'counts'   => $this->getSidebarCounts(),
         ];
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'photos'  => $data['photos'],
+                'hasMore' => $photoModel->pager->hasMore(),
+            ]);
+        }
+
         return view('photos/index', $data); // Reuse gallery grid
     }
 
     public function createAlbum()
     {
         $userId = auth()->id();
-        if (!$userId) return $this->response->setJSON(['status' => 'error', 'message' => 'Not authenticated']);
+        if (! $userId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Not authenticated']);
+        }
 
         $albumModel = new \App\Models\AlbumModel();
         $name = $this->request->getPost('name');
-        if (empty($name)) return $this->response->setJSON(['status' => 'error', 'message' => 'Name is required']);
+        if (empty($name)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Name is required']);
+        }
+
+        $isSmart = $this->request->getPost('album_type') === 'smart';
 
         $data = [
             'user_id'     => $userId,
             'name'        => $name,
-            'description' => $this->request->getPost('description')
+            'description' => $this->request->getPost('description'),
+            'is_smart'    => $isSmart ? 1 : 0,
+            'smart_rules' => null,
         ];
 
+        if ($isSmart) {
+            $rules = $this->smartRulesFromRequest();
+            $err   = SmartAlbumRules::validateForSave($rules);
+            if ($err !== null) {
+                return $this->response->setJSON(['status' => 'error', 'message' => $err]);
+            }
+            $data['smart_rules'] = json_encode($rules);
+        }
+
         if ($albumModel->insert($data)) {
+            $this->clearSidebarCountsCache($userId);
+
             return $this->response->setJSON(['status' => 'success', 'id' => $albumModel->getInsertID()]);
         }
-        
+
         return $this->response->setJSON(['status' => 'error', 'message' => 'Failed to create album: ' . print_r($albumModel->errors(), true)]);
+    }
+
+    public function updateSmartAlbum($id)
+    {
+        $userId = auth()->id();
+        if (! $userId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Not authenticated']);
+        }
+
+        $albumModel = new \App\Models\AlbumModel();
+        $album      = $albumModel->where('user_id', $userId)->find($id);
+        if (! $album || empty($album['is_smart'])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Album not found or not a smart album']);
+        }
+
+        $name = $this->request->getPost('name');
+        if (empty($name)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Name is required']);
+        }
+
+        $rules = $this->smartRulesFromRequest();
+        $err   = SmartAlbumRules::validateForSave($rules);
+        if ($err !== null) {
+            return $this->response->setJSON(['status' => 'error', 'message' => $err]);
+        }
+
+        $albumModel->update($id, [
+            'name'        => $name,
+            'description' => $this->request->getPost('description'),
+            'smart_rules' => json_encode($rules),
+        ]);
+
+        $this->clearSidebarCountsCache($userId);
+
+        return $this->response->setJSON(['status' => 'success']);
     }
 
     public function addPhotoToAlbum()
     {
         $db = \Config\Database::connect();
         $builder = $db->table('album_photos');
-        
+
         $albumId = $this->request->getPost('album_id');
         $photoId = $this->request->getPost('photo_id');
+
+        $albumModel = new \App\Models\AlbumModel();
+        $album      = $albumModel->where('user_id', auth()->id())->find($albumId);
+        if (! $album) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Album not found']);
+        }
+        if (! empty($album['is_smart'])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Smart albums follow rules automatically; you cannot add photos manually.']);
+        }
 
         // Check if already in album
         $exists = $builder->where(['album_id' => $albumId, 'photo_id' => $photoId])->get()->getRow();
@@ -561,6 +632,18 @@ class Photos extends BaseController
         return $this->response->setJSON(['status' => 'success']);
     }
 
+    private function smartRulesFromRequest(): array
+    {
+        return SmartAlbumRules::fromArray([
+            'date_from'       => $this->request->getPost('date_from'),
+            'date_to'         => $this->request->getPost('date_to'),
+            'camera_contains' => $this->request->getPost('camera_contains'),
+            'has_gps'         => $this->request->getPost('has_gps'),
+            'favorite_only'   => $this->request->getPost('favorite_only'),
+            'mime_kind'       => $this->request->getPost('mime_kind'),
+        ]);
+    }
+
     public function toggleFavorite($id)
     {
         $photoModel = new \App\Models\PhotoModel();
@@ -571,63 +654,6 @@ class Photos extends BaseController
         $photoModel->update($id, ['is_favorite' => $newVal]);
 
         return $this->response->setJSON(['status' => 'success', 'is_favorite' => $newVal]);
-    }
-
-    private function getSidebarCounts()
-    {
-        $userId = auth()->id();
-        $cacheKey = "sidebar_counts_{$userId}";
-        
-        if ($counts = cache($cacheKey)) {
-            return $counts;
-        }
-
-        $photoModel = new \App\Models\PhotoModel();
-        $linkModel = new \App\Models\SharedLinkModel();
-        $shareModel = new \App\Models\PhotoShareModel();
-
-        $photosCount = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
-        $exploreCount = $photoModel->where('user_id', $userId)->where('is_archived', false)
-                                   ->where('latitude IS NOT NULL')->where('longitude IS NOT NULL')->countAllResults();
-        
-        // Sharing count: Public links by me + Internal shares with me
-        $publicLinkCount = $linkModel->join('photos', 'photos.id = shared_links.photo_id')
-                                     ->where('photos.user_id', $userId)->countAllResults();
-        $sharedWithMeCount = $shareModel->where('shared_with', $userId)->countAllResults();
-        
-        $archiveCount = $photoModel->where('user_id', $userId)->where('is_archived', true)->countAllResults();
-        $trashCount = $photoModel->where('user_id', $userId)->onlyDeleted()->countAllResults();
-        $favoritesCount = $photoModel->where('user_id', $userId)->where('is_favorite', true)->where('is_archived', false)->countAllResults();
-        
-        // Memories count: Photos taken on this day in past years or exactly 6 months ago
-        $today = date('m-d');
-        $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
-        
-        $memoriesCount = $photoModel->where('user_id', $userId)
-                                    ->where('is_archived', false)
-                                    ->groupStart()
-                                        ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
-                                        ->orWhere("DATE(taken_at) =", $sixMonthsAgo)
-                                    ->groupEnd()
-                                    ->countAllResults();
-        
-        $albumModel = new \App\Models\AlbumModel();
-        $albumsCount = $albumModel->where('user_id', $userId)->countAllResults();
-
-        return [
-            'photos'    => $photosCount,
-            'explore'   => $exploreCount,
-            'sharing'   => $publicLinkCount + $sharedWithMeCount,
-            'favorites' => $favoritesCount,
-            'albums'    => $albumsCount,
-            'memories'  => $memoriesCount,
-            'archive'   => $archiveCount,
-            'trash'     => $trashCount,
-            'recent_albums' => $albumModel->where('user_id', $userId)->orderBy('id', 'DESC')->limit(5)->findAll()
-        ];
-
-        cache()->save($cacheKey, $counts, 300); // 5 minutes
-        return $counts;
     }
 
     public function archivePhoto($id)
@@ -713,8 +739,18 @@ class Photos extends BaseController
                 break;
             case 'add_to_album':
                 $albumId = $this->request->getPost('album_id');
-                if (!$albumId) return $this->response->setJSON(['status' => 'error', 'message' => 'Album ID required']);
-                
+                if (! $albumId) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'Album ID required']);
+                }
+                $albumModel = new \App\Models\AlbumModel();
+                $album      = $albumModel->where('user_id', $userId)->find($albumId);
+                if (! $album) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'Album not found']);
+                }
+                if (! empty($album['is_smart'])) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'Smart albums follow rules automatically; you cannot add photos manually.']);
+                }
+
                 $builder = $db->table('album_photos');
                 foreach ($photoIds as $id) {
                     $exists = $builder->where(['album_id' => $albumId, 'photo_id' => $id])->get()->getRow();
