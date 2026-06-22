@@ -1,55 +1,20 @@
+version: '3.8'
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: photos-app
-    restart: always
+  webapp:
+    build: .
+    container_name: photos-webapp
     ports:
-      - "8080:80"
-    environment:
-      - CI_ENVIRONMENT=${CI_ENVIRONMENT:-production}
-      - database.default.hostname=db
-      - database.default.database=${DB_NAME}
-      - database.default.username=${DB_USER}
-      - database.default.password=${DB_PASSWORD}
-      - database.default.DBDriver=MySQLi
-    depends_on:
-      - db
-    networks:
-      - app-network
-
-  db:
-    image: mysql:8.0
-    container_name: photos-db
-    restart: always
-    environment:
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      - "9005:80"
     volumes:
-      - db-data:/var/lib/mysql
-    networks:
-      - app-network
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: photos-phpmyadmin
-    restart: always
-    ports:
-      - "8081:80"
+      - .:/var/www/html
+      - /var/www/html/writable
     environment:
-      PMA_HOST: db
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-    depends_on:
-      - db
+      - CI_ENVIRONMENT=development
     networks:
-      - app-network
+      - shared-network
 
 networks:
-  app-network:
-    driver: bridge
-
-volumes:
-  db-data:
+  shared-network:
+    name: hosts-shared-network
+    external: true
