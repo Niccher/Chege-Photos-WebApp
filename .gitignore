@@ -25,3 +25,9 @@
 *.bak
 .DS_Store
 Thumbs.db
+
+# Ignore writable logs and debugbar
+writable/logs/*
+!writable/logs/index.html
+writable/debugbar/*
+!writable/debugbar/index.html

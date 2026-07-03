@@ -71,12 +71,6 @@
             margin-right: 1.5rem;
             font-size: 1.25rem;
         }
-        .sidebar .nav-link.active {
-            color: #1a73e8;
-            background-color: #e8f0fe;
-            border-radius: 0 25px 25px 0;
-            margin-right: 1rem;
-        }
         .main-content {
             margin-left: 280px;
             padding: 2rem;
@@ -140,31 +134,158 @@
             transition: all 0.2s ease;
         }
 
-        .sidebar .nav-link:hover {
+        .sidebar .nav-link:not(.active):hover {
             background-color: var(--border-color);
             color: var(--accent-color);
         }
 
+        /* Selected item — clearly stronger than muted row tints */
         .sidebar .nav-link.active {
-            background-color: #e8f0fe;
-            color: #1967d2;
+            margin-right: 0.5rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            color: #0d4f4a;
+            background: linear-gradient(90deg, #0d9488 5px, rgba(13, 148, 136, 0.28) 5px, rgba(13, 148, 136, 0.16));
+            box-shadow:
+                inset 0 0 0 1px rgba(13, 148, 136, 0.45),
+                2px 0 12px rgba(13, 148, 136, 0.12);
+        }
+
+        .sidebar .nav-link.active:hover {
+            color: #0a3d39;
+            background: linear-gradient(90deg, #0f766e 5px, rgba(15, 118, 110, 0.32) 5px, rgba(15, 118, 110, 0.18));
+            box-shadow:
+                inset 0 0 0 1px rgba(13, 148, 136, 0.55),
+                2px 0 14px rgba(13, 148, 136, 0.16);
         }
 
         @media (prefers-color-scheme: dark) {
             .sidebar .nav-link.active {
-                background-color: rgba(66, 133, 244, 0.1);
-                color: #8ab4f8;
+                color: #ccfbf1;
+                background: linear-gradient(90deg, #14b8a6 5px, rgba(20, 184, 166, 0.22) 5px, rgba(20, 184, 166, 0.12));
+                box-shadow:
+                    inset 0 0 0 1px rgba(45, 212, 191, 0.5),
+                    2px 0 14px rgba(20, 184, 166, 0.18);
+            }
+            .sidebar .nav-link.active:hover {
+                color: #f0fdfa;
+                background: linear-gradient(90deg, #2dd4bf 5px, rgba(45, 212, 191, 0.26) 5px, rgba(45, 212, 191, 0.14));
             }
         }
 
-        .sidebar .nav-link i {
-            margin-right: 1rem;
-            font-size: 1.25rem;
-            opacity: 0.7;
+        html[data-theme="dark"] .sidebar .nav-link.active,
+        html[data-theme="grey"] .sidebar .nav-link.active {
+            color: #ccfbf1;
+            background: linear-gradient(90deg, #14b8a6 5px, rgba(20, 184, 166, 0.22) 5px, rgba(20, 184, 166, 0.12));
+            box-shadow:
+                inset 0 0 0 1px rgba(45, 212, 191, 0.5),
+                2px 0 14px rgba(20, 184, 166, 0.18);
+        }
+
+        html[data-theme="dark"] .sidebar .nav-link.active:hover,
+        html[data-theme="grey"] .sidebar .nav-link.active:hover {
+            color: #f0fdfa;
+            background: linear-gradient(90deg, #2dd4bf 5px, rgba(45, 212, 191, 0.26) 5px, rgba(45, 212, 191, 0.14));
         }
 
         .sidebar .nav-link.active i {
             opacity: 1;
+            color: inherit;
+        }
+
+        /* Count pills — muted tints, readable text (no loud gradients) */
+        .sidebar .sidebar-count {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.22em 0.55em;
+            min-width: 1.65rem;
+            text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: none;
+            background-clip: padding-box;
+        }
+        .sidebar .sidebar-count--photos {
+            background: rgba(14, 165, 233, 0.2);
+            color: #0369a1;
+            border-color: rgba(14, 165, 233, 0.28);
+        }
+        .sidebar .sidebar-count--favorites {
+            background: rgba(244, 114, 182, 0.22);
+            color: #9d174d;
+            border-color: rgba(244, 114, 182, 0.3);
+        }
+        .sidebar .sidebar-count--albums {
+            background: rgba(167, 139, 250, 0.22);
+            color: #5b21b6;
+            border-color: rgba(167, 139, 250, 0.3);
+        }
+        .sidebar .sidebar-count--explore {
+            background: rgba(52, 211, 153, 0.2);
+            color: #047857;
+            border-color: rgba(52, 211, 153, 0.28);
+        }
+        .sidebar .sidebar-count--memories {
+            background: rgba(251, 191, 36, 0.22);
+            color: #92400e;
+            border-color: rgba(251, 191, 36, 0.35);
+        }
+        .sidebar .sidebar-count--sharing {
+            background: rgba(96, 165, 250, 0.22);
+            color: #1d4ed8;
+            border-color: rgba(96, 165, 250, 0.3);
+        }
+        .sidebar .sidebar-count--archive {
+            background: rgba(148, 163, 184, 0.28);
+            color: #334155;
+            border-color: rgba(100, 116, 139, 0.25);
+        }
+        .sidebar .sidebar-count--trash {
+            background: rgba(248, 113, 113, 0.22);
+            color: #991b1b;
+            border-color: rgba(248, 113, 113, 0.32);
+        }
+
+        /* Row hints — very light; selected state reads as the teal bar above */
+        #sidebarMenu .sidebar-nav-tone:not(.active) {
+            border-radius: 0 25px 25px 0;
+        }
+        #sidebarMenu .sidebar-nav-tone--photos:not(.active) { background: rgba(2, 132, 199, 0.04); }
+        #sidebarMenu .sidebar-nav-tone--photos:not(.active):hover { background: rgba(2, 132, 199, 0.08); }
+        #sidebarMenu .sidebar-nav-tone--explore:not(.active) { background: rgba(5, 150, 105, 0.045); }
+        #sidebarMenu .sidebar-nav-tone--explore:not(.active):hover { background: rgba(5, 150, 105, 0.09); }
+        #sidebarMenu .sidebar-nav-tone--favorites:not(.active) { background: rgba(219, 39, 119, 0.045); }
+        #sidebarMenu .sidebar-nav-tone--favorites:not(.active):hover { background: rgba(219, 39, 119, 0.085); }
+        #sidebarMenu .sidebar-nav-tone--memories:not(.active) { background: rgba(147, 51, 234, 0.05); }
+        #sidebarMenu .sidebar-nav-tone--memories:not(.active):hover { background: rgba(147, 51, 234, 0.09); }
+        #sidebarMenu .sidebar-nav-tone--albums:not(.active) { background: rgba(109, 40, 217, 0.045); }
+        #sidebarMenu .sidebar-nav-tone--albums:not(.active):hover { background: rgba(109, 40, 217, 0.085); }
+        #sidebarMenu .sidebar-nav-tone--settings:not(.active) { background: rgba(75, 85, 99, 0.05); }
+        #sidebarMenu .sidebar-nav-tone--settings:not(.active):hover { background: rgba(75, 85, 99, 0.09); }
+        #sidebarMenu .sidebar-nav-tone--sharing:not(.active) { background: rgba(37, 99, 235, 0.045); }
+        #sidebarMenu .sidebar-nav-tone--sharing:not(.active):hover { background: rgba(37, 99, 235, 0.085); }
+        #sidebarMenu .sidebar-nav-tone--analytics:not(.active) { background: rgba(79, 70, 229, 0.045); }
+        #sidebarMenu .sidebar-nav-tone--analytics:not(.active):hover { background: rgba(79, 70, 229, 0.085); }
+        #sidebarMenu .sidebar-nav-tone--archive:not(.active) { background: rgba(217, 119, 6, 0.06); }
+        #sidebarMenu .sidebar-nav-tone--archive:not(.active):hover { background: rgba(217, 119, 6, 0.11); }
+        #sidebarMenu .sidebar-nav-tone--trash:not(.active) { background: rgba(220, 38, 38, 0.055); }
+        #sidebarMenu .sidebar-nav-tone--trash:not(.active):hover { background: rgba(220, 38, 38, 0.1); }
+
+        html[data-theme="dark"] #sidebarMenu .sidebar-nav-tone--photos:not(.active),
+        html[data-theme="grey"] #sidebarMenu .sidebar-nav-tone--photos:not(.active) { background: rgba(56, 189, 248, 0.06); }
+        html[data-theme="dark"] #sidebarMenu .sidebar-nav-tone--trash:not(.active),
+        html[data-theme="grey"] #sidebarMenu .sidebar-nav-tone--trash:not(.active) { background: rgba(248, 113, 113, 0.06); }
+        html[data-theme="dark"] #sidebarMenu .sidebar-nav-tone--archive:not(.active),
+        html[data-theme="grey"] #sidebarMenu .sidebar-nav-tone--archive:not(.active) { background: rgba(251, 191, 36, 0.06); }
+
+        @media (prefers-color-scheme: dark) {
+            .sidebar .sidebar-count {
+                border-color: rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        html[data-theme="dark"] .sidebar .sidebar-count,
+        html[data-theme="grey"] .sidebar .sidebar-count {
+            border-color: rgba(255, 255, 255, 0.1);
         }
 
         .sidebar-section-title {
@@ -305,31 +426,33 @@
                 <!-- LIBRARY SECTION -->
                 <li class="sidebar-section-title">Library</li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('/')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url() ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--photos <?= (url_is('/')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url() ?>">
                         <span><i class="bi bi-image"></i> Photos</span>
-                        <span class="badge rounded-pill bg-light text-dark opacity-75 small fw-normal"><?= $counts['photos'] ?? 0 ?></span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--photos"><?= (int) ($counts['photos'] ?? 0) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('explore')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('explore') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--explore <?= (url_is('explore')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('explore') ?>">
                         <span><i class="bi bi-compass"></i> Explore</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--explore"><?= (int) ($counts['explore'] ?? 0) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('favorites')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('favorites') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--favorites <?= (url_is('favorites')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('favorites') ?>">
                         <span><i class="bi bi-heart"></i> Favorites</span>
-                        <span class="badge rounded-pill bg-light text-dark opacity-75 small fw-normal"><?= $counts['favorites'] ?? 0 ?></span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--favorites"><?= (int) ($counts['favorites'] ?? 0) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('memories')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('memories') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--memories <?= (url_is('memories')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('memories') ?>">
                         <span><i class="bi bi-clock-history"></i> Memories</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--memories"><?= (int) ($counts['memories'] ?? 0) ?></span>
                     </a>
                 </li>
 
                 <!-- ALBUMS (dropdown; fixed Popper strategy escapes sidebar overflow clipping) -->
                 <li class="nav-item dropdown dropend">
-                    <a class="nav-link dropdown-toggle d-flex justify-content-between align-items-center gap-2 <?= str_starts_with((string) (uri_string() ?: ''), 'albums') ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle sidebar-nav-tone sidebar-nav-tone--albums d-flex justify-content-between align-items-center gap-2 <?= str_starts_with((string) (uri_string() ?: ''), 'albums') ? 'active' : '' ?>"
                        href="#"
                        id="sidebarAlbumsDropdown"
                        role="button"
@@ -339,7 +462,7 @@
                        aria-haspopup="true"
                        aria-controls="sidebarAlbumsMenu">
                         <span class="text-truncate"><i class="bi bi-journal-album me-2"></i>Albums</span>
-                        <span class="badge rounded-pill bg-light text-dark opacity-75 small fw-normal flex-shrink-0"><?= $counts['albums'] ?? 0 ?></span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--albums flex-shrink-0"><?= (int) ($counts['albums'] ?? 0) ?></span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark shadow border border-secondary py-1 sidebar-albums-dropdown" id="sidebarAlbumsMenu" aria-labelledby="sidebarAlbumsDropdown" style="min-width: 240px; max-height: min(70vh, 360px); overflow-y: auto;">
                         <li>
@@ -367,28 +490,31 @@
                 <!-- TOOLS SECTION -->
                 <li class="sidebar-section-title">Tools</li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (uri_string() === 'settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
                         <span><i class="bi bi-gear"></i> Settings</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('sharing')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('sharing') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--sharing <?= (url_is('sharing')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('sharing') ?>">
                         <span><i class="bi bi-share"></i> Sharing</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--sharing"><?= (int) ($counts['sharing'] ?? 0) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('analytics')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('analytics') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--analytics <?= (url_is('analytics')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('analytics') ?>">
                         <span><i class="bi bi-bar-chart-line"></i> Analytics</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('archive')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('archive') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--archive <?= (url_is('archive')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('archive') ?>">
                         <span><i class="bi bi-archive"></i> Archive</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--archive"><?= (int) ($counts['archive'] ?? 0) ?></span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?= (url_is('trash')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('trash') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--trash <?= (url_is('trash')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('trash') ?>">
                         <span><i class="bi bi-trash"></i> Trash</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--trash"><?= (int) ($counts['trash'] ?? 0) ?></span>
                     </a>
                 </li>
             </ul>

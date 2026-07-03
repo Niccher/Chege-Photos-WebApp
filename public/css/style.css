@@ -282,6 +282,26 @@ body {
     z-index: 1070 !important;
 }
 
+/* Settings: email is display-only (disabled) but keep normal contrast */
+.settings-email-static:disabled,
+.settings-email-static[readonly] {
+    opacity: 1;
+    cursor: not-allowed;
+    background-color: var(--card-bg, #f1f3f4) !important;
+    color: var(--text-primary, #3c4043) !important;
+    border-style: dashed;
+    -webkit-text-fill-color: var(--text-primary, #3c4043);
+}
+
+html[data-theme="dark"] .settings-email-static:disabled,
+html[data-theme="grey"] .settings-email-static:disabled,
+html[data-theme="dark"] .settings-email-static[readonly],
+html[data-theme="grey"] .settings-email-static[readonly] {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: var(--text-muted, #bdc1c6) !important;
+    -webkit-text-fill-color: var(--text-muted, #bdc1c6);
+}
+
 #cropOverlay {
     pointer-events: auto;
 }

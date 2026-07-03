@@ -1,54 +1,35 @@
-FROM php:8.2-apache
+FROM php:8.3-apache
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     libicu-dev \
-    libpng-dev \
     libzip-dev \
-    libonig-dev \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install PHP extensions
-RUN docker-php-ext-install \
-    intl \
-    gd \
-    mysqli \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
     zip \
-    mbstring \
-    opcache
+    unzip \
+    git \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) intl mysqli pdo_mysql zip gd
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Enable Apache rewrite module
+RUN a2enmod rewrite headers
 
-# Configure Apache DocumentRoot
+# Update Apache configuration for DocumentRoot
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/php/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
-
-# Set production PHP settings
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
-
-# Custom PHP settings (Opcache)
-COPY docker/php/opcache.ini "$PHP_INI_DIR/conf.d/opcache.ini"
-
-# Redirect logs to stderr/stdout
-RUN ln -sf /dev/stdout /var/log/apache2/access.log \
-    && ln -sf /dev/stderr /var/log/apache2/error.log
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy application files
-COPY . .
+# Copy project files
+COPY . /var/www/html
 
-# Ensure www-data ownership
-RUN chown -R www-data:www-data /var/www/html
+# Set permissions for writable directory (create it if not exists)
+RUN mkdir -p /var/www/html/writable \
+    && chown -R www-data:www-data /var/www/html/writable \
+    && chmod -R 775 /var/www/html/writable
 
-# Copy and set up the entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Use the entrypoint script
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["apache2-foreground"]
+EXPOSE 80

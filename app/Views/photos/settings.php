@@ -78,8 +78,8 @@
                                         </div>
                                         <div class="col-md-12">
                                             <label class="form-label small fw-bold">Email</label>
-                                            <input type="email" class="form-control" value="<?= esc($user->email) ?>" readonly tabindex="-1" aria-readonly="true">
-                                            <p class="small text-muted mb-0 mt-1">Your sign-in email cannot be changed here.</p>
+                                            <input type="email" class="form-control settings-email-static" value="<?= esc($user->email) ?>" disabled readonly autocomplete="off" aria-label="Sign-in email (not editable)">
+                                            <p class="small text-muted mb-0 mt-1">This is your sign-in email. It cannot be changed here.</p>
                                         </div>
                                         <div class="col-12 mt-2">
                                             <button type="submit" class="btn btn-primary px-4 rounded-pill">Save profile</button>

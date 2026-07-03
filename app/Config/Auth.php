@@ -209,7 +209,7 @@ class Auth extends ShieldAuth
     public array $sessionConfig = [
         'field'              => 'user',
         'allowRemembering'   => true,
-        'rememberCookieName' => 'remember',
+        'rememberCookieName' => 'photos_remember',
         'rememberLength'     => 30 * DAY,
     ];
 
@@ -516,5 +516,15 @@ class Auth extends ShieldAuth
             route_to($url) !== false                                              => rtrim(url_to($url), '/ '),
             default                                                               => rtrim(site_url($url), '/ '),
         };
+    }
+
+    public function __construct()
+    {
+        parent::__construct();
+        if (filter_var(env("AUTH_SEND_EMAIL_ON_REGISTER", False), FILTER_VALIDATE_BOOLEAN) == False) {
+            $this->actions["register"] = null;
+        } else {
+            $this->actions["register"] = "\\CodeIgniter\\Shield\\Authentication\\Actions\\EmailActivator::class";
+        }
     }
 }
