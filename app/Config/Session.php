@@ -30,7 +30,7 @@ class Session extends BaseConfig
      *
      * The session cookie name, must contain only [0-9a-z_-] characters
      */
-    public string $cookieName = 'photos_session';
+    public string $cookieName = 'chege_photos_session';
 
     /**
      * --------------------------------------------------------------------------

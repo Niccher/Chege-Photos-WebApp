@@ -209,7 +209,7 @@ class Auth extends ShieldAuth
     public array $sessionConfig = [
         'field'              => 'user',
         'allowRemembering'   => true,
-        'rememberCookieName' => 'photos_remember',
+        'rememberCookieName' => 'chege_photos_remember',
         'rememberLength'     => 30 * DAY,
     ];
 

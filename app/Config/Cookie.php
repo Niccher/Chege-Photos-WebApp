@@ -14,7 +14,7 @@ class Cookie extends BaseConfig
      *
      * Set a cookie name prefix if you need to avoid collisions.
      */
-    public string $prefix = 'photos_';
+    public string $prefix = 'chege_photos_';
 
     /**
      * --------------------------------------------------------------------------

@@ -33,7 +33,7 @@ class Security extends BaseConfig
      *
      * Token name for Cross Site Request Forgery protection.
      */
-    public string $tokenName = 'photos_csrf_token';
+    public string $tokenName = 'chege_photos_csrf_token';
 
     /**
      * --------------------------------------------------------------------------
@@ -51,7 +51,7 @@ class Security extends BaseConfig
      *
      * Cookie name for Cross Site Request Forgery protection.
      */
-    public string $cookieName = 'photos_csrf_cookie';
+    public string $cookieName = 'chege_photos_csrf_cookie';
 
     /**
      * --------------------------------------------------------------------------

@@ -1,20 +1,65 @@
 version: '3.8'
 
+# Standalone Docker Compose for Chege Photos WebApp
+# Usage: docker compose up --build -d
+# This will spin up the webapp, MySQL, and phpMyAdmin.
+
 services:
-  webapp:
-    build: .
-    container_name: photos-webapp
+  mysql:
+    image: mysql:8.4
+    container_name: shared-mysql
+    ports:
+      - "9306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: db_chege_photos
+    command: --sql-mode="STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - shared-network
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: shared-phpmyadmin
+    ports:
+      - "9000:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root_password
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shared-network
+
+  chege-photos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chege-photos-webapp:latest
+    container_name: chege-photos-webapp
     ports:
       - "9005:80"
     volumes:
       - .:/var/www/html
-      - /var/www/html/writable
-    environment:
-      - CI_ENVIRONMENT=development
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - shared-network
+
+volumes:
+  mysql-data:
 
 networks:
   shared-network:
     name: hosts-shared-network
-    external: true
