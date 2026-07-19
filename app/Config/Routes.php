@@ -66,6 +66,11 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('settings/avatar/remove', 'Settings::removeAvatar');
     $routes->post('settings/password', 'Settings::updatePassword');
     $routes->post('settings/theme', 'Settings::updateTheme');
+    $routes->post('settings/clear-data', 'Settings::clearData');
+    $routes->post('settings/delete-account', 'Settings::deleteAccount');
+    $routes->post('settings/export', 'Settings::exportData');
+    $routes->get('settings/download-export/(:any)', 'Settings::downloadExport/$1');
+    $routes->post('settings/refresh-metadata', 'Settings::refreshMetadata');
 });
 
 // Public Sharing Routes

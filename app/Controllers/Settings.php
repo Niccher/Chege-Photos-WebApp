@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Models\UserModel;
+use ZipArchive;
 
 class Settings extends BaseController
 {
@@ -58,13 +59,13 @@ class Settings extends BaseController
         ]);
 
         $userModel = new UserModel();
-        if ($userModel->save($user)) {
+        if ($userModel->skipValidation(true)->save($user)) {
             $this->clearSidebarCountsCache($userId);
 
             return $this->response->setJSON(['status' => 'success', 'message' => 'Profile updated successfully.']);
         }
 
-        return $this->response->setJSON(['status' => 'error', 'message' => 'Failed to update profile.']);
+        return $this->response->setJSON(['status' => 'error', 'message' => implode(' ', $userModel->errors())]);
     }
 
     public function updateAvatar()
@@ -105,7 +106,7 @@ class Settings extends BaseController
 
         $user->avatar = $relative;
         $userModel    = new UserModel();
-        if (! $userModel->save($user)) {
+        if (! $userModel->skipValidation(true)->save($user)) {
             @unlink($dir . $newName);
 
             return $this->response->setJSON(['status' => 'error', 'message' => 'Could not save avatar.']);
@@ -142,7 +143,7 @@ class Settings extends BaseController
 
         $user->avatar = null;
         $userModel    = new UserModel();
-        $userModel->save($user);
+        $userModel->skipValidation(true)->save($user);
         $this->clearSidebarCountsCache($userId);
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Avatar removed.']);
@@ -175,7 +176,7 @@ class Settings extends BaseController
         $user->password = $this->request->getPost('new_password');
         $userModel      = new UserModel();
 
-        if ($userModel->save($user)) {
+        if ($userModel->skipValidation(true)->save($user)) {
             return $this->response->setJSON(['status' => 'success', 'message' => 'Password changed successfully.']);
         }
 
@@ -194,6 +195,289 @@ class Settings extends BaseController
         setting()->set('App.theme', $theme, "user:{$userId}");
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Theme updated successfully.']);
+    }
+
+    public function clearData()
+    {
+        $userId  = auth()->id();
+        $confirm = $this->request->getPost('confirm');
+        if ($confirm !== 'CLEAR') {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Please type CLEAR to confirm.']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $photoModel = new \App\Models\PhotoModel();
+
+        // Delete physical files
+        $photos = $photoModel->where('user_id', $userId)->withDeleted()->findAll();
+        foreach ($photos as $photo) {
+            foreach (['path', 'thumbnail_path'] as $field) {
+                if (! empty($photo[$field])) {
+                    $full = FCPATH . ltrim($photo[$field], '/');
+                    if (is_file($full)) @unlink($full);
+                }
+            }
+        }
+
+        // Photo shares where user is shared_by or shared_with
+        $db->table('photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
+
+        // Shared links via user's photos
+        $photoIds = $db->table('photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $ids      = array_column($photoIds, 'id');
+        if (! empty($ids)) {
+            $db->table('shared_links')->whereIn('photo_id', $ids)->delete();
+        }
+
+        // Album photos + albums
+        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $aIds     = array_column($albumIds, 'id');
+        if (! empty($aIds)) {
+            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+        }
+        $db->table('albums')->where('user_id', $userId)->delete();
+
+        // Delete all photos (hard delete)
+        $photoModel->where('user_id', $userId)->purgeDeleted();
+        $db->table('photos')->where('user_id', $userId)->delete();
+
+        // Reset user profile fields
+        $user = auth()->user();
+        $user->fill([
+            'name'       => null,
+            'avatar'     => null,
+            'username'   => 'user_' . $userId,
+        ]);
+        (new UserModel())->skipValidation(true)->save($user);
+
+        $db->transComplete();
+
+        $this->clearSidebarCountsCache($userId);
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'All user data cleared. Your account has been reset.']);
+    }
+
+    public function deleteAccount()
+    {
+        $userId  = auth()->id();
+        $confirm = $this->request->getPost('confirm');
+        if ($confirm !== 'DELETE') {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Please type DELETE to confirm.']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $photoModel = new \App\Models\PhotoModel();
+
+        // Delete physical files
+        $photos = $photoModel->where('user_id', $userId)->withDeleted()->findAll();
+        foreach ($photos as $photo) {
+            foreach (['path', 'thumbnail_path'] as $field) {
+                if (! empty($photo[$field])) {
+                    $full = FCPATH . ltrim($photo[$field], '/');
+                    if (is_file($full)) @unlink($full);
+                }
+            }
+        }
+
+        // Photo shares
+        $db->table('photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
+
+        // Shared links
+        $photoIds = $db->table('photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $ids      = array_column($photoIds, 'id');
+        if (! empty($ids)) {
+            $db->table('shared_links')->whereIn('photo_id', $ids)->delete();
+        }
+
+        // Albums
+        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $aIds     = array_column($albumIds, 'id');
+        if (! empty($aIds)) {
+            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+        }
+        $db->table('albums')->where('user_id', $userId)->delete();
+
+        // Photos
+        $photoModel->where('user_id', $userId)->purgeDeleted();
+        $db->table('photos')->where('user_id', $userId)->delete();
+
+        // Delete avatar file
+        $user = auth()->user();
+        if ($user->avatar && str_starts_with($user->avatar, 'uploads/avatars/')) {
+            $full = FCPATH . $user->avatar;
+            if (is_file($full)) @unlink($full);
+        }
+
+        // Delete user
+        $db->table('users')->where('id', $userId)->delete();
+
+        // Clean up auth tokens, remember-me, etc.
+        $db->table('auth_token_logins')->where('user_id', $userId)->delete();
+        $db->table('auth_identities')->where('user_id', $userId)->delete();
+        $db->table('auth_logins')->where('user_id', $userId)->delete();
+        $db->table('auth_remember_tokens')->where('user_id', $userId)->delete();
+
+        $db->transComplete();
+
+        $this->clearSidebarCountsCache($userId);
+
+        // Log out
+        auth()->logout();
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Account permanently deleted.']);
+    }
+
+    public function refreshMetadata()
+    {
+        $userId    = auth()->id();
+        $photoModel = new \App\Models\PhotoModel();
+
+        $photos = $photoModel->where('user_id', $userId)->findAll();
+        $count  = 0;
+
+        foreach ($photos as $photo) {
+            $fullPath = FCPATH . ltrim($photo['path'], '/');
+            if (! is_file($fullPath)) continue;
+
+            $isVideo = strpos($photo['mime_type'] ?? '', 'video/') === 0;
+            if ($isVideo) continue;
+
+            $metadata = (new \App\Controllers\Photos())->getMergedMetadata($fullPath);
+            if (! $metadata || ! $metadata['exif']) continue;
+
+            $photoModel->update($photo['id'], [
+                'exif_data' => $metadata['exif'],
+                'taken_at'  => $metadata['taken_at'] ?? $photo['taken_at'],
+                'latitude'  => $metadata['lat'] ?? $photo['latitude'],
+                'longitude' => $metadata['lng'] ?? $photo['longitude'],
+            ]);
+            $count++;
+        }
+
+        $this->clearSidebarCountsCache($userId);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Metadata refreshed for {$count} photo(s)."
+        ]);
+    }
+
+    public function exportData()
+    {
+        $userId  = auth()->id();
+        $type    = $this->request->getPost('type') ?? 'all'; // all, images, videos
+        $includeMetadata = (bool) ($this->request->getPost('metadata') ?? true);
+        $includeAlbums   = (bool) ($this->request->getPost('albums') ?? true);
+
+        if (! in_array($type, ['all', 'images', 'videos'], true)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid export type.']);
+        }
+
+        $photoModel = new \App\Models\PhotoModel();
+        $db         = \Config\Database::connect();
+
+        $pQuery = $photoModel->where('user_id', $userId);
+        if ($type === 'images') {
+            $pQuery->where('mime_type NOT LIKE', 'video/%');
+        } elseif ($type === 'videos') {
+            $pQuery->like('mime_type', 'video/');
+        }
+        $photos = $pQuery->findAll();
+
+        if (empty($photos)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'No files match your export criteria.']);
+        }
+
+        $exportDir = WRITEPATH . 'uploads/exports/';
+        if (! is_dir($exportDir)) mkdir($exportDir, 0755, true);
+
+        $token  = bin2hex(random_bytes(16));
+        $zipPath = $exportDir . $token . '.zip';
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE) !== true) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Could not create archive.']);
+        }
+
+        $added = 0;
+        foreach ($photos as $photo) {
+            $fullPath = FCPATH . ltrim($photo['path'], '/');
+            if (! is_file($fullPath)) continue;
+
+            $arcName = $type . '/' . ($photo['filename'] ?? basename($fullPath));
+            $zip->addFile($fullPath, $arcName);
+            $added++;
+        }
+
+        // Include metadata JSON
+        if ($includeMetadata) {
+            $metaPayload = [];
+            foreach ($photos as $p) {
+                $entry = [
+                    'filename'       => $p['filename'],
+                    'path'           => $p['path'],
+                    'mime_type'      => $p['mime_type'],
+                    'size'           => $p['size'],
+                    'width'          => $p['width'],
+                    'height'         => $p['height'],
+                    'taken_at'       => $p['taken_at'],
+                    'latitude'       => $p['latitude'],
+                    'longitude'      => $p['longitude'],
+                    'is_favorite'    => $p['is_favorite'],
+                    'is_archived'    => $p['is_archived'],
+                    'exif_data'      => $p['exif_data'] ? json_decode($p['exif_data'], true) : null,
+                    'file_hash'      => $p['file_hash'],
+                ];
+                $metaPayload[] = $entry;
+            }
+
+            // Include album structure
+            if ($includeAlbums) {
+                $albumModel = new \App\Models\AlbumModel();
+                $albums     = $albumModel->where('user_id', $userId)->findAll();
+                $albumPhotoModel = new \App\Models\AlbumPhotoModel();
+                foreach ($albums as &$album) {
+                    $albumPhotos = $albumPhotoModel->where('album_id', $album['id'])->findAll();
+                    $album['photo_ids'] = array_column($albumPhotos, 'photo_id');
+                }
+                unset($album);
+                $metaPayload['_albums'] = $albums;
+            }
+
+            $zip->addFromString('metadata.json', json_encode($metaPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+
+        $zip->close();
+
+        // Clean up old exports (older than 1 hour)
+        foreach (glob($exportDir . '*.zip') as $oldZip) {
+            if (basename($oldZip) !== $token . '.zip' && filemtime($oldZip) < time() - 3600) {
+                @unlink($oldZip);
+            }
+        }
+
+        $url = base_url('settings/download-export/' . $token);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Archive created with {$added} file(s).",
+            'url'     => $url,
+            'size'    => $this->formatBytes(filesize($zipPath)),
+        ]);
+    }
+
+    public function downloadExport($token)
+    {
+        $file = WRITEPATH . 'uploads/exports/' . basename($token) . '.zip';
+        if (! is_file($file)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound('Export file not found or expired.');
+        }
+
+        return $this->response->download($file, null)->setFileName('chege-photos-export.zip');
     }
 
     public function getSettings()

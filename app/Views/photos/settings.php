@@ -31,6 +31,14 @@
                         <i class="bi bi-cloud-check fs-5"></i>
                         <span>Storage</span>
                     </a>
+                    <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3" id="export-tab" data-bs-toggle="pill" href="#export" role="tab">
+                        <i class="bi bi-download fs-5"></i>
+                        <span>Export Data</span>
+                    </a>
+                    <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3 text-danger" id="danger-tab" data-bs-toggle="pill" href="#danger" role="tab">
+                        <i class="bi bi-exclamation-triangle fs-5"></i>
+                        <span>Danger Zone</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -181,9 +189,188 @@
                                 </div>
                             </div>
                         </div>
+                        <hr class="my-4">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <h6 class="fw-bold mb-1"><i class="bi bi-arrow-repeat me-1"></i>Refresh Metadata</h6>
+                                <p class="text-muted small mb-0">Re-scan all photos to extract the latest EXIF data (GPS, camera info, etc.).</p>
+                            </div>
+                            <button class="btn btn-outline-secondary rounded-pill px-3 flex-shrink-0" id="btnRefreshMetadata">
+                                <i class="bi bi-arrow-repeat me-1"></i> Refresh Now
+                            </button>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Export Data Tab -->
+                <div class="tab-pane fade" id="export" role="tabpanel">
+                    <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
+                        <h5 class="mb-1"><i class="bi bi-download me-2"></i>Export Data</h5>
+                        <p class="text-muted small mb-4">Download your photos, videos, and metadata as a compressed archive.</p>
+
+                        <div class="row g-4">
+                            <div class="col-lg-7">
+                                <div class="p-4 border rounded-3">
+                                    <h6 class="fw-bold mb-3">Select export options</h6>
+
+                                    <div class="mb-4">
+                                        <label class="form-label small fw-bold">Content to export</label>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="exportType" id="exportAll" value="all" checked>
+                                                <label class="form-check-label" for="exportAll">All files</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="exportType" id="exportImages" value="images">
+                                                <label class="form-check-label" for="exportImages">Images only</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="exportType" id="exportVideos" value="videos">
+                                                <label class="form-check-label" for="exportVideos">Videos only</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <label class="form-label small fw-bold">Additional data</label>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="includeMetadata" checked>
+                                                <label class="form-check-label" for="includeMetadata">
+                                                    Include <code>metadata.json</code> <span class="text-muted">(EXIF, GPS, dimensions)</span>
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="includeAlbums" checked>
+                                                <label class="form-check-label" for="includeAlbums">Include album structure</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button class="btn btn-primary rounded-pill px-4" id="btnExport">
+                                        <i class="bi bi-file-zip me-1"></i> <span id="exportBtnText">Create Archive</span>
+                                    </button>
+
+                                    <div id="exportProgress" class="mt-3 d-none">
+                                        <div class="progress rounded-pill" style="height:6px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success rounded-pill" style="width:100%"></div>
+                                        </div>
+                                        <p class="small text-muted mt-2 mb-0" id="exportStatus">Building archive...</p>
+                                    </div>
+
+                                    <div id="exportResult" class="mt-3 d-none">
+                                        <div class="alert alert-success border-0 rounded-3 d-flex align-items-center gap-3 py-2 px-3 mb-0">
+                                            <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+                                            <div class="flex-grow-1">
+                                                <span id="exportResultMessage"></span>
+                                            </div>
+                                            <a href="#" id="exportDownloadLink" class="btn btn-sm btn-success rounded-pill px-3 flex-shrink-0">
+                                                <i class="bi bi-download me-1"></i> Download
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-5">
+                                <div class="p-4 border rounded-3 bg-light bg-opacity-25">
+                                    <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>About exports</h6>
+                                    <ul class="small text-muted mb-0" style="line-height:1.8;">
+                                        <li>Files are compressed into a single <code>.zip</code> archive.</li>
+                                        <li>Original files are <strong>not</strong> modified or deleted.</li>
+                                        <li>Metadata is exported as a separate <code>metadata.json</code> file.</li>
+                                        <li>Export archives are deleted after 1 hour.</li>
+                                        <li>Large exports may take a moment to generate.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danger Zone Tab -->
+                <div class="tab-pane fade" id="danger" role="tabpanel">
+                    <div class="card border-0 shadow-sm rounded-card p-4 border-danger border-opacity-25" style="background: var(--card-bg); color: var(--text-primary);">
+                        <h5 class="mb-1 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Danger Zone</h5>
+                        <p class="text-muted small mb-4">Irreversible actions that affect your account and data.</p>
+
+                        <div class="border rounded-3 p-4 mb-4">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                <div>
+                                    <h6 class="mb-1 fw-bold">Clear All User Data</h6>
+                                    <p class="text-muted small mb-0">Deletes all your photos, albums, and shares. Resets your profile to a blank state — your account stays active.</p>
+                                </div>
+                                <button class="btn btn-outline-danger rounded-pill px-4 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#clearDataModal">
+                                    <i class="bi bi-eraser me-1"></i> Clear Data
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="border border-danger rounded-3 p-4">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                <div>
+                                    <h6 class="mb-1 fw-bold text-danger">Delete Account</h6>
+                                    <p class="text-muted small mb-0">Permanently deletes your account and all associated data. This cannot be undone.</p>
+                                </div>
+                                <button class="btn btn-danger rounded-pill px-4 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+                                    <i class="bi bi-trash3 me-1"></i> Delete Account
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Data Confirmation Modal -->
+<div class="modal fade" id="clearDataModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-danger text-white">
+                <h6 class="modal-title fw-bold"><i class="bi bi-eraser me-2"></i>Clear All Data</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i> This action is irreversible!</p>
+                <p class="text-muted small">This will permanently delete <strong>all your photos, albums, shares, and shared links</strong>. Your account will be reset to a fresh state.</p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Type <span class="text-danger fw-bold">CLEAR</span> to confirm:</label>
+                    <input type="text" id="clearConfirmInput" class="form-control" placeholder="Type CLEAR here">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger rounded-pill px-4" id="btnConfirmClear" disabled>
+                    <i class="bi bi-eraser me-1"></i> Clear Everything
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Account Confirmation Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-danger text-white">
+                <h6 class="modal-title fw-bold"><i class="bi bi-trash3 me-2"></i>Delete Account</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i> This action is irreversible!</p>
+                <p class="text-muted small">This will permanently delete <strong>your account, all your photos, albums, shares, and profile data</strong>. You will be logged out immediately.</p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Type <span class="text-danger fw-bold">DELETE</span> to confirm:</label>
+                    <input type="text" id="deleteConfirmInput" class="form-control" placeholder="Type DELETE here">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger rounded-pill px-4" id="btnConfirmDelete" disabled>
+                    <i class="bi bi-trash3 me-1"></i> Delete My Account
+                </button>
             </div>
         </div>
     </div>
@@ -283,6 +470,106 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 showToast(res.message, 'danger');
             }
+        });
+    });
+
+    // Danger Zone: enable confirm buttons only when the correct text is typed
+    $('#clearConfirmInput').on('input', function () {
+        $('#btnConfirmClear').prop('disabled', $(this).val() !== 'CLEAR');
+    });
+    $('#deleteConfirmInput').on('input', function () {
+        $('#btnConfirmDelete').prop('disabled', $(this).val() !== 'DELETE');
+    });
+
+    // Clear Data
+    $('#btnConfirmClear').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Clearing...');
+        $.post(BASE_URL + 'settings/clear-data', { confirm: 'CLEAR' }, function (res) {
+            if (res.status === 'success') {
+                $('#clearDataModal').modal('hide');
+                showToast(res.message, 'success');
+                setTimeout(function () { location.reload(); }, 1200);
+            } else {
+                showToast(res.message, 'danger');
+                $btn.prop('disabled', false).html('<i class="bi bi-eraser me-1"></i> Clear Everything');
+            }
+        }).fail(function () {
+            showToast('Request failed. Please try again.', 'danger');
+            $btn.prop('disabled', false).html('<i class="bi bi-eraser me-1"></i> Clear Everything');
+        });
+    });
+
+    // Delete Account
+    $('#btnConfirmDelete').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Deleting...');
+        $.post(BASE_URL + 'settings/delete-account', { confirm: 'DELETE' }, function (res) {
+            if (res.status === 'success') {
+                showToast(res.message, 'success');
+                setTimeout(function () { window.location.href = BASE_URL + 'login'; }, 1500);
+            } else {
+                showToast(res.message, 'danger');
+                $btn.prop('disabled', false).html('<i class="bi bi-trash3 me-1"></i> Delete My Account');
+            }
+        }).fail(function () {
+            showToast('Request failed. Please try again.', 'danger');
+            $btn.prop('disabled', false).html('<i class="bi bi-trash3 me-1"></i> Delete My Account');
+        });
+    });
+
+    // Reset modal inputs when hidden
+    $('#clearDataModal, #deleteAccountModal').on('hidden.bs.modal', function () {
+        $(this).find('input[type="text"]').val('');
+        $(this).find('.btn-danger').prop('disabled', true);
+    });
+
+    // Export Data
+    $('#btnExport').on('click', function () {
+        var $btn = $(this);
+        var type = $('input[name="exportType"]:checked').val();
+        var metadata = $('#includeMetadata').is(':checked') ? 1 : 0;
+        var albums = $('#includeAlbums').is(':checked') ? 1 : 0;
+
+        $('#exportProgress').removeClass('d-none');
+        $('#exportResult').addClass('d-none');
+        $('#exportBtnText').text('Building...');
+        $btn.prop('disabled', true);
+
+        $.post(BASE_URL + 'settings/export', {
+            type: type,
+            metadata: metadata,
+            albums: albums
+        }, function (res) {
+            if (res.status === 'success') {
+                $('#exportProgress').addClass('d-none');
+                $('#exportResult').removeClass('d-none');
+                $('#exportResultMessage').text(res.message + ' (' + res.size + ')');
+                $('#exportDownloadLink').attr('href', res.url);
+            } else {
+                $('#exportProgress').addClass('d-none');
+                showToast(res.message, 'danger');
+            }
+        }).fail(function () {
+            $('#exportProgress').addClass('d-none');
+            showToast('Export request failed.', 'danger');
+        }).always(function () {
+            $('#exportBtnText').text('Create Archive');
+            $btn.prop('disabled', false);
+        });
+    });
+
+    // Refresh Metadata
+    $('#btnRefreshMetadata').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Scanning...');
+        $.post(BASE_URL + 'settings/refresh-metadata', function (res) {
+            if (res.status === 'success') {
+                showToast(res.message, 'success');
+            } else {
+                showToast(res.message, 'danger');
+            }
+        }).fail(function () {
+            showToast('Refresh request failed.', 'danger');
+        }).always(function () {
+            $btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i> Refresh Now');
         });
     });
 });

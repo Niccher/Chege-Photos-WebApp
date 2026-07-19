@@ -149,6 +149,7 @@ class Photos extends BaseController
             }
 
             $photoModel->insert($data);
+        $this->clearSidebarCountsCache();
             $count++;
         }
 
@@ -214,6 +215,7 @@ class Photos extends BaseController
             $this->generateThumbnail($fullPath, $thumbnailPath);
         }
         $photoModel->insert($data);
+        $this->clearSidebarCountsCache();
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => $photoModel->getInsertID()]);
     }
@@ -299,48 +301,137 @@ class Photos extends BaseController
     public function analytics()
     {
         $photoModel = new \App\Models\PhotoModel();
+        $albumModel = new \App\Models\AlbumModel();
         $linkModel = new \App\Models\SharedLinkModel();
         $shareModel = new \App\Models\PhotoShareModel();
         $userId = auth()->id();
+        $db = \Config\Database::connect();
 
         // 1. Storage Stats
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
         $totalCount = $photoModel->where('user_id', $userId)->countAllResults();
-        
-        // 2. MIME Type Breakdown
+
+        // 2. Photo vs Video ratio
+        $imageCount = $photoModel->where('user_id', $userId)->where('mime_type NOT LIKE', 'video/%')->countAllResults();
+        $videoCount = $photoModel->where('user_id', $userId)->where('mime_type LIKE', 'video/%')->countAllResults();
+        $imageBytes = $photoModel->where('user_id', $userId)->where('mime_type NOT LIKE', 'video/%')->selectSum('size')->first()['size'] ?? 0;
+        $videoBytes = $photoModel->where('user_id', $userId)->where('mime_type LIKE', 'video/%')->selectSum('size')->first()['size'] ?? 0;
+
+        // 3. Favorites / Archive / Trash
+        $favoritesCount = $photoModel->where('user_id', $userId)->where('is_favorite', true)->countAllResults();
+        $archivedCount  = $photoModel->where('user_id', $userId)->where('is_archived', true)->countAllResults();
+        $trashCount     = $photoModel->where('user_id', $userId)->onlyDeleted()->countAllResults();
+
+        // 4. Albums count
+        $albumCount = $albumModel->where('user_id', $userId)->countAllResults();
+
+        // 5. Date range (oldest / newest photo)
+        $dateRange = $photoModel->where('user_id', $userId)
+            ->select('MIN(taken_at) as oldest, MAX(taken_at) as newest')
+            ->first();
+        $oldestDate = $dateRange['oldest'] ?? null;
+        $newestDate = $dateRange['newest'] ?? null;
+
+        // 6. Average file size
+        $avgSize = $totalCount > 0 ? $totalBytes / $totalCount : 0;
+
+        // 7. MIME Type Breakdown
         $mimeStats = $photoModel->where('user_id', $userId)
             ->select('mime_type, COUNT(*) as count')
             ->groupBy('mime_type')
             ->findAll();
 
-        // 3. Monthly Activity (Current Year)
-        $db = \Config\Database::connect();
+        // 8. Monthly Activity (Current Year)
         $monthlyQuery = $db->table('photos')
             ->select("DATE_FORMAT(taken_at, '%M') as month, COUNT(*) as count, MONTH(taken_at) as month_num")
             ->where('user_id', $userId)
             ->where('YEAR(taken_at)', date('Y'))
+            ->where('taken_at IS NOT NULL')
             ->groupBy('month, month_num')
             ->orderBy('month_num', 'ASC')
             ->get()
             ->getResultArray();
 
-        // 4. Sharing Stats
+        // 9. Hourly activity breakdown
+        $hourlyQuery = $db->table('photos')
+            ->select("HOUR(taken_at) as hour, COUNT(*) as count")
+            ->where('user_id', $userId)
+            ->where('taken_at IS NOT NULL')
+            ->groupBy('hour')
+            ->orderBy('hour', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        // 10. Top camera models from EXIF
+        $cameraQuery = $db->table('photos')
+            ->select("JSON_UNQUOTE(JSON_EXTRACT(exif_data, '$.Model')) as camera, COUNT(*) as count")
+            ->where('user_id', $userId)
+            ->where('exif_data IS NOT NULL')
+            ->where("JSON_EXTRACT(exif_data, '$.Model') IS NOT NULL")
+            ->groupBy('camera')
+            ->orderBy('count', 'DESC')
+            ->limit(10)
+            ->get()
+            ->getResultArray();
+
+        // 11. GPS-tagged count
+        $gpsCount = $photoModel->where('user_id', $userId)
+            ->where('latitude IS NOT NULL')
+            ->where('longitude IS NOT NULL')
+            ->countAllResults();
+
+        // 12. Year-over-year growth
+        $yearlyQuery = $db->table('photos')
+            ->select("YEAR(taken_at) as year, COUNT(*) as count")
+            ->where('user_id', $userId)
+            ->where('taken_at IS NOT NULL')
+            ->groupBy('year')
+            ->orderBy('year', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        // 13. Sharing Stats
         $publicShares = $linkModel->join('photos', 'photos.id = shared_links.photo_id')
                                    ->where('photos.user_id', $userId)->countAllResults();
         $internalShares = $shareModel->where('shared_by', $userId)->countAllResults();
 
+        // 14. Library lifespan in days
+        $lifespanDays = 0;
+        if ($oldestDate && $newestDate) {
+            $old = new \DateTime($oldestDate);
+            $new = new \DateTime($newestDate);
+            $lifespanDays = (int) $old->diff($new)->days;
+        }
+
         $data = [
-            'totalBytes'     => $totalBytes,
-            'totalCount'     => $totalCount,
-            'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
-            'mimeStats'      => $mimeStats,
-            'monthlyQuery'   => $monthlyQuery,
-            'sharingStats'   => [
+            'totalBytes'      => $totalBytes,
+            'totalCount'      => $totalCount,
+            'storageUsed'     => $this->formatBytes($totalBytes),
+            'storagePercent'  => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'imageCount'      => $imageCount,
+            'videoCount'      => $videoCount,
+            'imageBytes'      => $imageBytes,
+            'videoBytes'      => $videoBytes,
+            'favoritesCount'  => $favoritesCount,
+            'archivedCount'   => $archivedCount,
+            'trashCount'      => $trashCount,
+            'albumCount'      => $albumCount,
+            'oldestDate'      => $oldestDate,
+            'newestDate'      => $newestDate,
+            'avgSize'         => $avgSize,
+            'avgSizeFormatted'=> $this->formatBytes($avgSize),
+            'mimeStats'       => $mimeStats,
+            'monthlyQuery'    => $monthlyQuery,
+            'hourlyQuery'     => $hourlyQuery,
+            'cameraStats'     => $cameraQuery,
+            'gpsCount'        => $gpsCount,
+            'yearlyQuery'     => $yearlyQuery,
+            'lifespanDays'    => $lifespanDays,
+            'sharingStats'    => [
                 'public'   => $publicShares,
                 'internal' => $internalShares
             ],
-            'counts'         => $this->getSidebarCounts()
+            'counts'          => $this->getSidebarCounts()
         ];
 
         return view('photos/analytics', $data);
@@ -652,6 +743,7 @@ class Photos extends BaseController
 
         $newVal = !$photo['is_favorite'];
         $photoModel->update($id, ['is_favorite' => $newVal]);
+        $this->clearSidebarCountsCache();
 
         return $this->response->setJSON(['status' => 'success', 'is_favorite' => $newVal]);
     }
@@ -664,6 +756,7 @@ class Photos extends BaseController
         
         $newStatus = !$photo['is_archived'];
         $photoModel->update($id, ['is_archived' => $newStatus]);
+        $this->clearSidebarCountsCache();
         return $this->response->setJSON(['status' => 'success', 'is_archived' => $newStatus]);
     }
 
@@ -676,13 +769,15 @@ class Photos extends BaseController
             if ($photo) {
                 @unlink(FCPATH . $photo['path']);
                 @unlink(FCPATH . $photo['thumbnail_path']);
-                $photoModel->delete($id, true); // purges
+                $photoModel->delete($id, true);
+                $this->clearSidebarCountsCache();
             }
             return $this->response->setJSON(['status' => 'success', 'message' => 'Permanently deleted']);
         }
         
         // Otherwise, soft delete
         $photoModel->delete($id);
+        $this->clearSidebarCountsCache();
         return $this->response->setJSON(['status' => 'success', 'message' => 'Moved to trash']);
     }
 
@@ -693,6 +788,7 @@ class Photos extends BaseController
         // Actually CI4 update doesn't automatically find soft-deleted items unless specifically told to,
         // or we can just set deleted_at to null directly via builder.
         $photoModel->builder()->where('id', $id)->update(['deleted_at' => null]);
+        $this->clearSidebarCountsCache();
         return $this->response->setJSON(['status' => 'success']);
     }
 
@@ -723,19 +819,24 @@ class Photos extends BaseController
         switch ($action) {
             case 'archive':
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->set(['is_archived' => true])->update();
+                $this->clearSidebarCountsCache();
                 break;
             case 'unarchive':
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->set(['is_archived' => false])->update();
+                $this->clearSidebarCountsCache();
                 break;
             case 'favorite':
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->set(['is_favorite' => true])->update();
+                $this->clearSidebarCountsCache();
                 break;
             case 'unfavorite':
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->set(['is_favorite' => false])->update();
+                $this->clearSidebarCountsCache();
                 break;
             case 'delete':
                 // Check if already in trash (soft delete) or permanent
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->delete();
+                $this->clearSidebarCountsCache();
                 break;
             case 'add_to_album':
                 $albumId = $this->request->getPost('album_id');
@@ -780,29 +881,70 @@ class Photos extends BaseController
         ];
 
         try {
-            $exif = @exif_read_data($path);
+            $exif = @exif_read_data($path, 'ANY_TAG', 0, true);
             if (!$exif) return $result;
 
-            // 1. Extract Date
-            if (isset($exif['DateTimeOriginal'])) {
-                $result['taken_at'] = date('Y-m-d H:i:s', strtotime($exif['DateTimeOriginal']));
-            } elseif (isset($exif['DateTime'])) {
-                $result['taken_at'] = date('Y-m-d H:i:s', strtotime($exif['DateTime']));
+            // 1. Extract Date (try multiple fields)
+            if (isset($exif['EXIF']['DateTimeOriginal'])) {
+                $result['taken_at'] = date('Y-m-d H:i:s', strtotime($exif['EXIF']['DateTimeOriginal']));
+            } elseif (isset($exif['EXIF']['DateTimeDigitized'])) {
+                $result['taken_at'] = date('Y-m-d H:i:s', strtotime($exif['EXIF']['DateTimeDigitized']));
+            } elseif (isset($exif['IFD0']['DateTime'])) {
+                $result['taken_at'] = date('Y-m-d H:i:s', strtotime($exif['IFD0']['DateTime']));
+            } elseif (isset($exif['FILE']['FileDateTime'])) {
+                $result['taken_at'] = date('Y-m-d H:i:s', $exif['FILE']['FileDateTime']);
             }
 
-            // 2. Extract GPS
-            if (isset($exif['GPSLatitude'], $exif['GPSLatitudeRef'], $exif['GPSLongitude'], $exif['GPSLongitudeRef'])) {
-                $result['lat'] = $this->getGpsValue($exif['GPSLatitude'], $exif['GPSLatitudeRef']);
-                $result['lng'] = $this->getGpsValue($exif['GPSLongitude'], $exif['GPSLongitudeRef']);
+            // 2. Extract GPS (including altitude & direction)
+            if (isset($exif['GPS']['GPSLatitude'], $exif['GPS']['GPSLatitudeRef'], $exif['GPS']['GPSLongitude'], $exif['GPS']['GPSLongitudeRef'])) {
+                $result['lat'] = $this->getGpsValue($exif['GPS']['GPSLatitude'], $exif['GPS']['GPSLatitudeRef']);
+                $result['lng'] = $this->getGpsValue($exif['GPS']['GPSLongitude'], $exif['GPS']['GPSLongitudeRef']);
             }
 
-            // 3. Store raw simplified EXIF
-            $simplifiedExif = [];
-            $allowedKeys = ['Make', 'Model', 'Software', 'ExposureTime', 'FNumber', 'ISOSpeedRatings', 'FocalLength', 'Flash'];
-            foreach ($allowedKeys as $key) {
-                if (isset($exif[$key])) $simplifiedExif[$key] = $exif[$key];
+            // 3. Store all useful EXIF data as a rich JSON object
+            $richExif = [];
+
+            // IFD0 — camera body info
+            foreach (['Make', 'Model', 'Software', 'Artist', 'Copyright', 'Orientation', 'ImageDescription'] as $k) {
+                if (!empty($exif['IFD0'][$k])) $richExif[$k] = $exif['IFD0'][$k];
             }
-            $result['exif'] = !empty($simplifiedExif) ? json_encode($simplifiedExif) : null;
+
+            // EXIF — shooting parameters
+            $exifFields = [
+                'ExposureTime', 'FNumber', 'ISOSpeedRatings', 'FocalLength',
+                'FocalLengthIn35mmFilm', 'ExposureBiasValue', 'MaxApertureValue',
+                'MeteringMode', 'ExposureProgram', 'Flash', 'WhiteBalance',
+                'DigitalZoomRatio', 'SceneCaptureType', 'Contrast', 'Saturation',
+                'Sharpness', 'SubjectDistance', 'LightSource', 'ColorSpace',
+                'ExposureMode', 'SensingMethod', 'FileSource', 'SceneType',
+                'CustomRendered', 'GainControl',
+            ];
+            foreach ($exifFields as $k) {
+                if (isset($exif['EXIF'][$k])) $richExif[$k] = $exif['EXIF'][$k];
+            }
+
+            // GPS — full GPS data
+            $gpsFields = ['GPSLatitudeRef', 'GPSLatitude', 'GPSLongitudeRef', 'GPSLongitude',
+                          'GPSAltitudeRef', 'GPSAltitude', 'GPSImgDirectionRef', 'GPSImgDirection',
+                          'GPSMapDatum', 'GPSSpeedRef', 'GPSSpeed', 'GPSTrackRef', 'GPSTrack'];
+            foreach ($gpsFields as $k) {
+                if (isset($exif['GPS'][$k])) $richExif[$k] = $exif['GPS'][$k];
+            }
+
+            // Thumbnail info
+            if (isset($exif['THUMBNAIL']['THUMBNAIL_FORMAT'])) {
+                $richExif['ThumbnailFormat'] = $exif['THUMBNAIL']['THUMBNAIL_FORMAT'];
+            }
+
+            // Computed fields for convenience
+            if (isset($exif['COMPUTED']['ApertureFNumber'])) {
+                $richExif['ApertureFNumber'] = $exif['COMPUTED']['ApertureFNumber'];
+            }
+            if (isset($exif['COMPUTED']['CCDWidth'])) {
+                $richExif['CCDWidth'] = $exif['COMPUTED']['CCDWidth'];
+            }
+
+            $result['exif'] = !empty($richExif) ? json_encode($richExif) : null;
 
         } catch (\Exception $e) { }
 

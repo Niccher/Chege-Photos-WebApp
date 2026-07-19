@@ -48,12 +48,36 @@
             heatPoints.push([lat, lng, 0.5]); // intensity 0.5
             bounds.extend(point);
 
+            let exifStr = '';
+            if (loc.exif_data) {
+                try {
+                    const exif = JSON.parse(loc.exif_data);
+                    if (exif.Make) exifStr += `<br><small class="text-muted"><i class="bi bi-camera"></i> ${exif.Make} ${exif.Model || ''}</small>`;
+                    let settings = [];
+                    if (exif.FNumber) {
+                        const f = eval(exif.FNumber);
+                        if (f) settings.push('f/' + f);
+                    }
+                    if (exif.ExposureTime) {
+                        const exp = eval(exif.ExposureTime);
+                        if (exp) settings.push(exp + 's');
+                    }
+                    if (exif.ISOSpeedRatings) {
+                        settings.push('ISO ' + exif.ISOSpeedRatings);
+                    }
+                    if (settings.length > 0) {
+                        exifStr += `<br><small class="text-muted"><i class="bi bi-sliders"></i> ${settings.join(' • ')}</small>`;
+                    }
+                } catch(e) {}
+            }
+
             const marker = L.marker(point);
             marker.bindPopup(`
-                <div style="width: 150px">
-                    <img src="<?= base_url() ?>${loc.thumbnail_path}" style="width: 100%; border-radius: 4px; margin-bottom: 8px;">
-                    <strong>${loc.filename}</strong><br>
-                    <small class="text-muted">${loc.taken_at}</small>
+                <div style="width: 150px; font-family: var(--bs-body-font-family);">
+                    <img src="<?= base_url() ?>${loc.thumbnail_path}" style="width: 100%; border-radius: 4px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+                    <strong class="text-truncate d-block">${loc.filename}</strong>
+                    <small class="text-muted"><i class="bi bi-calendar"></i> ${loc.taken_at}</small>
+                    ${exifStr}
                 </div>
             `);
             markerGroup.addLayer(marker);

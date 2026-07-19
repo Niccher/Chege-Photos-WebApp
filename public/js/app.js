@@ -368,14 +368,17 @@ $(document).ready(function () {
     $('#btnFavorite').on('click', function () {
         if (!currentPhotoId) return;
         const $btn = $(this);
+        const targetPhotoId = currentPhotoId;
 
-        $.post(BASE_URL + 'photos/favorite/' + currentPhotoId, function (res) {
+        $.post(BASE_URL + 'photos/favorite/' + targetPhotoId, function (res) {
             if (res.status === 'success') {
-                const $item = $(`[data-id="${currentPhotoId}"]`);
+                const $item = $(`[data-id="${targetPhotoId}"]`);
                 $item.data('favorite', res.is_favorite ? '1' : '0');
 
-                // Toggle heart in lightbox
-                $btn.find('i').attr('class', res.is_favorite ? 'bi bi-heart-fill text-danger fs-5' : 'bi bi-heart fs-5');
+                // Toggle heart in lightbox only if we are still viewing the same photo
+                if (currentPhotoId === targetPhotoId) {
+                    $btn.find('i').attr('class', res.is_favorite ? 'bi bi-heart-fill text-danger fs-5' : 'bi bi-heart fs-5');
+                }
 
                 // Toggle heart on grid item
                 if (res.is_favorite) {
@@ -386,7 +389,9 @@ $(document).ready(function () {
                     $item.find('.bi-heart-fill').parent().remove();
                     // If we are on the favorites page, remove the item from view
                     if (window.location.pathname.includes('favorites')) {
-                        $lightboxModal.hide();
+                        if (currentPhotoId === targetPhotoId) {
+                            $lightboxModal.hide();
+                        }
                         $item.fadeOut(300, function () { $(this).remove(); });
                     }
                 }
