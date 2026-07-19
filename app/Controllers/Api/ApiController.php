@@ -114,6 +114,12 @@ class ApiController extends BaseController
                     ->get()->getResultArray();
             }
 
+            $photos = array_map(function ($p) {
+                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
+                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
+                return $p;
+            }, $photos);
+
             return $this->response->setJSON([
                 'status' => 'success',
                 'photos' => $photos,
@@ -185,6 +191,12 @@ class ApiController extends BaseController
             }
 
             $photos = $query->orderBy('taken_at', 'DESC')->findAll();
+
+            $photos = array_map(function ($p) {
+                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
+                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
+                return $p;
+            }, $photos);
 
             return $this->response->setJSON([
                 'status' => 'success',

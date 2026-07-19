@@ -42,7 +42,7 @@ use App\Libraries\SmartAlbumRules;
                                 <?php if (! empty($album['is_smart'])): ?>
                                     <span class="badge bg-info text-dark">Smart</span>
                                 <?php endif; ?>
-                                <span class="text-white small"><?= (int) $album['count'] ?> items</span>
+                                <span class="text-white small"><?= (int) ($album['photo_count'] ?? 0) ?> items</span>
                             </div>
                         </div>
                     </div>

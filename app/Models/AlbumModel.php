@@ -53,10 +53,22 @@ class AlbumModel extends Model
             }
 
             if ($isSmart) {
-                $rules            = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
-                $album['count']   = SmartAlbumRules::countMatching($userId, $rules);
+                $rules = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
+                $count = SmartAlbumRules::countMatching($userId, $rules);
+                $album['photo_count'] = (string) $count;
+                $album['video_count'] = '0';
             } else {
-                $album['count'] = $db->table('album_photos')->where('album_id', $album['id'])->countAllResults();
+                $total = $db->table('album_photos')
+                    ->join('photos', 'photos.id = album_photos.photo_id')
+                    ->where('album_photos.album_id', $album['id'])
+                    ->countAllResults();
+                $videos = $db->table('album_photos')
+                    ->join('photos', 'photos.id = album_photos.photo_id')
+                    ->where('album_photos.album_id', $album['id'])
+                    ->where('photos.mime_type LIKE', 'video/%')
+                    ->countAllResults();
+                $album['photo_count'] = (string) ($total - $videos);
+                $album['video_count'] = (string) $videos;
             }
         }
         
