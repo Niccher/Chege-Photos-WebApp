@@ -159,6 +159,9 @@ class Photos extends BaseController
     public function upload()
     {
         ini_set('memory_limit', '512M');
+        ini_set('upload_max_filesize', '512M');
+        ini_set('post_max_size', '512M');
+        ini_set('max_execution_time', '300');
 
         $file = $this->request->getFile('file');
 
