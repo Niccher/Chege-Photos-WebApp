@@ -30,7 +30,13 @@ class ApiController extends BaseController
                                 ->orderBy('taken_at', 'DESC')
                                 ->findAll();
 
-            // Transform paths to full URLs if needed, but the app can handle base_url + path
+            // Cast integer fields to strings for consistent Kotlin serialization
+            $photos = array_map(function ($p) {
+                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
+                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
+                return $p;
+            }, $photos);
+
             return $this->response->setJSON([
                 'status' => 'success',
                 'photos' => $photos

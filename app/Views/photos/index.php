@@ -62,7 +62,7 @@ if (isset($album) && ! empty($album['is_smart'])) {
              data-dimensions="<?= $photo['width'] ? $photo['width'].' x '.$photo['height'] : 'Video' ?>"
              data-date="<?= date('M d, Y H:i', strtotime($photo['taken_at'])) ?>"
              data-favorite="<?= $photo['is_favorite'] ? '1' : '0' ?>"
-             data-exif='<?= $photo['exif_data'] ? esc($photo['exif_data'], 'attr') : '' ?>'
+             data-exif-b64="<?= $photo['exif_data'] ? base64_encode($photo['exif_data']) : '' ?>"
              data-location="<?= ($photo['latitude'] && $photo['longitude']) ? $photo['latitude'].','.$photo['longitude'] : '' ?>"
              data-type="<?= strpos($photo['mime_type'], 'video/') === 0 ? 'video' : 'image' ?>">
             <div class="selection-overlay d-none position-absolute top-0 start-0 w-100 h-100 flex-row align-items-start justify-content-end p-2" style="z-index: 10; background: rgba(0,0,0,0.1);">

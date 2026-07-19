@@ -95,6 +95,9 @@ $(document).ready(function () {
             }
             
             const $targetGrid = $('.photo-grid').last();
+            const isFav = photo.is_favorite ? '1' : '0';
+            const exifB64 = photo.exif_data ? btoa(unescape(encodeURIComponent(photo.exif_data))) : '';
+            const locationStr = photo.latitude && photo.longitude ? photo.latitude + ',' + photo.longitude : '';
             const photoHtml = `
                 <div class="photo-item" 
                      draggable="true"
@@ -104,10 +107,10 @@ $(document).ready(function () {
                      data-size="${(photo.size / 1024 / 1024).toFixed(2)} MB"
                      data-dimensions="${photo.width ? photo.width + ' x ' + photo.height : 'Video'}"
                      data-date="${date.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
-                     data-favorite="${photo.is_favorite ? '1' : '0'}"
+                     data-favorite="${isFav}"
                      data-type="${photo.mime_type.startsWith('video/') ? 'video' : 'image'}"
-                     data-exif='${photo.exif_data ? photo.exif_data.replace(/'/g, '&#39;') : ''}'
-                     data-location="${photo.latitude && photo.longitude ? photo.latitude + ',' + photo.longitude : ''}">
+                     data-exif-b64="${exifB64}"
+                     data-location="${locationStr}">
                     <div class="selection-overlay d-none position-absolute top-0 start-0 w-100 h-100 flex-row align-items-start justify-content-end p-2" style="z-index: 10; background: rgba(0,0,0,0.1);">
                         <div class="selection-check d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style="width: 24px; height: 24px; cursor: pointer; border: 2px solid #1a73e8; color: #1a73e8;">
                             <i class="bi bi-check-lg d-none"></i>
@@ -160,8 +163,26 @@ $(document).ready(function () {
         const isFavorite = $this.data('favorite') == '1';
         $('#btnFavorite i').attr('class', isFavorite ? 'bi bi-heart-fill text-danger fs-5' : 'bi bi-heart fs-5');
 
-        const photoExif = $this.data('exif');
+        const exifB64 = $this.data('exif-b64');
+        const photoExif = exifB64 ? JSON.parse(decodeURIComponent(escape(atob(exifB64)))) : null;
         const photoLocation = $this.data('location');
+
+        function rationalToFloat(v) {
+            if (typeof v === 'number') return v;
+            if (typeof v !== 'string') return null;
+            const parts = v.split('/');
+            if (parts.length === 2) {
+                const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+                return d ? n / d : null;
+            }
+            return parseFloat(v) || null;
+        }
+
+        function formatExposure(val) {
+            const f = rationalToFloat(val);
+            if (!f) return val;
+            return f >= 1 ? f.toFixed(1) + 's' : '1/' + Math.round(1 / f) + 's';
+        }
 
         // Reset and populate EXIF
         $('#metaExifContainer').hide();
@@ -172,8 +193,9 @@ $(document).ready(function () {
                 if (exif.Make || exif.Model) {
                     exifHtml += `<strong>${[exif.Make, exif.Model].filter(Boolean).join(' ')}</strong><br>`;
                 }
-                if (exif.ExposureTime) exifHtml += `Exposure: ${exif.ExposureTime}s, `;
-                if (exif.FNumber) exifHtml += `f/${exif.FNumber}, `;
+                if (exif.ExposureTime) exifHtml += `Exposure: ${formatExposure(exif.ExposureTime)}, `;
+                const fNum = rationalToFloat(exif.FNumber);
+                if (fNum) exifHtml += `f/${fNum.toFixed(1)}, `;
                 if (exif.ISOSpeedRatings) exifHtml += `ISO ${exif.ISOSpeedRatings}`;
 
                 $('#metaExif').html(exifHtml);
