@@ -13,6 +13,7 @@ $routes->get('test-ping', 'TestAuth::ping', ['filter' => null]);
 $routes->get('api/test', function() { return 'API is working'; });
 $routes->get('api/test2', 'Api\TestController::index');
 $routes->post('api/login', 'Api\Auth::login');
+$routes->post('api/auth-with-token', 'Api\Auth::authWithToken');
 
 // API Data Endpoints
 $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens'], function ($routes) {
@@ -31,6 +32,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
 $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('/', 'Photos::index');
     $routes->get('scan', 'Photos::scan');
+    $routes->get('backfill-exif', 'Photos::backfillExif');
     $routes->post('upload', 'Photos::upload');
     $routes->get('explore', 'Photos::explore');
     $routes->get('sharing', 'Photos::sharing');
@@ -71,6 +73,10 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('settings/export', 'Settings::exportData');
     $routes->get('settings/download-export/(:any)', 'Settings::downloadExport/$1');
     $routes->post('settings/refresh-metadata', 'Settings::refreshMetadata');
+    $routes->get('settings/tokens', 'Tokens::index');
+    $routes->post('settings/tokens/generate', 'Tokens::generate');
+    $routes->post('settings/tokens/revoke', 'Tokens::revoke');
+    $routes->get('settings/tokens/qr/(:any)', 'Tokens::qr/$1');
 });
 
 // Public Sharing Routes

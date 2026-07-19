@@ -35,6 +35,10 @@
                         <i class="bi bi-download fs-5"></i>
                         <span>Export Data</span>
                     </a>
+                    <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3" id="tokens-tab" data-bs-toggle="pill" href="#tokens" role="tab">
+                        <i class="bi bi-key fs-5"></i>
+                        <span>Access Tokens</span>
+                    </a>
                     <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3 text-danger" id="danger-tab" data-bs-toggle="pill" href="#danger" role="tab">
                         <i class="bi bi-exclamation-triangle fs-5"></i>
                         <span>Danger Zone</span>
@@ -287,6 +291,74 @@
                     </div>
                 </div>
 
+                <!-- Access Tokens Tab -->
+                <div class="tab-pane fade" id="tokens" role="tabpanel">
+                    <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+                            <div>
+                                <h5 class="mb-1"><i class="bi bi-key me-2"></i>Access Tokens</h5>
+                                <p class="text-muted small mb-0">Generate single-use 8-character tokens for device authentication.</p>
+                            </div>
+                            <button class="btn btn-primary rounded-pill px-4" id="btnGenerateToken">
+                                <i class="bi bi-plus-lg me-1"></i> Generate Token
+                            </button>
+                        </div>
+
+                        <!-- Generate form (hidden by default) -->
+                        <div id="tokenGenerateForm" class="d-none border rounded-3 p-3 mb-4 bg-light bg-opacity-25">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold">Description (optional)</label>
+                                    <input type="text" id="tokenDescription" class="form-control" placeholder="e.g. My phone" maxlength="255">
+                                </div>
+                                <div class="col-md-auto">
+                                    <button class="btn btn-success rounded-pill px-4" id="btnCreateToken">
+                                        <i class="bi bi-check-lg me-1"></i> Create
+                                    </button>
+                                    <button class="btn btn-outline-secondary rounded-pill px-3 ms-2" id="btnCancelToken">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- New token display (hidden by default) -->
+                        <div id="tokenNewDisplay" class="d-none border rounded-3 p-4 mb-4 text-center">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-check-circle-fill text-success me-1"></i> Token Generated</h6>
+                            <div class="d-flex justify-content-center mb-3">
+                                <div id="tokenQrCode"></div>
+                            </div>
+                            <div class="mb-3">
+                                <code id="tokenCodeDisplay" class="fs-3 fw-bold user-select-all"></code>
+                            </div>
+                            <p class="text-muted small mb-3">This token will only be shown once. Copy it now.</p>
+                            <button class="btn btn-outline-primary rounded-pill px-3 btn-sm" onclick="copyTokenToClipboard()">
+                                <i class="bi bi-clipboard me-1"></i> Copy
+                            </button>
+                            <button class="btn btn-outline-secondary rounded-pill px-3 btn-sm ms-2" onclick="$('#tokenNewDisplay').addClass('d-none')">
+                                <i class="bi bi-x me-1"></i> Close
+                            </button>
+                        </div>
+
+                        <!-- Token list -->
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="tokensTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Token</th>
+                                        <th>Description</th>
+                                        <th>Status</th>
+                                        <th>Used</th>
+                                        <th>Device</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tokensTableBody">
+                                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Danger Zone Tab -->
                 <div class="tab-pane fade" id="danger" role="tabpanel">
                     <div class="card border-0 shadow-sm rounded-card p-4 border-danger border-opacity-25" style="background: var(--card-bg); color: var(--text-primary);">
@@ -379,7 +451,59 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
+<script src="<?= base_url('js/qrcode.min.js') ?>"></script>
 <script>
+var currentTokenId = null;
+
+function copyTokenToClipboard() {
+    var text = document.getElementById('tokenCodeDisplay').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('Token copied to clipboard!', 'success');
+    });
+}
+
+function loadTokens() {
+    $.get(BASE_URL + 'settings/tokens', function(res) {
+        if (res.status !== 'success') return;
+        var html = '';
+        if (res.tokens.length === 0) {
+            html = '<tr><td colspan="6" class="text-center text-muted py-4">No tokens generated yet.</td></tr>';
+        } else {
+            res.tokens.forEach(function(t) {
+                var statusBadge = t.is_used
+                    ? '<span class="badge bg-secondary bg-opacity-25 text-secondary">Used</span>'
+                    : '<span class="badge bg-success bg-opacity-25 text-success">Active</span>';
+                var usedAt = t.used_at ? new Date(t.used_at).toLocaleString() : '—';
+                var deviceInfo = t.device_name ? (t.device_name + '<br><small class="text-muted">' + (t.device_id || '') + '</small>') : '—';
+                var revokeBtn = t.is_used
+                    ? ''
+                    : '<button class="btn btn-outline-danger btn-sm" onclick="revokeToken(' + t.id + ')"><i class="bi bi-x-circle"></i></button>';
+                html += '<tr>' +
+                    '<td><code>' + t.token + '</code></td>' +
+                    '<td>' + (t.description || '—') + '</td>' +
+                    '<td>' + statusBadge + '</td>' +
+                    '<td class="small">' + usedAt + '</td>' +
+                    '<td class="small">' + deviceInfo + '</td>' +
+                    '<td>' + revokeBtn + '</td>' +
+                    '</tr>';
+            });
+        }
+        $('#tokensTableBody').html(html);
+    });
+}
+
+function revokeToken(id) {
+    if (!confirm('Revoke this token?')) return;
+    $.post(BASE_URL + 'settings/tokens/revoke', { id: id }, function(res) {
+        if (res.status === 'success') {
+            showToast(res.message, 'success');
+            loadTokens();
+        } else {
+            showToast(res.message, 'danger');
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Storage Chart
     const ctx = document.getElementById('storageChart').getContext('2d');
@@ -555,6 +679,49 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#exportBtnText').text('Create Archive');
             $btn.prop('disabled', false);
         });
+    });
+
+    // Tokens tab: Generate
+    $('#btnGenerateToken').on('click', function () {
+        $('#tokenGenerateForm').removeClass('d-none');
+        $('#tokenDescription').focus();
+    });
+    $('#btnCancelToken').on('click', function () {
+        $('#tokenGenerateForm').addClass('d-none');
+    });
+    $('#btnCreateToken').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Creating...');
+        var desc = $('#tokenDescription').val();
+        $.post(BASE_URL + 'settings/tokens/generate', { description: desc }, function (res) {
+            if (res.status === 'success') {
+                var token = res.token;
+                $('#tokenGenerateForm').addClass('d-none');
+                $('#tokenDescription').val('');
+                $('#tokenCodeDisplay').text(token.token);
+                $('#tokenQrCode').empty();
+                new QRCode(document.getElementById('tokenQrCode'), {
+                    text: token.token,
+                    width: 180,
+                    height: 180,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+                $('#tokenNewDisplay').removeClass('d-none');
+                loadTokens();
+            } else {
+                showToast(res.message, 'danger');
+            }
+        }).fail(function () {
+            showToast('Failed to generate token.', 'danger');
+        }).always(function () {
+            $btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Create');
+        });
+    });
+
+    // Load tokens when the tokens tab is shown
+    $('#tokens-tab').on('shown.bs.tab', function () {
+        loadTokens();
     });
 
     // Refresh Metadata

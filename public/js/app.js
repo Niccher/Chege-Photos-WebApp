@@ -105,7 +105,9 @@ $(document).ready(function () {
                      data-dimensions="${photo.width ? photo.width + ' x ' + photo.height : 'Video'}"
                      data-date="${date.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
                      data-favorite="${photo.is_favorite ? '1' : '0'}"
-                     data-type="${photo.mime_type.startsWith('video/') ? 'video' : 'image'}">
+                     data-type="${photo.mime_type.startsWith('video/') ? 'video' : 'image'}"
+                     data-exif='${photo.exif_data ? photo.exif_data.replace(/'/g, '&#39;') : ''}'
+                     data-location="${photo.latitude && photo.longitude ? photo.latitude + ',' + photo.longitude : ''}">
                     <div class="selection-overlay d-none position-absolute top-0 start-0 w-100 h-100 flex-row align-items-start justify-content-end p-2" style="z-index: 10; background: rgba(0,0,0,0.1);">
                         <div class="selection-check d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style="width: 24px; height: 24px; cursor: pointer; border: 2px solid #1a73e8; color: #1a73e8;">
                             <i class="bi bi-check-lg d-none"></i>
@@ -167,7 +169,9 @@ $(document).ready(function () {
             try {
                 const exif = typeof photoExif === 'string' ? JSON.parse(photoExif) : photoExif;
                 let exifHtml = '';
-                if (exif.Model) exifHtml += `<strong>${exif.Model}</strong><br>`;
+                if (exif.Make || exif.Model) {
+                    exifHtml += `<strong>${[exif.Make, exif.Model].filter(Boolean).join(' ')}</strong><br>`;
+                }
                 if (exif.ExposureTime) exifHtml += `Exposure: ${exif.ExposureTime}s, `;
                 if (exif.FNumber) exifHtml += `f/${exif.FNumber}, `;
                 if (exif.ISOSpeedRatings) exifHtml += `ISO ${exif.ISOSpeedRatings}`;
@@ -838,6 +842,24 @@ $(document).ready(function () {
             },
             error: function () {
                 showToast('Scan failed.', 'danger');
+            },
+            complete: function () {
+                $loading.hide();
+            }
+        });
+    });
+
+    // Backfill EXIF Logic
+    $('#btnBackfillExif').on('click', function () {
+        $loading.css('display', 'flex');
+        $.ajax({
+            url: 'backfill-exif',
+            method: 'GET',
+            success: function (response) {
+                showToast(response.message, 'success');
+            },
+            error: function () {
+                showToast('EXIF backfill failed.', 'danger');
             },
             complete: function () {
                 $loading.hide();

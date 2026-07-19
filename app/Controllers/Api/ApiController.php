@@ -155,9 +155,16 @@ class ApiController extends BaseController
             $query = $photoModel->where('user_id', $userId);
 
             if ($field === 'memories') {
-                $query->where('taken_at <', date('Y-m-d', strtotime('-1 year')))
-                      ->orderBy('taken_at', 'DESC')
-                      ->limit(20);
+                $today        = date('m-d');
+                $thisYear     = date('Y');
+                $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
+                $query->where('is_archived', false)
+                      ->groupStart()
+                          ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
+                          ->where('YEAR(taken_at) <', $thisYear)
+                      ->groupEnd()
+                      ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
+                      ->orderBy('taken_at', 'DESC');
             } elseif ($field === 'explore') {
                 $query->where('latitude IS NOT NULL')
                       ->where('longitude IS NOT NULL')

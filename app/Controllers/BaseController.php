@@ -83,14 +83,16 @@ abstract class BaseController extends Controller
         $favoritesCount = $photoModel->where('user_id', $userId)->where('is_favorite', true)->where('is_archived', false)->countAllResults();
 
         $today        = date('m-d');
+        $thisYear     = date('Y');
         $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
 
         $memoriesCount = $photoModel->where('user_id', $userId)
             ->where('is_archived', false)
             ->groupStart()
             ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
-            ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
+            ->where('YEAR(taken_at) <', $thisYear)
             ->groupEnd()
+            ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
             ->countAllResults();
 
         $albumModel  = new \App\Models\AlbumModel();
@@ -108,7 +110,7 @@ abstract class BaseController extends Controller
             'sidebar_albums'  => $albumModel->where('user_id', $userId)->orderBy('name', 'ASC')->findAll(),
         ];
 
-        cache()->save($cacheKey, $counts, 300);
+        cache()->save($cacheKey, $counts, 10);
 
         return $counts;
     }

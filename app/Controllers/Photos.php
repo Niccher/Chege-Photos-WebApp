@@ -8,6 +8,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class Photos extends BaseController
 {
+    private const MAX_UPLOAD_BYTES = 536_870_912; // 512 MB
     public function index()
     {
         $photoModel = new \App\Models\PhotoModel();
@@ -159,14 +160,21 @@ class Photos extends BaseController
     public function upload()
     {
         ini_set('memory_limit', '512M');
-        ini_set('upload_max_filesize', '512M');
-        ini_set('post_max_size', '512M');
         ini_set('max_execution_time', '300');
 
         $file = $this->request->getFile('file');
 
         if ($file === null || !$file->isValid()) {
             return $this->response->setJSON(['status' => 'error', 'message' => $file ? $file->getErrorString() : 'No file uploaded']);
+        }
+
+        if ($file->getSize() > self::MAX_UPLOAD_BYTES) {
+            $maxMb = self::MAX_UPLOAD_BYTES / 1024 / 1024;
+            $actual = round($file->getSize() / 1024 / 1024, 1);
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => "File exceeds the {$maxMb} MB limit ({$actual} MB)."
+            ]);
         }
 
         // Get info BEFORE move, as move() deletes the temporary file
@@ -200,6 +208,7 @@ class Photos extends BaseController
 
         $data = [
             'user_id'        => auth()->id(),
+            'device_id'      => $this->request->getPost('device_id') ?? null,
             'filename'       => $newName,
             'path'           => 'uploads/' . $newName,
             'mime_type'      => $isVideo ? $mimeType : ($imageInfo['mime'] ?? $mimeType),
@@ -221,6 +230,46 @@ class Photos extends BaseController
         $this->clearSidebarCountsCache();
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => $photoModel->getInsertID()]);
+    }
+
+    public function backfillExif()
+    {
+        $photoModel = new \App\Models\PhotoModel();
+        $photos = $photoModel->where('user_id', auth()->id())
+            ->where('mime_type NOT LIKE', 'video/%')
+            ->findAll();
+
+        $updated = 0;
+        foreach ($photos as $photo) {
+            $fullPath = FCPATH . $photo['path'];
+            if (!file_exists($fullPath)) continue;
+
+            $metadata = $this->getMergedMetadata($fullPath);
+            if ($metadata === null) continue;
+
+            $update = [];
+            if ($metadata['exif'] !== null && ($photo['exif_data'] === null || $photo['exif_data'] === '')) {
+                $update['exif_data'] = $metadata['exif'];
+            }
+            if ($metadata['lat'] !== null && $photo['latitude'] === null) {
+                $update['latitude'] = $metadata['lat'];
+            }
+            if ($metadata['lng'] !== null && $photo['longitude'] === null) {
+                $update['longitude'] = $metadata['lng'];
+            }
+            if ($metadata['taken_at'] !== null && ($photo['taken_at'] === null || $photo['taken_at'] === '')) {
+                $update['taken_at'] = $metadata['taken_at'];
+            }
+            if (!empty($update)) {
+                $photoModel->update($photo['id'], $update);
+                $updated++;
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'message' => "EXIF backfill complete. Updated $updated photos."
+        ]);
     }
 
     public function sharing()
@@ -884,7 +933,7 @@ class Photos extends BaseController
         ];
 
         try {
-            $exif = @exif_read_data($path, 'ANY_TAG', 0, true);
+            $exif = @exif_read_data($path, 'ANY_TAG', true, true);
             if (!$exif) return $result;
 
             // 1. Extract Date (try multiple fields)
@@ -1001,6 +1050,15 @@ class Photos extends BaseController
         $file = $this->request->getFile('image');
         if (!$file || !$file->isValid()) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid image data']);
+        }
+
+        if ($file->getSize() > self::MAX_UPLOAD_BYTES) {
+            $maxMb = self::MAX_UPLOAD_BYTES / 1024 / 1024;
+            $actual = round($file->getSize() / 1024 / 1024, 1);
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => "File exceeds the {$maxMb} MB limit ({$actual} MB)."
+            ]);
         }
 
         $fullPath = FCPATH . $photo['path'];

@@ -49,17 +49,27 @@
             bounds.extend(point);
 
             let exifStr = '';
+            function rationalToFloat(v) {
+                if (typeof v === 'number') return v;
+                if (typeof v !== 'string') return null;
+                const parts = v.split('/');
+                if (parts.length === 2) {
+                    const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+                    return d ? n / d : null;
+                }
+                return parseFloat(v) || null;
+            }
             if (loc.exif_data) {
                 try {
                     const exif = JSON.parse(loc.exif_data);
                     if (exif.Make) exifStr += `<br><small class="text-muted"><i class="bi bi-camera"></i> ${exif.Make} ${exif.Model || ''}</small>`;
                     let settings = [];
                     if (exif.FNumber) {
-                        const f = eval(exif.FNumber);
-                        if (f) settings.push('f/' + f);
+                        const f = rationalToFloat(exif.FNumber);
+                        if (f) settings.push('f/' + f.toFixed(1));
                     }
                     if (exif.ExposureTime) {
-                        const exp = eval(exif.ExposureTime);
+                        const exp = rationalToFloat(exif.ExposureTime);
                         if (exp) settings.push(exp + 's');
                     }
                     if (exif.ISOSpeedRatings) {
