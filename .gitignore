@@ -31,3 +31,4 @@ writable/logs/*
 !writable/logs/index.html
 writable/debugbar/*
 !writable/debugbar/index.html
+=*
