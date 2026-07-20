@@ -26,6 +26,19 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
     $routes->get('archive', 'ApiController::archive');
     $routes->get('trash', 'ApiController::trash');
     $routes->get('explore', 'ApiController::explore');
+
+    // Face API endpoints
+    $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1');
+    $routes->get('faces/persons',      '\App\Controllers\Faces::apiPersons');
+    $routes->get('faces/unassigned',   '\App\Controllers\Faces::apiUnassigned');
+    $routes->get('faces/by-person/(:num)', '\App\Controllers\Faces::apiPersonPhotos/$1');
+    $routes->post('faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1');
+    $routes->post('faces/scan-all',    '\App\Controllers\Faces::apiScanAll');
+    $routes->post('faces/search',      '\App\Controllers\Faces::apiSearch');
+    $routes->post('faces/cluster',     '\App\Controllers\Faces::apiCluster');
+    $routes->post('faces/persons/name/(:num)', '\App\Controllers\Faces::apiNamePerson/$1');
+    $routes->post('faces/persons/merge',       '\App\Controllers\Faces::apiMergePersons');
+    $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan');
 });
 
 // All app routes require an authenticated session or token
@@ -33,6 +46,9 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('/', 'Photos::index');
     $routes->get('scan', 'Photos::scan');
     $routes->get('backfill-exif', 'Photos::backfillExif');
+    $routes->get('faces',          'Faces::index');
+    $routes->get('faces/person/(:num)', 'Faces::personPhotos/$1');
+    $routes->get('faces/photo/(:num)', 'Faces::photo/$1');
     $routes->post('upload', 'Photos::upload');
     $routes->get('explore', 'Photos::explore');
     $routes->get('sharing', 'Photos::sharing');

@@ -226,10 +226,21 @@ class Photos extends BaseController
         if (!$isVideo) {
             $this->generateThumbnail($fullPath, $thumbnailPath);
         }
-        $photoModel->insert($data);
+        $photoId = $photoModel->insert($data);
         $this->clearSidebarCountsCache();
 
-        return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => $photoModel->getInsertID()]);
+        if (!$isVideo && $photoId) {
+            if (function_exists('fastcgi_finish_request')) {
+                $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId])->send();
+                fastcgi_finish_request();
+                ignore_user_abort(true);
+                $this->triggerFaceScan((int) $photoId);
+                return;
+            }
+            $this->triggerFaceScanAsync((int) $photoId);
+        }
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId]);
     }
 
     public function backfillExif()
@@ -1082,5 +1093,36 @@ class Photos extends BaseController
         ]);
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Changes saved successfully']);
+    }
+
+    private function triggerFaceScan(int $photoId): void
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 10,
+                'timeout'        => 60,
+            ]);
+            $client->post('http://ml-chege-photos:8000/api/v1/faces/encode', [
+                'form_params' => ['photo_id' => $photoId],
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', "Auto face scan failed for photo {$photoId}: " . $e->getMessage());
+        }
+    }
+
+    private function triggerFaceScanAsync(int $photoId): void
+    {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => 'http://ml-chege-photos:8000/api/v1/faces/encode',
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query(['photo_id' => $photoId]),
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_TIMEOUT_MS => 100,
+            CURLOPT_CONNECTTIMEOUT_MS => 100,
+            CURLOPT_NOSIGNAL => 1,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
     }
 }

@@ -125,6 +125,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--faces <?= (url_is('faces')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('faces') ?>">
+                        <span><i class="bi bi-people"></i> Faces</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--explore <?= (url_is('explore')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('explore') ?>">
                         <span><i class="bi bi-compass"></i> Explore</span>
                         <span class="badge rounded-pill sidebar-count sidebar-count--explore"><?= (int) ($counts['explore'] ?? 0) ?></span>
