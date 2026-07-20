@@ -188,11 +188,6 @@
                 <!-- TOOLS SECTION -->
                 <li class="sidebar-section-title">Tools</li>
                 <li class="nav-item">
-                    <button class="nav-link sidebar-nav-tone sidebar-nav-tone--settings d-flex justify-content-between align-items-center border-0 bg-transparent w-100" id="btnBackfillExif" style="color: var(--text-primary);">
-                        <span><i class="bi bi-camera-fill"></i> Backfill EXIF</span>
-                    </button>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
                         <span><i class="bi bi-gear"></i> Settings</span>
                     </a>

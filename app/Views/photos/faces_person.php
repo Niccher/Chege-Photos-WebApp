@@ -14,7 +14,7 @@
     <div class="row g-2">
         <?php foreach ($photos as $photo): ?>
             <div class="col-6 col-md-3 col-lg-2">
-                <a href="<?= base_url('explore?photo=' . $photo['id']) ?>" class="text-decoration-none">
+                <a href="<?= base_url('faces/photo/' . $photo['id'] . '?person=' . $person['id']) ?>" class="text-decoration-none">
                     <div class="photo-card rounded overflow-hidden" style="aspect-ratio:1;background:#1a1a2e;cursor:pointer;position:relative;">
                         <img src="<?= base_url(esc($photo['thumbnail_path'] ?: $photo['path'])) ?>"
                              alt="<?= esc($photo['filename']) ?>"

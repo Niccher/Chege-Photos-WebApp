@@ -22,9 +22,24 @@ class Settings extends BaseController
         $photoBytes = $totalBytes - $videoBytes;
 
         $user = auth()->user();
+
+        // ML Stats
+        $faceModel = new \App\Models\FaceEncodingModel();
+        $personModel = new \App\Models\PersonModel();
+        $scanned = $faceModel->distinct()->select('photo_id')->countAllResults();
+        $totalImages = $photoModel->where('user_id', $userId)
+            ->where('mime_type NOT LIKE', 'video/%')
+            ->countAllResults();
+        $persons = $personModel->countAllResults();
+
         $data = [
             'user'    => $user,
             'counts'  => $this->getSidebarCounts(),
+            'mlStats' => [
+                'scanned'      => $scanned,
+                'total_images' => $totalImages,
+                'persons'      => $persons,
+            ],
             'storage' => [
                 'total'   => $totalBytes,
                 'photos'  => $photoBytes,
@@ -255,6 +270,19 @@ class Settings extends BaseController
         $db->transComplete();
 
         $this->clearSidebarCountsCache($userId);
+
+        // Clear ML face data for this user
+        if (! empty($ids)) {
+            try {
+                $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
+                $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
+                    'headers' => ['Content-Type' => 'application/json'],
+                    'body'    => json_encode(['photo_ids' => $ids]),
+                ]);
+            } catch (\Exception $e) {
+                log_message('error', 'Failed to clear ML face data: ' . $e->getMessage());
+            }
+        }
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'All user data cleared. Your account has been reset.']);
     }

@@ -15,7 +15,16 @@ $routes->get('api/test2', 'Api\TestController::index');
 $routes->post('api/login', 'Api\Auth::login');
 $routes->post('api/auth-with-token', 'Api\Auth::authWithToken');
 
-// API Data Endpoints
+// Web-only face action endpoints — inside main chain group
+$routes->post('api/faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1', ['filter' => 'chain']);
+$routes->post('api/faces/scan-all',    '\App\Controllers\Faces::apiScanAll', ['filter' => 'chain']);
+$routes->post('api/faces/cluster',     '\App\Controllers\Faces::apiCluster', ['filter' => 'chain']);
+$routes->post('api/faces/reset',       '\App\Controllers\Faces::apiResetScans', ['filter' => 'chain']);
+$routes->post('api/faces/force-scan',  '\App\Controllers\Faces::apiForceScanAll', ['filter' => 'chain']);
+$routes->get('api/faces/scan-job/(:num)', '\App\Controllers\Faces::apiScanJobStatus/$1', ['filter' => 'chain']);
+$routes->post('api/faces/search',      '\App\Controllers\Faces::apiSearch', ['filter' => 'chain']);
+
+// API Data Endpoints (token auth for Android app)
 $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens'], function ($routes) {
     $routes->get('photos', 'ApiController::index');
     $routes->get('albums', 'ApiController::albums');
@@ -27,15 +36,11 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
     $routes->get('trash', 'ApiController::trash');
     $routes->get('explore', 'ApiController::explore');
 
-    // Face API endpoints
+    // Face API endpoints (Android — token auth)
     $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1');
     $routes->get('faces/persons',      '\App\Controllers\Faces::apiPersons');
     $routes->get('faces/unassigned',   '\App\Controllers\Faces::apiUnassigned');
     $routes->get('faces/by-person/(:num)', '\App\Controllers\Faces::apiPersonPhotos/$1');
-    $routes->post('faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1');
-    $routes->post('faces/scan-all',    '\App\Controllers\Faces::apiScanAll');
-    $routes->post('faces/search',      '\App\Controllers\Faces::apiSearch');
-    $routes->post('faces/cluster',     '\App\Controllers\Faces::apiCluster');
     $routes->post('faces/persons/name/(:num)', '\App\Controllers\Faces::apiNamePerson/$1');
     $routes->post('faces/persons/merge',       '\App\Controllers\Faces::apiMergePersons');
     $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan');

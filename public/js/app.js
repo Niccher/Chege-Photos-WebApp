@@ -1,22 +1,22 @@
+function showToast(message, type = 'dark') {
+    const el = document.getElementById('liveToast');
+    if (!el) return;
+    const toast = bootstrap.Toast.getOrCreateInstance(el);
+    const $toast = $('#liveToast');
+    $toast.removeClass('bg-dark bg-success bg-danger bg-warning').addClass('bg-' + type);
+    $('#toastMessage').text(message);
+    const icons = {
+        'dark': 'bi-info-circle',
+        'success': 'bi-check-circle',
+        'danger': 'bi-exclamation-circle',
+        'warning': 'bi-exclamation-triangle'
+    };
+    $('#toastIcon').attr('class', 'bi ' + (icons[type] || icons['dark']) + ' me-2');
+    toast.show();
+}
+
 $(document).ready(function () {
     const $loading = $('#loadingOverlay');
-    const toastBootstrap = bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast'));
-
-    function showToast(message, type = 'dark') {
-        const $toast = $('#liveToast');
-        $toast.removeClass('bg-dark bg-success bg-danger bg-warning').addClass('bg-' + type);
-        $('#toastMessage').text(message);
-        
-        const icons = {
-            'dark': 'bi-info-circle',
-            'success': 'bi-check-circle',
-            'danger': 'bi-exclamation-circle',
-            'warning': 'bi-exclamation-triangle'
-        };
-        $('#toastIcon').attr('class', 'bi ' + (icons[type] || icons['dark']) + ' me-2');
-        
-        toastBootstrap.show();
-    }
 
     // Sidebar Toggle
     $('#sidebarToggle').on('click', function () {

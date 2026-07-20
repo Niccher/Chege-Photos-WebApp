@@ -31,6 +31,10 @@
                         <i class="bi bi-cloud-check fs-5"></i>
                         <span>Storage</span>
                     </a>
+                    <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3" id="ml-tab" data-bs-toggle="pill" href="#ml" role="tab">
+                        <i class="bi bi-cpu fs-5"></i>
+                        <span>ML / Face Recognition</span>
+                    </a>
                     <a class="list-group-item list-group-item-action p-3 border-0 d-flex align-items-center gap-3" id="export-tab" data-bs-toggle="pill" href="#export" role="tab">
                         <i class="bi bi-download fs-5"></i>
                         <span>Export Data</span>
@@ -202,6 +206,121 @@
                             <button class="btn btn-outline-secondary rounded-pill px-3 flex-shrink-0" id="btnRefreshMetadata">
                                 <i class="bi bi-arrow-repeat me-1"></i> Refresh Now
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ML / Face Recognition Tab -->
+                <div class="tab-pane fade" id="ml" role="tabpanel">
+                    <div class="card border-0 shadow-sm rounded-card overflow-hidden" style="background: var(--card-bg); color: var(--text-primary);">
+                        <!-- Inner pill tabs -->
+                        <ul class="nav nav-pills mb-0 border-bottom px-4 pt-3 pb-0" id="mlPills" role="tablist" style="background: transparent;">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active rounded-0 border-0 px-3 py-2 fw-semibold small" id="ml-scan-tab" data-bs-toggle="pill" data-bs-target="#mlScan" type="button" role="tab">
+                                    <i class="bi bi-gear me-1"></i> Scan & Manage
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link rounded-0 border-0 px-3 py-2 fw-semibold small" id="ml-about-tab" data-bs-toggle="pill" data-bs-target="#mlAbout" type="button" role="tab">
+                                    <i class="bi bi-info-circle me-1"></i> About
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content p-4" id="mlPillsContent">
+                            <!-- Scan & Manage -->
+                            <div class="tab-pane fade show active" id="mlScan" role="tabpanel">
+                                <!-- Stats row -->
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-4">
+                                        <div class="p-3 border rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-primary"><?= (int) ($mlStats['scanned'] ?? 0) ?></div>
+                                            <div class="small text-muted">Scanned Photos</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="p-3 border rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-success"><?= (int) ($mlStats['total_images'] ?? 0) ?></div>
+                                            <div class="small text-muted">Total Images</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="p-3 border rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-info"><?= (int) ($mlStats['persons'] ?? 0) ?></div>
+                                            <div class="small text-muted">Identified Persons</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Scan Unscanned -->
+                                <div class="border rounded-3 p-4 mb-3">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                        <div>
+                                            <h6 class="mb-1 fw-bold"><i class="bi bi-search me-1"></i> Scan Unscanned Photos</h6>
+                                            <p class="text-muted small mb-0">Process all images that haven't been scanned for faces yet.</p>
+                                        </div>
+                                        <button class="btn btn-primary rounded-pill px-4 flex-shrink-0" id="btnScanUnscanned">
+                                            <i class="bi bi-play-fill me-1"></i> Scan Unscanned
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Re-cluster -->
+                                <div class="border rounded-3 p-4 mb-3">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                        <div>
+                                            <h6 class="mb-1 fw-bold"><i class="bi bi-diagram-3 me-1"></i> Re-cluster Faces</h6>
+                                            <p class="text-muted small mb-0">Re-run HDBSCAN clustering on all existing face embeddings to regroup persons.</p>
+                                        </div>
+                                        <button class="btn btn-outline-info rounded-pill px-4 flex-shrink-0" id="btnRecluster">
+                                            <i class="bi bi-arrow-repeat me-1"></i> Re-cluster
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Danger Zone: Force Rescan -->
+                                <div class="border border-danger rounded-3 p-4">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                        <div>
+                                            <h6 class="mb-1 fw-bold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Force Rescan All</h6>
+                                            <p class="text-muted small mb-0">Deletes all existing face data and rescans every image from scratch. This cannot be undone.</p>
+                                        </div>
+                                        <button class="btn btn-danger rounded-pill px-4 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#forceRescanModal">
+                                            <i class="bi bi-arrow-clockwise me-1"></i> Force Rescan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- About -->
+                            <div class="tab-pane fade" id="mlAbout" role="tabpanel">
+                                <h5 class="mb-1"><i class="bi bi-cpu me-2"></i>ML / Face Recognition</h5>
+                                <p class="text-muted small mb-4">Face detection, recognition, and clustering powered by Insightface + Qdrant.</p>
+
+                                <div class="mb-4">
+                                    <h6 class="fw-bold mb-2">About the Model</h6>
+                                    <div class="small text-muted" style="line-height:1.7;">
+                                        <p class="mb-1"><strong>Model:</strong> Insightface Buffalo-L — a ResNet-100 backbone trained on MS1MV3 with ArcFace loss, producing 512-dimensional embeddings.</p>
+                                        <p class="mb-1"><strong>Detection:</strong> RetinaFace (Mobilenet0.25) for face detection with landmark localisation. Detection threshold: 0.5.</p>
+                                        <p class="mb-1"><strong>Why this model?</strong> Buffalo-L offers the best accuracy/speed trade-off for CPU inference. It is widely benchmarked and achieves 99.8%+ on LFW with robust occlusion and pose handling.</p>
+                                        <p class="mb-1"><strong>Vector DB:</strong> Qdrant stores embeddings for cosine-similarity search. Each face is converted to a 512-d float vector and indexed with HNSW for fast approximate nearest-neighbour lookups.</p>
+                                        <p class="mb-1"><strong>Clustering:</strong> HDBSCAN groups similar embeddings into persons without requiring a predefined number of clusters. New faces are automatically assigned to existing clusters or flagged as unknown.</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h6 class="fw-bold mb-2">How It Works</h6>
+                                    <div class="small text-muted" style="line-height:1.7;">
+                                        <ol class="mb-0 ps-3">
+                                            <li><strong>Detection</strong> — When a photo is uploaded (or scanned manually), it is sent to the ML service. RetinaFace finds all faces in the image and returns bounding boxes and 5-point facial landmarks.</li>
+                                            <li><strong>Embedding</strong> — Each detected face is aligned using the landmarks, then passed through the Buffalo-L ResNet-100 model to produce a 512-dimensional feature vector.</li>
+                                            <li><strong>Storage</strong> — The embedding is stored in Qdrant for similarity search, and metadata (bbox, score, photo_id) is stored in MySQL for fast relational queries.</li>
+                                            <li><strong>Clustering</strong> — HDBSCAN scans all stored embeddings and groups them into person clusters based on cosine distance. Cluster labels are saved to the <code>person</code> table.</li>
+                                            <li><strong>Search</strong> — Upload a photo → detect + embed → search Qdrant for the nearest neighbours → return ranked results with similarity scores.</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -391,6 +510,32 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Force Rescan Confirmation Modal -->
+<div class="modal fade" id="forceRescanModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-danger text-white">
+                <h6 class="modal-title fw-bold"><i class="bi bi-arrow-clockwise me-2"></i>Force Rescan All</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i> This will delete all existing face data!</p>
+                <p class="text-muted small mb-3">This permanently deletes <strong>all face encodings, person assignments, and Qdrant vectors</strong>, then rescans every image from scratch. Clustering will need to be re-run afterwards.</p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Type <span class="text-danger fw-bold">RESCAN</span> to confirm:</label>
+                    <input type="text" id="forceRescanConfirmInput" class="form-control" placeholder="Type RESCAN here">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger rounded-pill px-4" id="btnConfirmForceRescan" disabled>
+                    <i class="bi bi-arrow-clockwise me-1"></i> Force Rescan
+                </button>
             </div>
         </div>
     </div>
@@ -738,6 +883,81 @@ document.addEventListener('DOMContentLoaded', function() {
         }).always(function () {
             $btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i> Refresh Now');
         });
+    });
+
+    // ── ML / Face Recognition Actions ─────────────────────────────────
+
+    // Scan Unscanned
+    $('#btnScanUnscanned').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Scanning...');
+        $.post(BASE_URL + 'api/faces/scan-all', function (res) {
+            if (res.status === 'success') {
+                var msg = 'Scanned ' + res.processed + ' new photos' + (res.skipped ? ', skipped ' + res.skipped : '') + '.';
+                if (res.errors && res.errors.length) msg += ' ' + res.errors.length + ' error(s).';
+                showToast(msg, res.errors && res.errors.length ? 'warning' : 'success');
+                setTimeout(function () { location.reload(); }, 1500);
+            } else {
+                showToast(res.message || 'Scan failed', 'danger');
+            }
+        }).fail(function () {
+            showToast('Scan request failed.', 'danger');
+        }).always(function () {
+            $btn.prop('disabled', false).html('<i class="bi bi-play-fill me-1"></i> Scan Unscanned');
+        });
+    });
+
+    // Re-cluster
+    $('#btnRecluster').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Clustering...');
+        $.post(BASE_URL + 'api/faces/cluster', function (res) {
+            if (res.status === 'success') {
+                var data = res.data || {};
+                showToast(
+                    'Clustering complete — ' + (data.clusters || 0) + ' clusters, ' + (data.assigned || 0) + ' faces assigned.',
+                    'success'
+                );
+                setTimeout(function () { location.reload(); }, 1500);
+            } else {
+                showToast(res.message || 'Clustering failed', 'danger');
+            }
+        }).fail(function () {
+            showToast('Clustering request failed.', 'danger');
+        }).always(function () {
+            $btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i> Re-cluster');
+        });
+    });
+
+    // Force Rescan confirm input
+    $('#forceRescanConfirmInput').on('input', function () {
+        $('#btnConfirmForceRescan').prop('disabled', $(this).val() !== 'RESCAN');
+    });
+
+    // Force Rescan
+    $('#btnConfirmForceRescan').on('click', function () {
+        var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Rescanning all...');
+        $.post(BASE_URL + 'api/faces/force-scan', function (res) {
+            if (res.status === 'success') {
+                $('#forceRescanModal').modal('hide');
+                showToast(
+                    'Force rescan complete — ' + res.processed + ' photos processed' +
+                    (res.errors && res.errors.length ? ' (' + res.errors.length + ' errors)' : '') + '.',
+                    res.errors && res.errors.length ? 'warning' : 'success'
+                );
+                setTimeout(function () { location.reload(); }, 1500);
+            } else {
+                showToast(res.message || 'Force rescan failed', 'danger');
+                $btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i> Force Rescan');
+            }
+        }).fail(function () {
+            showToast('Force rescan request failed.', 'danger');
+            $btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i> Force Rescan');
+        });
+    });
+
+    // Reset modal input when hidden
+    $('#forceRescanModal').on('hidden.bs.modal', function () {
+        $(this).find('input[type="text"]').val('');
+        $(this).find('.btn-danger').prop('disabled', true);
     });
 });
 

@@ -39,12 +39,62 @@ class Faces extends BaseController
     {
         $personModel = new PersonModel();
         $faceModel   = new FaceEncodingModel();
+        $photoModel  = new \App\Models\PhotoModel();
 
         $persons = $personModel->getPersonsWithFaceCount();
         $unassignedCount = $faceModel->where('person_id', null)->countAllResults();
 
+        // Attach thumbnail data for each person (first face's photo + bbox + attributes)
+        foreach ($persons as &$person) {
+            $firstFace = $faceModel->where('person_id', $person['id'])->orderBy('id', 'ASC')->first();
+            $person['thumbnail'] = null;
+            $person['age'] = null;
+            $person['gender'] = null;
+            if ($firstFace) {
+                $photo = $photoModel->find($firstFace['photo_id']);
+                $person['age'] = $firstFace['age'] ?? null;
+                $person['gender'] = $firstFace['gender'] ?? null;
+                if ($photo) {
+                    $pw = (float) ($photo['width'] ?: 800);
+                    $ph = (float) ($photo['height'] ?: 600);
+                    $person['thumbnail'] = [
+                        'url'  => base_url($photo['path']),
+                        'x'    => (float) $firstFace['bbox_x'],
+                        'y'    => (float) $firstFace['bbox_y'],
+                        'w'    => (float) $firstFace['bbox_w'],
+                        'h'    => (float) $firstFace['bbox_h'],
+                        'pw'   => $pw,
+                        'ph'   => $ph,
+                    ];
+                }
+            }
+        }
+        unset($person);
+
+        // Attach thumbnail data for unassigned faces
+        $unassigned = $faceModel->where('person_id', null)->orderBy('id')->findAll();
+        foreach ($unassigned as &$uface) {
+            $uface['thumbnail'] = null;
+            $photo = $photoModel->find($uface['photo_id']);
+            if ($photo) {
+                $pw = (float) ($photo['width'] ?: 800);
+                $ph = (float) ($photo['height'] ?: 600);
+                $uface['thumbnail'] = [
+                    'url'  => base_url($photo['path']),
+                    'x'    => (float) $uface['bbox_x'],
+                    'y'    => (float) $uface['bbox_y'],
+                    'w'    => (float) $uface['bbox_w'],
+                    'h'    => (float) $uface['bbox_h'],
+                    'pw'   => $pw,
+                    'ph'   => $ph,
+                ];
+            }
+        }
+        unset($uface);
+
         $data = [
             'persons'         => $persons,
+            'unassigned'      => $unassigned,
             'unassignedCount' => $unassignedCount,
             'faceModel'       => $faceModel,
             'counts'          => $this->getSidebarCounts(),
@@ -89,10 +139,36 @@ class Faces extends BaseController
         $photoModel = new \App\Models\PhotoModel();
         $photo = $photoModel->find($photoId);
 
+        $highlightPersonId = $this->request->getGet('person');
+        if ($highlightPersonId) {
+            $highlightPersonId = (int) $highlightPersonId;
+        }
+
+        $personPhotos = [];
+        $currentIndex = 0;
+        if ($highlightPersonId) {
+            $allFaces = $faceModel->where('person_id', $highlightPersonId)->orderBy('id', 'ASC')->findAll();
+            $allPhotoIds = array_unique(array_column($allFaces, 'photo_id'));
+            $idx = 0;
+            foreach ($allPhotoIds as $pid) {
+                $p = $photoModel->find($pid);
+                if ($p) {
+                    $personPhotos[] = $p;
+                    if ($pid == $photoId) {
+                        $currentIndex = $idx;
+                    }
+                    $idx++;
+                }
+            }
+        }
+
         return view('photos/faces_photo', [
-            'photo'  => $photo,
-            'faces'  => $faces,
-            'counts' => $this->getSidebarCounts(),
+            'photo'              => $photo,
+            'faces'              => $faces,
+            'highlightPersonId'  => $highlightPersonId,
+            'personPhotos'       => $personPhotos,
+            'currentIndex'       => $currentIndex,
+            'counts'             => $this->getSidebarCounts(),
         ]);
     }
 
@@ -136,17 +212,39 @@ class Faces extends BaseController
     public function apiPersons(): ResponseInterface
     {
         $personModel = new PersonModel();
+        $faceModel   = new FaceEncodingModel();
+        $photoModel  = new \App\Models\PhotoModel();
         $persons = $personModel->getPersonsWithFaceCount();
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'persons' => array_map(fn($p) => [
-                'id'            => (int) $p['id'],
-                'name'          => $p['name'],
-                'cluster_label' => $p['cluster_label'],
-                'face_count'    => (int) $p['face_count'],
-                'thumbnail_face_id' => $p['thumbnail_face_id'] ? (int) $p['thumbnail_face_id'] : null,
-            ], $persons),
+            'persons' => array_map(function($p) use ($faceModel, $photoModel) {
+                $thumb = null;
+                $firstFace = $faceModel->where('person_id', $p['id'])->orderBy('id', 'ASC')->first();
+                if ($firstFace) {
+                    $photo = $photoModel->find($firstFace['photo_id']);
+                    if ($photo) {
+                        $thumb = [
+                            'path' => $photo['path'],
+                            'thumbnail_path' => $photo['thumbnail_path'],
+                            'bbox_x' => (float) $firstFace['bbox_x'],
+                            'bbox_y' => (float) $firstFace['bbox_y'],
+                            'bbox_w' => (float) $firstFace['bbox_w'],
+                            'bbox_h' => (float) $firstFace['bbox_h'],
+                            'photo_width' => (float) ($photo['width'] ?: 800),
+                            'photo_height' => (float) ($photo['height'] ?: 600),
+                        ];
+                    }
+                }
+                return [
+                    'id'            => (int) $p['id'],
+                    'name'          => $p['name'],
+                    'cluster_label' => $p['cluster_label'],
+                    'face_count'    => (int) $p['face_count'],
+                    'thumbnail_face_id' => $p['thumbnail_face_id'] ? (int) $p['thumbnail_face_id'] : null,
+                    'thumbnail'     => $thumb,
+                ];
+            }, $persons),
         ]);
     }
 
@@ -190,6 +288,8 @@ class Faces extends BaseController
                 'path'   => $p['path'],
                 'thumbnail_path' => $p['thumbnail_path'],
                 'filename' => $p['filename'],
+                'width'  => $p['width'] ? (int) $p['width'] : null,
+                'height' => $p['height'] ? (int) $p['height'] : null,
             ], $photos),
         ]);
     }
@@ -309,26 +409,86 @@ class Faces extends BaseController
 
     public function apiScanAll(): ResponseInterface
     {
+        try {
+            $faceModel = new FaceEncodingModel();
+            $photoModel = new \App\Models\PhotoModel();
+
+            $photos = $photoModel
+                ->like('mime_type', 'image/', 'after')
+                ->where('deleted_at', null)
+                ->orderBy('id', 'ASC')
+                ->findAll();
+
+            $processed = 0;
+            $skipped = 0;
+            $errors = [];
+
+            foreach ($photos as $photo) {
+                $existing = $faceModel->where('photo_id', $photo['id'])->countAllResults();
+                if ($existing > 0) {
+                    $skipped++;
+                    continue;
+                }
+
+                $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
+                    'form_params' => ['photo_id' => $photo['id']],
+                ]);
+
+                if (isset($result['error'])) {
+                    $errors[] = ['photo_id' => $photo['id'], 'error' => $result['error']];
+                } else {
+                    $processed++;
+                }
+            }
+
+            return $this->response->setJSON([
+                'status'    => 'success',
+                'processed' => $processed,
+                'skipped'   => $skipped,
+                'errors'    => $errors,
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'apiScanAll crashed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return $this->response->setStatusCode(500)->setJSON([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function apiResetScans(): ResponseInterface
+    {
+        $result = $this->mlProxy('DELETE', '/api/v1/faces/reset');
+
+        return $this->response->setJSON([
+            'status' => isset($result['error']) ? 'error' : 'success',
+            'data'   => $result,
+        ]);
+    }
+
+    public function apiForceScanAll(): ResponseInterface
+    {
+        $resetResult = $this->mlProxy('DELETE', '/api/v1/faces/reset');
+        if (isset($resetResult['error'])) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Reset failed: ' . $resetResult['error'],
+            ]);
+        }
+
         $faceModel = new FaceEncodingModel();
         $photoModel = new \App\Models\PhotoModel();
 
         $photos = $photoModel
-            ->where('type', 'image')
+            ->like('mime_type', 'image/', 'after')
             ->where('deleted_at', null)
             ->orderBy('id', 'ASC')
             ->findAll();
 
         $processed = 0;
-        $skipped = 0;
         $errors = [];
 
         foreach ($photos as $photo) {
-            $existing = $faceModel->where('photo_id', $photo['id'])->countAllResults();
-            if ($existing > 0) {
-                $skipped++;
-                continue;
-            }
-
             $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
                 'form_params' => ['photo_id' => $photo['id']],
             ]);
@@ -343,8 +503,17 @@ class Faces extends BaseController
         return $this->response->setJSON([
             'status'    => 'success',
             'processed' => $processed,
-            'skipped'   => $skipped,
             'errors'    => $errors,
+        ]);
+    }
+
+    public function apiScanJobStatus(int $jobId): ResponseInterface
+    {
+        $result = $this->mlProxy('GET', "/api/v1/scan/batch/{$jobId}/status");
+
+        return $this->response->setJSON([
+            'status' => isset($result['error']) ? 'error' : 'success',
+            'data'   => $result,
         ]);
     }
 
