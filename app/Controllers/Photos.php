@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Controllers\BaseController;
 use App\Libraries\SmartAlbumRules;
 use CodeIgniter\HTTP\ResponseInterface;
+use ZipArchive;
 
 class Photos extends BaseController
 {
@@ -324,16 +325,28 @@ class Photos extends BaseController
             return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
         }
 
+        $expiresAt = $this->request->getPost('expires_at');
+        if ($expiresAt === '' || $expiresAt === null) {
+            $expiresAt = null;
+        } else {
+            $ts = strtotime($expiresAt);
+            $expiresAt = $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
+        }
+
         // Check for existing link
         $existing = $shareModel->where('photo_id', $id)->first();
         if ($existing) {
             $token = $existing['access_token'];
+            if ($existing['expires_at'] !== $expiresAt) {
+                $shareModel->update($existing['id'], ['expires_at' => $expiresAt]);
+            }
         } else {
             // Generate unique secure token
             $token = bin2hex(random_bytes(16));
             $shareModel->insert([
                 'photo_id'     => $id,
-                'access_token' => $token
+                'access_token' => $token,
+                'expires_at'   => $expiresAt,
             ]);
         }
 
@@ -341,6 +354,90 @@ class Photos extends BaseController
             'status' => 'success', 
             'url'    => base_url("s/{$token}")
         ]);
+    }
+
+    public function sharePhoto($id)
+    {
+        $userId   = auth()->id();
+        $targetId = (int) $this->request->getPost('user_id');
+        if (! $targetId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'User ID required']);
+        }
+        if ($targetId === (int) $userId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'You cannot share a photo with yourself']);
+        }
+
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($id);
+        if (! $photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
+        }
+
+        $userModel = new \App\Models\UserModel();
+        $target = $userModel->find($targetId);
+        if (! $target) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'User not found']);
+        }
+
+        $shareModel = new \App\Models\PhotoShareModel();
+        $exists = $shareModel->where('photo_id', $id)->where('shared_with', $targetId)->first();
+        if ($exists) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Already shared with this user']);
+        }
+
+        $shareModel->insert([
+            'photo_id'    => $id,
+            'shared_by'   => $userId,
+            'shared_with' => $targetId,
+            'permission'  => 'view',
+        ]);
+
+        return $this->response->setJSON(['status' => 'success']);
+    }
+
+    public function unsharePhoto($id)
+    {
+        $userId   = auth()->id();
+        $targetId = (int) $this->request->getPost('user_id');
+        if (! $targetId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'User ID required']);
+        }
+
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($id);
+        if (! $photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
+        }
+
+        $shareModel = new \App\Models\PhotoShareModel();
+        $shareModel->where('photo_id', $id)->where('shared_with', $targetId)->delete();
+
+        return $this->response->setJSON(['status' => 'success']);
+    }
+
+    public function searchUsers()
+    {
+        $q = trim((string) $this->request->getGet('q'));
+        if ($q === '') {
+            return $this->response->setJSON([]);
+        }
+
+        $db    = \Config\Database::connect();
+        $users = $db->table('users')
+            ->select('users.id, users.username, users.name, auth_identities.secret as email')
+            ->join('auth_identities', 'auth_identities.user_id = users.id AND auth_identities.type = ' . $db->escape('email_password'), 'left')
+            ->where('users.id !=', auth()->id())
+            ->groupStart()
+                ->like('users.username', $q)
+                ->orLike('users.name', $q)
+                ->orLike('auth_identities.secret', $q)
+            ->groupEnd()
+            ->orderBy('users.username', 'ASC')
+            ->limit(10)
+            ->get()
+            ->getResultArray();
+
+        return $this->response->setJSON($users);
     }
 
     public function viewShared($token)
@@ -793,6 +890,10 @@ class Photos extends BaseController
             'date_to'         => $this->request->getPost('date_to'),
             'camera_contains' => $this->request->getPost('camera_contains'),
             'has_gps'         => $this->request->getPost('has_gps'),
+            'min_latitude'    => $this->request->getPost('min_latitude'),
+            'max_latitude'    => $this->request->getPost('max_latitude'),
+            'min_longitude'   => $this->request->getPost('min_longitude'),
+            'max_longitude'   => $this->request->getPost('max_longitude'),
             'favorite_only'   => $this->request->getPost('favorite_only'),
             'mime_kind'       => $this->request->getPost('mime_kind'),
         ]);
@@ -897,9 +998,71 @@ class Photos extends BaseController
                 $this->clearSidebarCountsCache();
                 break;
             case 'delete':
-                // Check if already in trash (soft delete) or permanent
+                // Soft delete (moves to trash)
                 $photoModel->whereIn('id', $photoIds)->where('user_id', $userId)->delete();
                 $this->clearSidebarCountsCache();
+                break;
+            case 'trash':
+                // Soft delete (moves to trash) — alias of delete
+                $db->table('photos')
+                    ->whereIn('id', $photoIds)
+                    ->where('user_id', $userId)
+                    ->where('deleted_at IS NULL', null, false)
+                    ->set('deleted_at', date('Y-m-d H:i:s'))
+                    ->update();
+                $this->clearSidebarCountsCache();
+                break;
+            case 'download':
+                $photos = $db->table('photos')
+                    ->whereIn('id', $photoIds)
+                    ->where('user_id', $userId)
+                    ->get()
+                    ->getResultArray();
+                if (empty($photos)) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'No photos found']);
+                }
+
+                if (! class_exists('ZipArchive')) {
+                    $first = FCPATH . ltrim($photos[0]['path'], '/');
+                    if (! is_file($first)) {
+                        return $this->response->setJSON(['status' => 'error', 'message' => 'File not found on disk']);
+                    }
+
+                    return $this->response->download($first, null)->setFileName($photos[0]['filename']);
+                }
+
+                $zipDir  = WRITEPATH . 'downloads/';
+                if (! is_dir($zipDir)) {
+                    mkdir($zipDir, 0755, true);
+                }
+                $zipPath = $zipDir . 'photos_' . $userId . '_' . time() . '.zip';
+
+                $zip = new ZipArchive();
+                if ($zip->open($zipPath, ZipArchive::CREATE) !== true) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'Could not create archive']);
+                }
+
+                $added = 0;
+                foreach ($photos as $photo) {
+                    $full = FCPATH . ltrim($photo['path'], '/');
+                    if (is_file($full)) {
+                        $zip->addFile($full, $photo['filename'] ?? basename($full));
+                        $added++;
+                    }
+                }
+                $zip->close();
+
+                if ($added === 0) {
+                    @unlink($zipPath);
+
+                    return $this->response->setJSON(['status' => 'error', 'message' => 'No files found on disk']);
+                }
+
+                register_shutdown_function(function () use ($zipPath) {
+                    if (is_file($zipPath)) @unlink($zipPath);
+                });
+
+                return $this->response->download($zipPath, null)->setFileName('chege-photos-' . date('Ymd-His') . '.zip');
                 break;
             case 'add_to_album':
                 $albumId = $this->request->getPost('album_id');

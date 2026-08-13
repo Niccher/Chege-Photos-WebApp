@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Something Went Wrong — Chege Photos</title>
-    <meta name="description" content="An unexpected error occurred while processing your request.">
+    <title>Forbidden — Chege Photos</title>
+    <meta name="description" content="You do not have permission to access this resource.">
     <meta name="robots" content="noindex, follow">
     <script>
         (function() {
@@ -62,18 +62,18 @@
 </head>
 <body>
     <div class="error-card">
-        <div class="error-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
-        <div class="error-code">500</div>
-        <h1 class="error-title">Something went wrong</h1>
+        <div class="error-icon"><i class="bi bi-shield-lock-fill"></i></div>
+        <div class="error-code">403</div>
+        <h1 class="error-title">Access Forbidden</h1>
         <p class="error-desc">
-            An unexpected error occurred while processing your request. Our team has been notified and we're working to fix it.
+            You don't have permission to access this resource. If you think this is a mistake, sign in to your account.
         </p>
         <a href="<?= base_url() ?>" class="btn-home">
             <i class="bi bi-house-door-fill"></i> Back to Home
         </a>
         <div class="error-links">
-            <a href="<?= url_to('login') ?>">Return to Gallery</a>
-            <a href="<?= base_url('setup') ?>">Deployment Guide</a>
+            <a href="<?= url_to('login') ?>">Sign In</a>
+            <a href="<?= base_url('about') ?>">About Chege Photos</a>
         </div>
     </div>
 </body>

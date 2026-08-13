@@ -40,7 +40,7 @@
             <button class="btn btn-link text-dark me-2 d-xl-none" id="sidebarToggle">
                 <i class="bi bi-list fs-4"></i>
             </button>
-            <a class="navbar-brand me-auto" href="<?= base_url() ?>">
+            <a class="navbar-brand me-auto" href="<?= base_url('photos') ?>">
                 <img src="<?= base_url('app_icon.png') ?>" alt="Logo" width="32" height="32" class="me-2 rounded shadow-sm">
                 <span>Photos</span>
             </a>
@@ -116,10 +116,56 @@
     <nav id="sidebarMenu" class="sidebar">
         <div class="d-flex flex-column h-100">
             <ul class="nav flex-column mb-auto">
+                <?php if (str_starts_with((uri_string() ?? ''), 'admin')): ?>
+                <!-- ADMIN CONSOLE SECTION -->
+                <li class="sidebar-section-title">Administration</li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--photos <?= (uri_string() === 'admin/home') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/home') ?>">
+                        <span><i class="bi bi-speedometer2"></i> Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'admin/settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/settings') ?>">
+                        <span><i class="bi bi-sliders"></i> Global Configs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--faces <?= (uri_string() === 'admin/users') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/users') ?>">
+                        <span><i class="bi bi-people"></i> User Accounts</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--sharing <?= (uri_string() === 'admin/smtp') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/smtp') ?>">
+                        <span><i class="bi bi-envelope-at"></i> Email Config</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'admin/ml') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/ml') ?>">
+                        <span><i class="bi bi-cpu"></i> ML Config</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--photos <?= (uri_string() === 'admin/storage') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/storage') ?>">
+                        <span><i class="bi bi-hdd"></i> Storage Config</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--timeline <?= (uri_string() === 'admin/crons') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/crons') ?>">
+                        <span><i class="bi bi-clock-history"></i> System Crons</span>
+                    </a>
+                </li>
+                
+                <li class="sidebar-section-title">Navigation</li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--explore d-flex justify-content-between align-items-center" href="<?= base_url('photos') ?>">
+                        <span><i class="bi bi-arrow-left-circle"></i> Return to Library</span>
+                    </a>
+                </li>
+                <?php else: ?>
                 <!-- LIBRARY SECTION -->
                 <li class="sidebar-section-title">Library</li>
                 <li class="nav-item">
-                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--photos <?= (url_is('/')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url() ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--photos <?= (url_is('photos')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('photos') ?>">
                         <span><i class="bi bi-image"></i> Photos</span>
                         <span class="badge rounded-pill sidebar-count sidebar-count--photos"><?= (int) ($counts['photos'] ?? 0) ?></span>
                     </a>
@@ -147,8 +193,8 @@
                         <span class="badge rounded-pill sidebar-count sidebar-count--memories"><?= (int) ($counts['memories'] ?? 0) ?></span>
                     </a>
                 </li>
-
-                <!-- ALBUMS (dropdown; fixed Popper strategy escapes sidebar overflow clipping) -->
+ 
+                <!-- ALBUMS (dropdown) -->
                 <li class="nav-item dropdown dropend">
                     <a class="nav-link dropdown-toggle sidebar-nav-tone sidebar-nav-tone--albums d-flex justify-content-between align-items-center gap-2 <?= str_starts_with((string) (uri_string() ?: ''), 'albums') ? 'active' : '' ?>"
                        href="#"
@@ -174,17 +220,17 @@
                                 <li>
                                     <a class="dropdown-item rounded-1 album-dropzone text-truncate <?= (uri_string() === 'albums/' . (int) $album['id']) ? 'active' : '' ?>"
                                        href="<?= base_url('albums/' . $album['id']) ?>"
-                                       data-album-id="<?= $album['id'] ?>"
-                                       data-is-smart="<?= ! empty($album['is_smart']) ? '1' : '0' ?>"
-                                       title="<?= esc($album['name']) ?>">
-                                        <i class="bi <?= ! empty($album['is_smart']) ? 'bi-stars' : 'bi-folder' ?> me-2 flex-shrink-0"></i><?= esc($album['name']) ?>
+                                        data-album-id="<?= $album['id'] ?>"
+                                        data-is-smart="<?= ! empty($album['is_smart']) ? '1' : '0' ?>"
+                                        title="<?= esc($album['name']) ?>">
+                                         <i class="bi <?= ! empty($album['is_smart']) ? 'bi-stars' : 'bi-folder' ?> me-2 flex-shrink-0"></i><?= esc($album['name']) ?>
                                     </a>
                                 </li>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </ul>
                 </li>
-
+ 
                 <!-- TOOLS SECTION -->
                 <li class="sidebar-section-title">Tools</li>
                 <li class="nav-item">
@@ -215,6 +261,16 @@
                         <span class="badge rounded-pill sidebar-count sidebar-count--trash"><?= (int) ($counts['trash'] ?? 0) ?></span>
                     </a>
                 </li>
+                <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin')): ?>
+                <!-- ADMINISTRATION SECTION -->
+                <li class="sidebar-section-title">Administration</li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= str_starts_with((uri_string() ?? ''), 'admin') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/home') ?>">
+                        <span><i class="bi bi-shield-lock"></i> Admin Console</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                <?php endif; ?>
             </ul>
             
             <div class="storage-indicator p-3 rounded-4 mt-4" style="background: var(--card-bg); border: 1px solid var(--border-color);">
@@ -258,6 +314,12 @@
             </button>
             <button class="btn btn-link text-white p-0" id="bulkDelete" title="Delete Selected">
                 <i class="bi bi-trash fs-5"></i>
+            </button>
+            <button class="btn btn-link text-white p-0" id="bulkTrash" title="Move Selected to Trash">
+                <i class="bi bi-recycle fs-5"></i>
+            </button>
+            <button class="btn btn-link text-white p-0" id="bulkDownload" title="Download Selected">
+                <i class="bi bi-download fs-5"></i>
             </button>
             <button class="btn btn-link text-white p-0" id="bulkAddToAlbum" title="Add Selected to Album">
                 <i class="bi bi-plus-circle fs-5"></i>
@@ -313,10 +375,15 @@
             </div>
             
             <!-- Link Copy Tooltip (Pseudo) -->
-            <div id="shareLinkPopup" class="position-absolute top-10 start-50 translate-middle-x bg-white text-dark rounded-pill shadow px-3 py-2 d-none" style="z-index: 1060; margin-top: 60px;">
+            <div id="shareLinkPopup" class="position-absolute top-10 start-50 translate-middle-x bg-white text-dark rounded shadow px-3 py-2 d-none" style="z-index: 1060; margin-top: 60px;">
                 <div class="d-flex align-items-center gap-2">
                     <span class="small fw-bold" id="sharedUrlText"></span>
                     <button class="btn btn-primary btn-sm rounded-pill px-3" id="btnCopyLink">Copy</button>
+                </div>
+                <div class="d-flex align-items-center gap-2 mt-2">
+                    <label class="small text-muted text-nowrap" for="linkExpiryInput">Expires</label>
+                    <input type="datetime-local" id="linkExpiryInput" class="form-control form-control-sm" style="min-width: 180px;">
+                    <button class="btn btn-outline-dark btn-sm rounded-pill px-3" id="btnApplyExpiry">Apply</button>
                 </div>
             </div>
             <div class="modal-body p-0 d-flex align-items-center justify-content-center flex-grow-1 overflow-hidden" id="lightboxImageContainer">

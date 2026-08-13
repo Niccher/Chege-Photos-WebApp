@@ -22,5 +22,19 @@ echo "Running database migrations..."
 cd /var/www/html
 php spark migrate --all 2>&1 || echo "WARNING: Migration encountered an issue. Check logs."
 
+# Setup container cron jobs
+echo "Configuring container cron schedules..."
+cat << 'EOF' > /etc/cron.d/photos-cron
+# Run master task scheduler every minute
+* * * * * php /var/www/html/spark cron:run >> /var/log/cron-run.log 2>&1
+EOF
+
+chmod 0644 /etc/cron.d/photos-cron
+crontab /etc/cron.d/photos-cron
+
+# Start the cron service
+echo "Starting cron service..."
+service cron start || cron || echo "WARNING: Could not start cron daemon."
+
 echo "Migrations complete. Starting Apache..."
 exec apache2-foreground

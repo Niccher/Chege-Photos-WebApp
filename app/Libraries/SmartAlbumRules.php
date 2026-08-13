@@ -23,6 +23,10 @@ class SmartAlbumRules
             'date_to'           => null,
             'camera_contains'   => '',
             'has_gps'           => false,
+            'min_latitude'      => null,
+            'max_latitude'      => null,
+            'min_longitude'     => null,
+            'max_longitude'     => null,
             'favorite_only'     => false,
             'mime_kind'         => self::MIME_ANY,
         ];
@@ -49,6 +53,10 @@ class SmartAlbumRules
             'date_to'         => self::sanitizeDate($raw['date_to'] ?? null),
             'camera_contains' => self::sanitizeCamera($raw['camera_contains'] ?? ''),
             'has_gps'         => filter_var($raw['has_gps'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'min_latitude'    => self::sanitizeFloat($raw['min_latitude'] ?? null, -90, 90),
+            'max_latitude'    => self::sanitizeFloat($raw['max_latitude'] ?? null, -90, 90),
+            'min_longitude'   => self::sanitizeFloat($raw['min_longitude'] ?? null, -180, 180),
+            'max_longitude'   => self::sanitizeFloat($raw['max_longitude'] ?? null, -180, 180),
             'favorite_only'   => filter_var($raw['favorite_only'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'mime_kind'       => $mime,
         ];
@@ -78,6 +86,10 @@ class SmartAlbumRules
         if (! empty($r['has_gps'])) {
             return true;
         }
+        if ($r['min_latitude'] !== null || $r['max_latitude'] !== null
+            || $r['min_longitude'] !== null || $r['max_longitude'] !== null) {
+            return true;
+        }
         if (! empty($r['favorite_only'])) {
             return true;
         }
@@ -100,6 +112,14 @@ class SmartAlbumRules
         $to   = $r['date_to'] ?? null;
         if ($from && $to && $from > $to) {
             return 'The start date must be on or before the end date.';
+        }
+        if (($r['min_latitude'] ?? null) !== null && ($r['max_latitude'] ?? null) !== null
+            && $r['min_latitude'] > $r['max_latitude']) {
+            return 'Minimum latitude must be on or below the maximum latitude.';
+        }
+        if (($r['min_longitude'] ?? null) !== null && ($r['max_longitude'] ?? null) !== null
+            && $r['min_longitude'] > $r['max_longitude']) {
+            return 'Minimum longitude must be on or below the maximum longitude.';
         }
 
         return null;
@@ -129,6 +149,19 @@ class SmartAlbumRules
         if (! empty($rules['has_gps'])) {
             $photoModel->where('latitude IS NOT NULL', null, false)
                 ->where('longitude IS NOT NULL', null, false);
+        }
+
+        if ($rules['min_latitude'] !== null) {
+            $photoModel->where('latitude >=', (string) $rules['min_latitude']);
+        }
+        if ($rules['max_latitude'] !== null) {
+            $photoModel->where('latitude <=', (string) $rules['max_latitude']);
+        }
+        if ($rules['min_longitude'] !== null) {
+            $photoModel->where('longitude >=', (string) $rules['min_longitude']);
+        }
+        if ($rules['max_longitude'] !== null) {
+            $photoModel->where('longitude <=', (string) $rules['max_longitude']);
         }
 
         if (! empty($rules['favorite_only'])) {
@@ -178,5 +211,21 @@ class SmartAlbumRules
         }
 
         return $s;
+    }
+
+    private static function sanitizeFloat(mixed $v, float $min, float $max): ?float
+    {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        if (! is_numeric($v)) {
+            return null;
+        }
+        $f = (float) $v;
+        if ($f < $min || $f > $max) {
+            return null;
+        }
+
+        return $f;
     }
 }

@@ -74,8 +74,8 @@ class Auth extends ShieldAuth
      * to apply any logic you may need.
      */
     public array $redirects = [
-        'register'          => '/',
-        'login'             => '/',
+        'register'          => '/photos',
+        'login'             => '/photos',
         'logout'            => 'login',
         'force_reset'       => '/',
         'permission_denied' => '/',
@@ -442,6 +442,11 @@ class Auth extends ShieldAuth
     public function loginRedirect(): string
     {
         $session = session();
+
+        if (auth()->loggedIn() && auth()->user()->inGroup('superadmin')) {
+            return $this->getUrl('/admin/home');
+        }
+
         $url     = $session->getTempdata('beforeLoginUrl') ?? setting('Auth.redirects')['login'];
 
         return $this->getUrl($url);

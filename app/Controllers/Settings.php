@@ -353,6 +353,19 @@ class Settings extends BaseController
 
         $this->clearSidebarCountsCache($userId);
 
+        // Clear ML face data for this user
+        if (! empty($ids)) {
+            try {
+                $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
+                $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
+                    'headers' => ['Content-Type' => 'application/json'],
+                    'body'    => json_encode(['photo_ids' => $ids]),
+                ]);
+            } catch (\Exception $e) {
+                log_message('error', 'Failed to clear ML face data: ' . $e->getMessage());
+            }
+        }
+
         // Log out
         auth()->logout();
 

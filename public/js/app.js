@@ -332,10 +332,11 @@ $(document).ready(function () {
     });
 
     // Public Sharing Link
-    $('#btnShareLink').on('click', function () {
+    $('#btnShareLink, #btnApplyExpiry').on('click', function () {
         if (!currentPhotoId) return;
 
-        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, function (res) {
+        const expiresAt = $('#linkExpiryInput').val() || '';
+        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, { expires_at: expiresAt }, function (res) {
             if (res.status === 'success') {
                 $('#sharedUrlText').text(res.url);
                 $('#shareLinkPopup').removeClass('d-none').hide().fadeIn(200);
@@ -796,11 +797,11 @@ $(document).ready(function () {
     }
 
     // --- Bulk Actions ---
-    $('#bulkFavorite, #bulkArchive, #bulkDelete').on('click', function () {
+    $('#bulkFavorite, #bulkArchive, #bulkDelete, #bulkTrash').on('click', function () {
         const action = $(this).attr('id').replace('bulk', '').toLowerCase();
         if (selectedIds.size === 0) return;
 
-        if (action === 'delete' && !confirm(`Delete ${selectedIds.size} selected photos?`)) return;
+        if ((action === 'delete' || action === 'trash') && !confirm(`Move ${selectedIds.size} selected photos to trash?`)) return;
 
         $.post(BASE_URL + 'bulk-action', {
             action: action,
@@ -810,6 +811,18 @@ $(document).ready(function () {
                 location.reload();
             }
         });
+    });
+
+    $('#bulkDownload').on('click', function () {
+        if (selectedIds.size === 0) return;
+
+        const $form = $('<form method="post" style="display:none"></form>').attr('action', BASE_URL + 'bulk-action').appendTo('body');
+        $form.append($('<input type="hidden" name="action" value="download">'));
+        selectedIds.forEach(function (id) {
+            $form.append($('<input type="hidden" name="ids[]" value="' + id + '">'));
+        });
+        $form.submit();
+        $form.remove();
     });
 
     $('#bulkAddToAlbum').on('click', function () {
@@ -1001,7 +1014,7 @@ $(document).ready(function () {
     if ($('#photoDropzone').length) {
         let myDropzone = new Dropzone("#photoDropzone", {
             paramName: "file",
-            maxFilesize: 250, // MB
+            maxFilesize: 512, // MB
             acceptedFiles: "image/*,video/*",
             timeout: 60000,
             dictDefaultMessage: "Drop photos here or click to upload",

@@ -11,9 +11,17 @@ use CodeIgniter\Router\RouteCollection;
 // API Auth
 $routes->get('test-ping', 'TestAuth::ping', ['filter' => null]);
 $routes->get('api/test', function() { return 'API is working'; });
-$routes->get('api/test2', 'Api\TestController::index');
+$routes->get('api/test2', 'Api\TestController::counts');
 $routes->post('api/login', 'Api\Auth::login');
 $routes->post('api/auth-with-token', 'Api\Auth::authWithToken');
+
+// Public pages (no auth required)
+$routes->get('/', 'Home::index');
+$routes->get('about', 'Home::about');
+$routes->get('android', 'Home::android');
+$routes->get('ml', 'Home::ml');
+$routes->get('setup', 'Home::setup');
+$routes->get('faq', 'Home::faq');
 
 // Web-only face action endpoints — inside main chain group
 $routes->post('api/faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1', ['filter' => 'chain']);
@@ -29,6 +37,9 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
     $routes->get('photos', 'ApiController::index');
     $routes->get('albums', 'ApiController::albums');
     $routes->get('albums/(:num)/photos', 'ApiController::albumPhotos/$1');
+    $routes->post('albums', 'ApiController::createAlbum');
+    $routes->put('albums/(:num)', 'ApiController::updateAlbum/$1');
+    $routes->delete('albums/(:num)', 'ApiController::deleteAlbum/$1');
     $routes->post('upload', '\App\Controllers\Photos::upload');
     $routes->get('memories', 'ApiController::memories');
     $routes->get('favorites', 'ApiController::favorites');
@@ -48,7 +59,7 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
 
 // All app routes require an authenticated session or token
 $routes->group('', ['filter' => 'chain'], function ($routes) {
-    $routes->get('/', 'Photos::index');
+    $routes->get('photos', 'Photos::index');
     $routes->get('scan', 'Photos::scan');
     $routes->get('backfill-exif', 'Photos::backfillExif');
     $routes->get('faces',          'Faces::index');
@@ -98,6 +109,38 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('settings/tokens/generate', 'Tokens::generate');
     $routes->post('settings/tokens/revoke', 'Tokens::revoke');
     $routes->get('settings/tokens/qr/(:any)', 'Tokens::qr/$1');
+});
+
+// Admin Console Routes (restricted to superadmin group)
+$routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
+    $routes->get('home', 'Admin::home');
+    $routes->get('settings', 'Admin::settings');
+    $routes->post('settings/save', 'Admin::saveSettings');
+    $routes->get('users', 'Admin::users');
+    
+    // User Management Actions
+    $routes->post('users/update-role', 'Admin::updateRole');
+    $routes->post('users/purge', 'Admin::purgeUserData');
+    $routes->post('users/delete', 'Admin::deleteUser');
+    
+    // SMTP Configurations
+    $routes->get('smtp', 'Admin::smtp');
+    $routes->post('smtp/save', 'Admin::saveSmtp');
+    $routes->post('smtp/test', 'Admin::testEmail');
+
+    // ML Configurations & Triggers
+    $routes->get('ml', 'Admin::ml');
+    $routes->post('ml/save', 'Admin::saveMlSettings');
+    $routes->post('ml/reset', 'Admin::resetMl');
+    $routes->post('ml/cluster', 'Admin::triggerCluster');
+
+    // Storage Configs
+    $routes->get('storage', 'Admin::storage');
+    $routes->post('storage/save', 'Admin::saveStorageSettings');
+
+    // Cron Jobs History & Configs
+    $routes->get('crons', 'Admin::crons');
+    $routes->post('crons/save', 'Admin::saveCronSettings');
 });
 
 // Public Sharing Routes

@@ -144,6 +144,25 @@ if (isset($album) && ! empty($album['is_smart'])) {
                             </div>
                         </div>
                         <div class="col-12">
+                            <label class="form-label small">GPS bounds (optional — leave blank to ignore)</label>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Min latitude</label>
+                            <input type="number" name="min_latitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['min_latitude'] ?? '') ?>" placeholder="-90 to 90">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Max latitude</label>
+                            <input type="number" name="max_latitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['max_latitude'] ?? '') ?>" placeholder="-90 to 90">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Min longitude</label>
+                            <input type="number" name="min_longitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['min_longitude'] ?? '') ?>" placeholder="-180 to 180">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Max longitude</label>
+                            <input type="number" name="max_longitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['max_longitude'] ?? '') ?>" placeholder="-180 to 180">
+                        </div>
+                        <div class="col-12">
                             <label class="form-label small">Media type</label>
                             <select name="mime_kind" class="form-select bg-black border-secondary text-white">
                                 <?php $mk = $smartRulesEdit['mime_kind'] ?? SmartAlbumRules::MIME_ANY; ?>

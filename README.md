@@ -1,307 +1,405 @@
-# Chege Photos Web App
+<div align="center">
 
-A CodeIgniter 4 PHP web application for photo management with ML-powered face recognition. Acts as the primary UI and API gateway within the Chege Photos ecosystem, serving a web frontend and Android mobile client.
+# Chege Photos WebApp
+
+Self-hosted personal photo management platform with ML-powered face recognition.
+
+![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?style=for-the-badge&logo=php)
+![CodeIgniter](https://img.shields.io/badge/CodeIgniter-4-EF4223?style=for-the-badge&logo=codeigniter)
+![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?style=for-the-badge&logo=mysql)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?style=for-the-badge&logo=bootstrap)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
+
+</div>
+
+---
+
+## About the Project
+
+Chege Photos is a self-hosted photo management web application built on CodeIgniter 4 with Shield authentication. It provides upload, organisation (albums, folders), viewing (grid, fullscreen, map explore, memories timeline), sharing, and analytics — all augmented by an ML face recognition service (sibling repo: [ML Chege Photos](https://github.com/niccher/Chege-Photos-ML)) for automatic face detection, person grouping, and similarity search. An [Android companion app](https://github.com/niccher/Chege-Photos-Android) syncs with the same backend via REST API.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Docker (hosts-shared-network)               │
+│                                                                     │
+│  ┌────────────────────┐              ┌──────────────────────────┐   │
+│  │  chege-photos       │  HTTP 9005   │  Browser / Android App   │   │
+│  │  (PHP 8.3 Apache)   │◀────────────▶│  (Web UI + REST API)     │   │
+│  │  port 80→9005      │              └──────────────────────────┘   │
+│  └──────┬─────────────┘                                             │
+│         │                                                           │
+│         │  CURL proxy to ML service                                 │
+│         ▼                                                           │
+│  ┌────────────────────┐   HTTP       ┌──────────────────────────┐   │
+│  │  ML Chege Photos   │◀────────────▶│  MySQL 8.4 (shared-mysql)│   │
+│  │  (FastAPI)          │             │  port 3306→9306          │   │
+│  │  port 9051         │             │  db_chege_photos         │   │
+│  └────────────────────┘             └──────────────────────────┘   │
+│                                                                     │
+│  ┌────────────────────┐                                             │
+│  │  phpMyAdmin        │  HTTP 9000  (dev convenience)               │
+│  │  port 80→9000     │                                             │
+│  └────────────────────┘                                             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+The web app acts as both a standalone photo manager and a proxy to the ML service. All face-related endpoints (`api/faces/scan`, `api/faces/cluster`, `api/faces/search`, etc.) are proxied from the CI4 controllers to `http://ml-chege-photos:8000` via cURL. The Android app communicates directly with both the web app's REST API and the ML service's API.
+
+---
+
+## Features
+
+### Photo Management
+- **Upload** — AJAX multi-file upload via Dropzone.js, 512 MB max file size, auto EXIF extraction
+- **Grid & Fullscreen** — Responsive photo grid with infinite scroll; fullscreen lightbox carousel with keyboard navigation and slideshow mode
+- **EXIF metadata** — Camera model, ISO, shutter speed, aperture, GPS coordinates, and more extracted on upload
+- **Bulk operations** — Select multiple photos for batch favorite, archive, delete, trash, download, add-to-album
+- **Soft delete** — Trash with 60-day retention; permanent delete only after 60 days
+
+### Albums
+- **Manual albums** — Create, name, describe, and populate with photos via drag-select
+- **Smart albums** — Rule-based auto-populating albums with filters: date range, camera model, GPS bounds, file type, favorites
+- **Cover photos** — Auto-selected or manually set album cover image
+
+### Face Recognition (requires ML service)
+- **Auto-detect & scan** — Face detection across all photos; per-photo scan status tracking
+- **Person grouping** — HDBSCAN clustering auto-groups detected faces into persons
+- **Person management** — Name persons, merge duplicates, view all photos of a person
+- **Thumbnails** — Face thumbnails shown in person grid with age/gender overlay (when `INCLUDE_SENSITIVE_ATTRIBUTES=true`)
+- **Photo detail overlay** — Face bounding boxes highlighted on photo with gold border for the current person; click any face to see person details
+- **Similarity search** — Upload a photo to find all matching faces across the library
+
+### Sharing
+- **Share with users** — Share individual photos with other registered users (view permission)
+- **Public share links** — Generate token-authenticated public links with optional expiration
+- **Standalone viewer** — Public share page shows photo with metadata on a glass-themed layout
+
+### Explore & Memories
+- **Map explore** — Leaflet map with photo markers and heatmap overlay for geotagged photos
+- **Memories** — "On this day" and "6 months ago" feeds based on photo timestamps
+
+### Analytics
+- **Storage usage** — Bar chart of per-user storage consumption
+- **Timeline** — Monthly photo upload volume chart
+- **File types** — MIME type distribution (JPG, PNG, MP4, etc.)
+- **Camera models** — EXIF-derived camera model frequency table
+- **Metadata stats** — Average resolution, file size trends
+
+### User Features
+- **Shield auth** — Registration, login, magic-link, password reset
+- **Auth tokens** — Generate 8-character tokens for Android app authentication; QR code display for easy scanning
+- **Profile & preferences** — Avatar, display name, theme selection (light/dark/solarized/grey), biometric unlock toggle
+- **Data export** — ZIP download of all user photos and metadata
+- **Account deletion** — Self-service account deletion with all data removed (including ML face data)
+
+### Superuser Administration Console
+- **Dashboard Overview** — Live status monitoring of standard/thumbnails directory usage, MySQL records, and FastAPI ML service health checks.
+- **Dynamic Configs** — Adjust registrations options, default storage limits, and manage user roles (Standard vs Superadmin).
+- **Storage & Disk Management** — Inspect uploads vs thumbnails footprints (both count and size) and configure trash purge policies.
+- **SMTP Mail Configuration** — Manage mail credentials, dispatch test emails, view sent logs with tracking IDs (`CP-[HEX]`), and list trigger events.
+- **ML Configuration** — Tune RetinaFace detection thresholds, swap model packs (Buffalo-L, M, S, SC), and trigger HDBSCAN clustering or vector space resets.
+- **System Task Scheduler** — Modify execution schedules (via cron expressions) directly from the dashboard and inspect run logs database (`cron_logs`).
+
+### System Logging Tables
+- `cron_logs` — Tracks background executions of CLI Spark commands (`trash:purge`, `ml:cluster`, `storage:clean-temp`), recording runtime statuses, outputs, execution durations, and run times.
+- `email_logs` — Records all outgoing SMTP emails, tracking subjects, recipients, execution times, success statuses, debug transaction trails, and unique tracking IDs.
+
+### Themes
+- **5 themes** — Auto (OS), Light (default), Dark, Solarized, Grey; persisted in the settings database and `localStorage`; toggle via sidebar
+
+---
+
+## Superuser Default Account
+For administrative overrides, a default superuser account is seeded automatically:
+*   **Username:** `superadmin`
+*   **Email:** `superadmin@eavesdroid.com`
+*   **Password:** `SuperAdmin@2024!`
+*   *Note:* Accounts in the `superadmin` group are automatically redirected to the `/admin/home` dashboard upon login.
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Backend | PHP 8.3, CodeIgniter 4 |
-| Database | MySQL 8.4 |
-| Auth | CodeIgniter Shield |
-| Frontend | Bootstrap 5, Chart.js, jQuery |
-| Containerization | Docker & Docker Compose |
-| ML Service | Companion Python ML service (face detection, embedding, clustering) |
-| Vector DB | Qdrant (stores face embeddings for similarity search) |
+| Framework | CodeIgniter 4 (with Shield 1.2 auth) |
+| Language | PHP 8.3 |
+| Database | MySQL 8.4 (via MySQLi driver) |
+| Web server | Apache 2.4 (mod_rewrite) |
+| Container | Docker + Compose |
+| Frontend | Bootstrap 5.3, jQuery, Fabric.js, Chart.js, Leaflet, Dropzone.js |
+| Face ML proxy | cURL to ML Chege Photos (FastAPI) at `http://ml-chege-photos:8000` |
 
-## Architecture
+---
 
-The Chege Photos ecosystem has four components:
+## Prerequisites
 
-```
-Android App  ──┐
-                ├──> Chege Photos WebApp (CI4) ──> MySQL
-Web Browser  ──┘         │
-                         v
-               ML Service (Python) ──> Qdrant (vector DB)
-```
+- Docker ≥ 24.0
+- Docker Compose ≥ 2.20
+- A shared Docker network `hosts-shared-network` (created once via `docker network create hosts-shared-network`)
 
-- **Chege Photos WebApp** — The CI4 PHP application. Serves the web UI and exposes REST API endpoints consumed by the Android app. Handles uploads, EXIF extraction, thumbnail generation, album management, sharing, and search.
-- **Android App** — Mobile client that uploads photos via the API and can trigger face scanning.
-- **ML Service** — A standalone Python service (`ml-chege-photos:8000`) that performs face detection, extracts 512-dimensional embeddings, stores them in Qdrant, and runs HDBSCAN clustering.
-- **Qdrant** — Vector database for efficient similarity search across face embeddings.
+---
 
-The webapp communicates with the ML service via HTTP POST requests (proxied through `Faces` controller methods). It does not call Qdrant directly — all vector operations go through the ML service.
+## Installation & Setup
 
-## Why ML over Heuristics
-
-Traditional photo grouping relies on EXIF metadata (camera model, timestamp, GPS). ML-based face recognition is superior because:
-
-- **Varied conditions** — Faces are detected reliably across different poses, lighting conditions, and occlusions (sunglasses, masks, angles). EXIF-based heuristics cannot identify *who* is in a photo.
-- **Consistent embeddings** — Each detected face is converted to a 512-dimensional vector embedding. Cosine distance between embeddings is a robust similarity metric regardless of camera or settings.
-- **Automatic clustering** — HDBSCAN clustering groups embeddings into persons without manual tagging. The same person across different years, cameras, and locations is grouped automatically.
-- **Cross-device identification** — A person is recognized across photos taken with different phones, DSLRs, or scanned prints. EXIF data differs per device and cannot link subjects across cameras.
-- **Search by face** — Upload a reference photo and search for all occurrences of that person across the entire library.
-
-## Docker Containers
-
-The `docker-compose.yml` defines three services:
-
-| Container | Image | Purpose |
-|---|---|---|
-| `chege-photos-webapp` | `chege-photos-webapp:latest` (custom) | Apache + PHP 8.3 serving the CI4 app on port 9005 |
-| `shared-mysql` | `mysql:8.4` | MySQL database on port 9306 |
-| `shared-phpmyadmin` | `phpmyadmin:latest` | Database management UI on port 9000 |
-
-The webapp container:
-- Extends `php:8.3-apache` with GD, intl, mysqli, pdo_mysql, zip, and exif extensions.
-- Sets upload limits to 512 MB, execution timeout to 300 seconds.
-- Configures the Apache document root to `/var/www/html/public`.
-- Runs `entrypoint.sh` on boot, which waits for MySQL then executes `php spark migrate --all`.
-- Mounts the project root as a volume for live code updates.
-
-## Usefulness of Docker
-
-- **Dev/prod parity** — The same environment runs on any machine with Docker.
-- **One-command startup** — `docker compose up --build -d` starts all services.
-- **Service isolation** — Each component runs in its own container with explicit network dependencies.
-- **Automated migrations** — The entrypoint script runs pending database migrations on every boot.
-- **No host installation** — No need to install PHP, Composer, or MySQL locally.
-
-## Setup
-
-### Prerequisites
-
-- Docker & Docker Compose
-- A shared `.env` file (details below)
-
-### Build and Run
+### Docker (recommended)
 
 ```bash
+# Build and start all services
 docker compose up --build -d
+
+# Or run only the web app + its DB (without ML):
+docker compose up --build -d chege-photos mysql
 ```
 
-This builds the webapp image (if not cached), pulls MySQL and phpMyAdmin, creates a shared Docker network, and starts all three containers. The entrypoint waits for MySQL to accept connections, runs `php spark migrate --all`, then starts Apache.
+The Compose file defines three services:
 
-### Access
+| Service | Container name | Host port | Purpose |
+|---|---|---|---|
+| `chege-photos` | `chege-photos-webapp` | 9005 | PHP 8.3 Apache web app |
+| `mysql` | `shared-mysql` | 9306 | MySQL 8.4 database |
+| `phpmyadmin` | `shared-phpmyadmin` | 9000 | phpMyAdmin (dev convenience) |
 
-| Service | URL |
+On first run, the entrypoint script runs database migrations automatically and boots the internal container `cron` service. This daemon dynamically executes the master scheduler (`cron:run`) every minute based on the settings configured via the Admin Console.
+
+The ML face recognition service is an optional sibling dependency — the web app works without it (face features are simply unavailable).
+
+### Local / Non-Docker
+
+```bash
+# Prerequisites: PHP 8.1+, composer, MySQL 8.4
+composer install
+cp .env.example .env
+# Edit .env with your database and server settings
+php spark migrate --all
+php spark serve
+```
+
+### Environment
+
+```bash
+cp .env.example .env
+```
+
+Edit key values:
+
+```
+app.baseURL = 'http://your-server:9005/'
+database.default.hostname = 'mysql'
+database.default.database = 'db_chege_photos'
+```
+
+### ML Service Integration (optional)
+
+To enable face recognition, deploy the [ML Chege Photos](https://github.com/niccher/Chege-Photos-ML) service alongside and ensure the web app's `Faces` controller can reach `http://ml-chege-photos:8000` (the default in the Docker network).
+
+---
+
+## Database Configuration
+
+### `photos` — one row per uploaded photo
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INT (PK) | Auto-increment |
+| `user_id` | INT (FK → `users.id`) | Owner |
+| `filename` | VARCHAR(255) | Original filename |
+| `path` | VARCHAR(500) | Relative path in `public/uploads/` |
+| `thumbnail_path` | VARCHAR(500) (nullable) | Thumbnail path |
+| `taken_at` | DATETIME (nullable) | EXIF capture timestamp |
+| `width`, `height` | INT (nullable) | Image dimensions |
+| `size` | BIGINT (nullable) | File size in bytes |
+| `mime_type` | VARCHAR(100) (nullable) | e.g. `image/jpeg` |
+| `latitude`, `longitude` | VARCHAR (nullable) | GPS coordinates |
+| `exif_data` | TEXT (nullable) | Full EXIF JSON |
+| `file_hash` | VARCHAR(64) (nullable) | SHA-256 for dedup |
+| `is_archived` | TINYINT(1) | Default 0 |
+| `is_favorite` | TINYINT(1) | Default 0 |
+| `deleted_at` | DATETIME (nullable) | Soft delete timestamp |
+
+### `face_encoding` — one row per detected face (shared with ML service)
+
+See [ML Chege Photos README](https://github.com/niccher/Chege-Photos-ML#database-configuration) for schema.
+
+### Other tables
+
+| Table | Purpose |
 |---|---|
-| Web App | http://localhost:9005 |
-| phpMyAdmin | http://localhost:9000 |
+| `person` | Auto-discovered persons via HDBSCAN clustering |
+| `albums` | Manual + smart album definitions |
+| `album_photos` | Many-to-many pivot (album ↔ photo) |
+| `photo_shares` | Photo sharing between users |
+| `shared_links` | Token-authenticated public share links |
+| `auth_tokens` | 8-char tokens for Android app authentication |
+| `photo_scan` | ML scan status per photo |
+| `scan_job` | Batch scan job progress |
+| `face_cluster` | Cluster centroid references and lineage |
 
-## Key Features
+> **Note:** `person`, `face_encoding`, `photo_scan`, `scan_job`, and `face_cluster` are created and managed by the [ML Chege Photos](https://github.com/niccher/Chege-Photos-ML) service (see its [Database Configuration](https://github.com/niccher/Chege-Photos-ML#database-configuration)), not by the web app's own migrations.
 
-- **Photo upload** — Drag-and-drop or file picker upload with automatic face scan trigger. 512 MB max file size. Duplicate detection via MD5 hash.
-- **Gallery** — Grid view with pagination (100 per page). Infinite scroll support via AJAX.
-- **Search** — Search by filename, EXIF data, or date.
-- **Favorites** — Toggle favorite status on any photo. Filter to show only favorites.
-- **Archive / Trash** — Archive photos to hide from the main gallery. Soft-delete to trash with permanent delete option.
-- **Albums** — Create manual albums (add photos individually) or smart albums (dynamically populated by rules: date range, camera model, GPS-tagged, favorites only, image/video type).
-- **Sharing** — Two mechanisms:
-  - *Public links* — Generate a unique token-based URL (`/s/{token}`) for anyone to view a photo.
-  - *Internal shares* — Share a photo with another registered user by their ID.
-- **Faces page** — View all detected persons with face thumbnails. Click a person to see all photos containing them. Name persons, merge duplicate clusters, rescan unprocessed photos.
-- **Explore** — Map view of photos with GPS coordinates (latitude/longitude).
-- **Memories** — "On this day" and "6 months ago" photo groupings.
-- **Analytics** — Storage usage, photo/video breakdown, monthly activity chart (Chart.js), hourly activity, camera model statistics, GPS-tagged count, yearly growth, sharing stats.
-- **Settings** — Profile editing, avatar upload, password change, theme selection (auto/light/dark/solarized/grey), ML panel stats, data export (ZIP with metadata JSON), full data clear, account deletion.
-- **EXIF extraction** — Reads DateTimeOriginal, GPS coordinates, camera make/model, exposure settings, flash, focal length, ISO, and more. Stores as JSON in `exif_data`.
-- **Token auth** — Generate API tokens for the Android app. QR code display for easy mobile pairing.
+---
 
-## Face Recognition Pipeline
+## Usage / Routes
+
+### Web UI Routes
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Photo grid (paginated, searchable) |
+| `GET` | `/faces` | Face recognition dashboard (persons grid) |
+| `GET` | `/faces/person/{id}` | All photos of a specific person |
+| `GET` | `/faces/photo/{id}` | Photo detail with face bounding box overlays |
+| `GET` | `/explore` | Map explore with Leaflet + heatmap |
+| `GET` | `/memories` | On-this-day and 6-months-ago feeds |
+| `GET` | `/albums` | Album list |
+| `GET` | `/albums/{id}` | Album detail view |
+| `GET` | `/archive` | Archived photos |
+| `GET` | `/trash` | Soft-deleted photos (60-day retention) |
+| `GET` | `/analytics` | Charts: storage, timeline, file types, cameras |
+| `GET` | `/sharing` | Photo sharing management |
+| `GET` | `/settings` | Profile, security, preferences, storage, ML stats, export, delete |
+| `GET` | `/settings/tokens` | Auth token management |
+| `POST` | `/upload` | AJAX multi-file upload (Dropzone) |
+| `GET` | `/s/{token}` | Public shared photo view |
+
+### Face API Endpoints (web → ML proxy + local queries)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `api/faces/scan/{id}` | Scan a single photo for faces (ML proxy) |
+| `POST` | `api/faces/scan-all` | Start batch scan of all photos |
+| `POST` | `api/faces/cluster` | Run HDBSCAN clustering |
+| `POST` | `api/faces/reset` | Reset all ML scan data |
+| `POST` | `api/faces/force-scan` | Force re-scan of all photos |
+| `GET` | `api/faces/scan-job/{id}` | Poll batch scan job status |
+| `POST` | `api/faces/search` | Upload photo for face similarity search |
+| `GET` | `api/faces/{photoId}` | List faces for a photo |
+| `GET` | `api/faces/persons` | List all persons |
+| `GET` | `api/faces/unassigned` | List unassigned faces |
+| `GET` | `api/faces/by-person/{id}` | List photos containing a person |
+| `POST` | `api/faces/persons/name/{id}` | Name a person |
+| `POST` | `api/faces/persons/merge` | Merge two persons |
+
+### Android API Endpoints (token auth)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `api/login` | Email/password authentication |
+| `POST` | `api/auth-with-token` | Token-based device auth |
+| `GET` | `api/photos` | List remote photos |
+| `GET` | `api/albums` | List albums |
+| `GET` | `api/albums/{id}/photos` | Photos in an album |
+| `GET` | `api/memories` | Memories feed |
+| `GET` | `api/favorites` | Favorited photos |
+| `GET` | `api/archive` | Archived photos |
+| `GET` | `api/trash` | Trashed photos |
+| `GET` | `api/explore` | Explore feed |
+
+---
+
+## Project Structure
 
 ```
-1. Upload  ──>  2. ML Service (POST /api/v1/faces/encode)
-                     │
-                     ├── Face detection (RetinaFace / MTCNN)
-                     ├── Landmark detection (5-point)
-                     ├── Embedding extraction (512-d vector)
-                     └── Store in Qdrant, save metadata to MySQL face_encoding table
-                         │
-                    3. Clustering (POST /api/v1/faces/cluster)
-                         │
-                         ├── HDBSCAN on all embeddings in Qdrant
-                         ├── Create/update person records
-                         └── Assign person_id to face_encoding rows
-                             │
-                        4. Web UI: Faces page displays persons with count + thumbnail
-                           Click person → /faces/person/{id} → all photos for that person
+Chege Photos WebApp/
+├── app/
+│   ├── Config/
+│   │   ├── Routes.php            # All web + API route definitions
+│   │   ├── App.php               # App config (baseURL, encoding, timezone)
+│   │   ├── Database.php          # MySQLi connection config
+│   │   ├── Filters.php           # Auth filter aliases (session, tokens, chain)
+│   │   └── Auth.php              # Shield auth config
+│   ├── Controllers/
+│   │   ├── Photos.php            # Photo grid, upload, view, explore, albums, etc.
+│   │   ├── Faces.php             # Face dashboard, scan, cluster, search (ML proxy)
+│   │   ├── Settings.php          # Profile, security, preferences, export, delete
+│   │   ├── Home.php              # Welcome page
+│   │   ├── Tokens.php            # Auth token generation/revocation
+│   │   └── Api/
+│   │       ├── Auth.php          # Login + token auth endpoints
+│   │       ├── ApiController.php # Android REST API (photos, albums, etc.)
+│   │       └── TestController.php # API test endpoint
+│   ├── Models/
+│   │   ├── PhotoModel.php        # Photos ORM (soft deletes, search, counts)
+│   │   ├── AlbumModel.php        # Albums + smart album rules
+│   │   ├── AlbumPhotoModel.php   # Album↔photo pivot
+│   │   ├── FaceEncodingModel.php # Face encoding queries
+│   │   ├── PersonModel.php       # Person queries with face count
+│   │   ├── PhotoShareModel.php   # Photo sharing between users
+│   │   ├── SharedLinkModel.php   # Public share links
+│   │   └── AuthTokenModel.php    # Android auth tokens
+│   ├── Views/
+│   │   ├── layouts/main.php      # Bootstrap 5.3 layout, sidebar, theme toggle
+│   │   ├── photos/
+│   │   │   ├── index.php         # Photo grid, search, upload
+│   │   │   ├── faces.php         # Persons grid with thumbnails
+│   │   │   ├── faces_person.php  # Photos of a single person
+│   │   │   ├── faces_photo.php   # Photo detail with face overlays + modals
+│   │   │   ├── albums.php        # Album list + CRUD
+│   │   │   ├── album_detail.php  # Album contents
+│   │   │   ├── explore.php       # Leaflet map + heatmap
+│   │   │   ├── analytics.php     # Charts (Chart.js)
+│   │   │   ├── memories.php      # On-this-day feeds
+│   │   │   ├── archive.php       # Archived photos
+│   │   │   ├── trash.php         # Soft-deleted photos
+│   │   │   ├── settings.php      # Profiles, security, data management
+│   │   │   └── view_shared.php   # Public share viewer
+│   │   └── auth/
+│   │       ├── layout.php        # Glass-themed auth layout
+│   │       ├── login.php         # Login form
+│   │       └── register.php      # Registration form
+│   ├── Database/Migrations/      # 21 migrations (Shield + app)
+│   └── Libraries/
+│       └── SmartAlbumRules.php   # Rule engine for smart albums
+├── public/
+│   ├── js/app.js                 # Infinite scroll, lightbox, slideshow, face UI
+│   ├── css/style.css             # Theme variables + base styles
+│   ├── css/photos.css            # Full design system (~26k chars)
+│   └── uploads/                  # User-uploaded photos (mounted by ML service)
+├── Dockerfile                    # PHP 8.3 Apache with GD, Intl, MySQLi
+├── docker-compose.yml            # Webapp + MySQL 8.4 + phpMyAdmin
+├── .env                          # Runtime config (git-ignored)
+└── composer.json                 # PHP dependencies
 ```
 
-- **Auto-scan on upload** — After a photo uploads, the webapp fires a non-blocking HTTP request to the ML service to encode faces (`triggerFaceScanAsync` uses a 100 ms timeout CURL call).
-- **Bulk scan** — The Faces page has a "Rescan All" button that iterates over all unprocessed photos.
-- **Clustering** — Triggered manually from the ML settings panel. HDBSCAN groups similar embeddings into `person` records. The same person across different photos gets the same `person_id`.
-- **Merge persons** — Users can merge two person clusters via the API if HDBSCAN splits the same person.
-- **Name persons** — Assign a human-readable name to a person cluster.
+---
 
-## Routes / Pages
+## Configuration / Environment Variables
 
-| Route | Page | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `/` | Photos | Main gallery grid |
-| `/upload` | — | POST endpoint for photo upload |
-| `/scan` | — | Scan filesystem for new photos |
-| `/backfill-exif` | — | Re-extract EXIF for photos missing metadata |
-| `/faces` | Faces | All detected persons with face thumbnails |
-| `/faces/person/{id}` | Person Photos | All photos containing a specific person |
-| `/faces/photo/{id}` | Photo Faces | Face bounding boxes on a single photo |
-| `/explore` | Explore | Map of GPS-tagged photos |
-| `/albums` | Albums | Album list with thumbnails |
-| `/albums/{id}` | Album | Photos in a specific album |
-| `/favorites` | Favorites | Favorite photos |
-| `/memories` | Memories | "On this day" and "6 months ago" |
-| `/archive` | Archive | Archived photos |
-| `/trash` | Trash | Soft-deleted photos |
-| `/sharing` | Sharing | Public links and internal shares |
-| `/analytics` | Analytics | Storage and activity charts |
-| `/settings` | Settings | Profile, security, preferences, ML settings |
-| `/s/{token}` | Shared Photo | Public shared photo view (no auth required) |
-| `/api/*` | — | REST API endpoints for Android app |
+| `app.baseURL` | `http://localhost:8080/` | Application base URL (set per deployment, e.g. `http://192.168.100.80:9005/`) |
+| `database.default.hostname` | `mysql` | MySQL hostname (Docker service name) |
+| `database.default.database` | `db_chege_photos` | MySQL database name |
+| `database.default.username` | `root` | MySQL user |
+| `database.default.password` | `root_password` | MySQL password |
+| `encryption.key` | *(auto-generated)* | CI4 encryption key (hex2bin) |
+| `AUTH_SEND_EMAIL_ON_REGISTER` | `false` | Disable registration email |
+| `email.*` | *(Mailtrap defaults)* | SMTP for transaction emails |
+| `CI_ENVIRONMENT` | `development` | CodeIgniter environment mode |
 
-### API Endpoints (under `/api`)
+---
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/photos` | List photos |
-| GET | `/api/albums` | List albums |
-| GET | `/api/albums/{id}/photos` | Photos in album |
-| POST | `/api/upload` | Upload a photo |
-| GET | `/api/memories` | Memories feed |
-| GET | `/api/favorites` | Favorites list |
-| GET | `/api/archive` | Archive list |
-| GET | `/api/trash` | Trash list |
-| GET | `/api/explore` | GPS-tagged photos |
-| GET | `/api/faces/{id}` | Faces for a photo |
-| GET | `/api/faces/persons` | All persons |
-| GET | `/api/faces/unassigned` | Unassigned faces |
-| GET | `/api/faces/by-person/{id}` | Photos for a person |
-| POST | `/api/faces/scan/{id}` | Scan a photo for faces |
-| POST | `/api/faces/scan-all` | Scan all unprocessed photos |
-| POST | `/api/faces/search` | Search by face (upload reference image) |
-| POST | `/api/faces/cluster` | Run HDBSCAN clustering |
-| POST | `/api/faces/persons/name/{id}` | Name a person |
-| POST | `/api/faces/persons/merge` | Merge two persons |
-| POST | `/api/faces/bulk-scan` | Scan specific photo IDs |
+## Contributing
 
-## Database
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'Add feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Open a Pull Request
 
-Key tables managed by the webapp (excluding Shield auth tables):
+---
 
-### `photos`
-| Column | Type | Description |
-|---|---|---|
-| id | INT UNSIGNED PK | Auto-increment |
-| user_id | INT UNSIGNED | Owner |
-| device_id | VARCHAR | Optional device identifier |
-| filename | VARCHAR(255) | Stored filename |
-| path | VARCHAR(500) | Relative path under public/ |
-| thumbnail_path | VARCHAR(500) | Relative thumbnail path |
-| mime_type | VARCHAR(100) | image/jpeg, video/mp4, etc. |
-| width / height | INT | Pixel dimensions |
-| size | BIGINT | File size in bytes |
-| file_hash | VARCHAR(32) | MD5 hash for dedup |
-| taken_at | DATETIME | Photo capture time |
-| latitude / longitude | DECIMAL | GPS coordinates |
-| exif_data | TEXT | Full EXIF as JSON |
-| is_favorite | BOOLEAN | Favorite flag |
-| is_archived | BOOLEAN | Archive flag |
-| deleted_at | DATETIME | Soft delete timestamp |
+## License
 
-### `albums`
-| Column | Type | Description |
-|---|---|---|
-| id | INT UNSIGNED PK | Auto-increment |
-| user_id | INT UNSIGNED | Owner |
-| name | VARCHAR(255) | Album name |
-| description | TEXT | Optional |
-| cover_photo_id | INT UNSIGNED | Cover photo reference |
-| is_smart | TINYINT(1) | Whether rules-driven |
-| smart_rules | TEXT | JSON rules config |
+MIT License. See `LICENSE` file in this repository.
 
-### `album_photos`
-Pivot table: `album_id` + `photo_id` with `added_at` timestamp.
+---
 
-### `face_encoding`
-| Column | Type | Description |
-|---|---|---|
-| id | INT PK | Auto-increment |
-| photo_id | INT | Parent photo |
-| person_id | INT | Assigned person (nullable) |
-| qdrant_point_id | VARCHAR | Qdrant vector point ID |
-| bbox_x/y/w/h | FLOAT | Face bounding box (normalized) |
-| landmark_* | FLOAT | 5 facial landmarks |
-| detection_score | FLOAT | Confidence score |
-| face_image_path | VARCHAR | Cropped face image |
-| age / gender | INT/VARCHAR | Optional attributes |
+## Support / Contact
 
-### `person`
-| Column | Type | Description |
-|---|---|---|
-| id | INT PK | Auto-increment |
-| name | VARCHAR | Human-readable name (nullable) |
-| thumbnail_face_id | INT | Face used for thumbnail |
-| cluster_label | INT | HDBSCAN cluster label |
-
-### `shared_links`
-| Column | Type | Description |
-|---|---|---|
-| id | INT PK | Auto-increment |
-| photo_id | INT | Shared photo |
-| access_token | VARCHAR(64) | Unique token for URL |
-| expires_at | DATETIME | Optional expiration |
-
-### `photo_shares`
-| Column | Type | Description |
-|---|---|---|
-| id | INT PK | Auto-increment |
-| photo_id | INT | Shared photo |
-| shared_by | INT | Sender user ID |
-| shared_with | INT | Recipient user ID |
-| permission | VARCHAR(20) | `view` (default) |
-
-### `settings`
-Stores application settings per user context (theme, storage limit, etc.) via CodeIgniter Settings library.
-
-## Port Mapping
-
-| Container | Internal | Host |
-|---|---|---|
-| chege-photos-webapp | 80 | 9005 |
-| shared-mysql | 3306 | 9306 |
-| shared-phpmyadmin | 80 | 9000 |
-
-## Environment Variables
-
-The app reads from a shared `.env` file located at `../.env` (one level above the project root, shared across the Chege Photos ecosystem). Key variables:
-
-| Variable | Description | Example |
-|---|---|---|
-| `CI_ENVIRONMENT` | CI4 environment mode | `development` or `production` |
-| `app.baseURL` | Public-facing base URL | `http://192.168.1.212:9005/` |
-| `database.default.hostname` | MySQL host | `mysql` |
-| `database.default.database` | Database name | `db_chege_photos` |
-| `database.default.username` | DB user | `root` |
-| `database.default.password` | DB password | `root_password` |
-| `database.default.port` | DB port | `3306` |
-| `encryption.key` | CI4 encryption key | `hex2bin:...` |
-| `email.*` | SMTP configuration | Mailtrap defaults |
-
-For Docker, a local `.env` or `.env.docker` file in the project root overrides the shared one.
-
-## Sidebar
-
-The navigation sidebar (visible when authenticated) contains:
-
-- **Photos** — Main gallery (count of non-archived photos)
-- **Faces** — ML-detected persons page
-- **Explore** — Map of GPS-tagged photos
-- **Favorites** — Starred photos
-- **Memories** — "On this day" and "6 months ago"
-- **Albums** — User-created and smart albums (with album names listed below)
-- **Archive** — Hidden/archived photos
-- **Trash** — Soft-deleted photos
-- **Settings** — Profile, security, preferences, ML panel
-- **Sharing** — Public links and internal shares (count of shared items)
-
-Each sidebar item shows a badge count (e.g., number of photos, albums, shared items) cached for 10 seconds.
+For issues and feature requests, please open an issue on the [GitHub repository](https://github.com/niccher/Chege-Photos-WebApp/issues).

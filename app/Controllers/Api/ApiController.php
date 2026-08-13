@@ -30,12 +30,7 @@ class ApiController extends BaseController
                                 ->orderBy('taken_at', 'DESC')
                                 ->findAll();
 
-            // Cast integer fields to strings for consistent Kotlin serialization
-            $photos = array_map(function ($p) {
-                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
-                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
-                return $p;
-            }, $photos);
+            $photos = array_map([$this, 'formatPhotoForApi'], $photos);
 
             return $this->response->setJSON([
                 'status' => 'success',
@@ -68,6 +63,7 @@ class ApiController extends BaseController
             }
 
             $albums = $albumModel->getAlbumsWithThumbs($userId);
+            $albums = array_map([$this, 'formatAlbumForApi'], $albums);
 
             return $this->response->setJSON([
                 'status' => 'success',
@@ -114,11 +110,7 @@ class ApiController extends BaseController
                     ->get()->getResultArray();
             }
 
-            $photos = array_map(function ($p) {
-                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
-                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
-                return $p;
-            }, $photos);
+            $photos = array_map([$this, 'formatPhotoForApi'], $photos);
 
             return $this->response->setJSON([
                 'status' => 'success',
@@ -192,11 +184,7 @@ class ApiController extends BaseController
 
             $photos = $query->orderBy('taken_at', 'DESC')->findAll();
 
-            $photos = array_map(function ($p) {
-                $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
-                $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
-                return $p;
-            }, $photos);
+            $photos = array_map([$this, 'formatPhotoForApi'], $photos);
 
             return $this->response->setJSON([
                 'status' => 'success',
@@ -205,5 +193,215 @@ class ApiController extends BaseController
         } catch (\Throwable $e) {
             return $this->response->setJSON(['status' => 'error', 'message' => $e->getMessage()])->setStatusCode(500);
         }
+    }
+
+    public function createAlbum()
+    {
+        try {
+            $userId = auth()->id();
+            if (!$userId) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'User not authenticated'
+                ])->setStatusCode(401);
+            }
+
+            $albumModel = new \App\Models\AlbumModel();
+            $name = $this->request->getPost('name') ?? $this->request->getVar('name');
+            $description = $this->request->getPost('description') ?? $this->request->getVar('description');
+
+            if (empty($name)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Name is required'
+                ])->setStatusCode(400);
+            }
+
+            $data = [
+                'user_id'     => $userId,
+                'name'        => $name,
+                'description' => $description,
+                'is_smart'    => 0,
+                'smart_rules' => null,
+            ];
+
+            if ($albumModel->insert($data)) {
+                $this->clearSidebarCountsCache($userId);
+                $insertedId = $albumModel->getInsertID();
+                $album = $albumModel->find($insertedId);
+
+                $formattedAlbum = [
+                    'id'          => (string) $album['id'],
+                    'user_id'     => (string) $album['user_id'],
+                    'name'        => (string) $album['name'],
+                    'description' => $album['description'] ? (string) $album['description'] : null,
+                    'cover_photo' => null,
+                    'photo_count' => '0',
+                    'video_count' => '0'
+                ];
+
+                return $this->response->setJSON([
+                    'status' => 'success',
+                    'album'  => $formattedAlbum
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => 'Failed to create album'
+            ])->setStatusCode(500);
+
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function updateAlbum($id)
+    {
+        try {
+            $userId = auth()->id();
+            if (!$userId) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'User not authenticated'
+                ])->setStatusCode(401);
+            }
+
+            $albumModel = new \App\Models\AlbumModel();
+            $album = $albumModel->where('user_id', $userId)->find($id);
+
+            if (!$album) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Album not found'
+                ])->setStatusCode(404);
+            }
+
+            $input = $this->request->getRawInput();
+            $name = $input['name'] ?? $this->request->getVar('name') ?? $album['name'];
+            $description = $input['description'] ?? $this->request->getVar('description') ?? $album['description'];
+
+            if (empty($name)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Name is required'
+                ])->setStatusCode(400);
+            }
+
+            $albumModel->update($id, [
+                'name'        => $name,
+                'description' => $description
+            ]);
+
+            $this->clearSidebarCountsCache($userId);
+
+            $db = \Config\Database::connect();
+            $updatedAlbum = $albumModel->find($id);
+
+            $total = $db->table('album_photos')
+                ->join('photos', 'photos.id = album_photos.photo_id')
+                ->where('album_photos.album_id', $id)
+                ->countAllResults();
+            $videos = $db->table('album_photos')
+                ->join('photos', 'photos.id = album_photos.photo_id')
+                ->where('album_photos.album_id', $id)
+                ->where('photos.mime_type LIKE', 'video/%')
+                ->countAllResults();
+
+            $formattedAlbum = [
+                'id'          => (string) $updatedAlbum['id'],
+                'user_id'     => (string) $updatedAlbum['user_id'],
+                'name'        => (string) $updatedAlbum['name'],
+                'description' => $updatedAlbum['description'] ? (string) $updatedAlbum['description'] : null,
+                'cover_photo' => null,
+                'photo_count' => (string) ($total - $videos),
+                'video_count' => (string) $videos
+            ];
+
+            return $this->response->setJSON([
+                'status' => 'success',
+                'album'  => $formattedAlbum
+            ]);
+
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function deleteAlbum($id)
+    {
+        try {
+            $userId = auth()->id();
+            if (!$userId) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'User not authenticated'
+                ])->setStatusCode(401);
+            }
+
+            $albumModel = new \App\Models\AlbumModel();
+            $album = $albumModel->where('user_id', $userId)->find($id);
+
+            if (!$album) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Album not found'
+                ])->setStatusCode(404);
+            }
+
+            $db = \Config\Database::connect();
+            $db->table('album_photos')->where('album_id', $id)->delete();
+            $albumModel->delete($id);
+
+            $this->clearSidebarCountsCache($userId);
+
+            return $this->response->setJSON([
+                'status' => 'success'
+            ]);
+
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+    private function formatPhotoForApi(array $p): array
+    {
+        $p['id']          = isset($p['id']) ? (string) $p['id'] : null;
+        $p['user_id']     = isset($p['user_id']) ? (string) $p['user_id'] : null;
+        $p['album_id']    = isset($p['album_id']) ? (string) $p['album_id'] : null;
+        $p['width']       = isset($p['width']) ? (string) $p['width'] : null;
+        $p['height']      = isset($p['height']) ? (string) $p['height'] : null;
+        $p['size']         = isset($p['size']) ? (string) $p['size'] : null;
+        $p['latitude']    = isset($p['latitude']) ? (string) $p['latitude'] : null;
+        $p['longitude']   = isset($p['longitude']) ? (string) $p['longitude'] : null;
+        $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
+        $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
+        if (array_key_exists('deleted_at', $p)) {
+            $p['is_deleted'] = $p['deleted_at'] ? '1' : '0';
+        } else {
+            $p['is_deleted'] = '0';
+        }
+        return $p;
+    }
+
+    private function formatAlbumForApi(array $album): array
+    {
+        return [
+            'id'          => isset($album['id']) ? (string) $album['id'] : null,
+            'user_id'     => isset($album['user_id']) ? (string) $album['user_id'] : null,
+            'name'        => (string) $album['name'],
+            'description' => $album['description'] ? (string) $album['description'] : null,
+            'cover_photo' => isset($album['thumbnail']) ? (string) $album['thumbnail'] : null,
+            'photo_count' => isset($album['photo_count']) ? (string) $album['photo_count'] : '0',
+            'video_count' => isset($album['video_count']) ? (string) $album['video_count'] : '0',
+        ];
     }
 }

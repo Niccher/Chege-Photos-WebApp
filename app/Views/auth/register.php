@@ -54,7 +54,7 @@
                     class="form-control auth-input pe-5"
                     placeholder="Min. 8 characters"
                     required>
-                <button type="button" class="btn btn-link text-white-50 position-absolute end-0 top-50 translate-middle-y me-2 p-0" id="togglePwd">
+                <button type="button" class="btn btn-link text-secondary position-absolute end-0 top-50 translate-middle-y me-2 p-0" id="togglePwd">
                     <i class="bi bi-eye" id="eyeIcon"></i>
                 </button>
             </div>
@@ -75,7 +75,7 @@
 
     <hr class="auth-divider">
 
-    <p class="text-center mb-0" style="color: rgba(255,255,255,0.55); font-size: 0.875rem;">
+    <p class="text-center mb-0 brand-sub">
         Already have an account?
         <a href="<?= url_to('login') ?>" class="auth-link">Sign in</a>
     </p>

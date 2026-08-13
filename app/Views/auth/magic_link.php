@@ -18,7 +18,7 @@
     <?php endif ?>
 
     <?php if (session()->has('message')): ?>
-        <div class="alert mb-3" style="background: rgba(25,135,84,0.2); border: 1px solid rgba(25,135,84,0.4); border-radius: 10px; color: #7dffba; font-size: 0.85rem;">
+        <div class="alert alert-success-auth mb-3">
             <i class="bi bi-check-circle me-1"></i>
             <?= session('message') ?>
         </div>
@@ -42,7 +42,7 @@
 
     <hr class="auth-divider">
 
-    <p class="text-center mb-0" style="color: rgba(255,255,255,0.55); font-size: 0.875rem;">
+    <p class="text-center mb-0 brand-sub">
         <a href="<?= url_to('login') ?>" class="auth-link">
             <i class="bi bi-arrow-left me-1"></i>Back to Sign In
         </a>

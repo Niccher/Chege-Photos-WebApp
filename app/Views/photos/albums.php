@@ -105,6 +105,25 @@ use App\Libraries\SmartAlbumRules;
                                 </div>
                             </div>
                             <div class="col-12">
+                                <label class="form-label small">GPS bounds (optional — leave blank to ignore)</label>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Min latitude</label>
+                                <input type="number" name="min_latitude" step="any" class="form-control bg-black border-secondary text-white" placeholder="-90 to 90">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Max latitude</label>
+                                <input type="number" name="max_latitude" step="any" class="form-control bg-black border-secondary text-white" placeholder="-90 to 90">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Min longitude</label>
+                                <input type="number" name="min_longitude" step="any" class="form-control bg-black border-secondary text-white" placeholder="-180 to 180">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Max longitude</label>
+                                <input type="number" name="max_longitude" step="any" class="form-control bg-black border-secondary text-white" placeholder="-180 to 180">
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label small">Media type</label>
                                 <select name="mime_kind" class="form-select bg-black border-secondary text-white">
                                     <option value="<?= esc(SmartAlbumRules::MIME_ANY) ?>">Photos and videos</option>
