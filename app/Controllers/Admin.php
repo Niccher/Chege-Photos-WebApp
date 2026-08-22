@@ -112,18 +112,62 @@ class Admin extends BaseController
                 'total_encodings' => $totalEncodings,
                 'total_persons'   => $totalPersons,
                 'unassigned'      => $unassigned,
+                'total_photos'    => $photoModel->countAllResults(),
+                'scanned_faces'   => $photoModel->where('scanned_face', 1)->countAllResults(),
+                'scanned_tags'    => $photoModel->where('scanned_tag', 1)->countAllResults(),
+                'scanned_clips'   => $photoModel->where('scanned_clip', 1)->countAllResults(),
             ],
             'settings' => [
                 'faceModelPack'     => setting('ML.faceModelPack') ?? 'buffalo_l',
                 'faceDetThresh'     => setting('ML.faceDetThresh') ?? 0.5,
                 'includeSensitive'  => setting('ML.includeSensitive') ?? false,
                 'hdbscanMinCluster' => setting('ML.hdbscanMinCluster') ?? 2,
+                'hdbscanMinSamples' => setting('ML.hdbscanMinSamples') ?? 1,
+                'clipModelName'     => setting('ML.clipModelName') ?? 'openai/clip-vit-base-patch32',
+                'objectDetThresh'   => setting('ML.objectDetThresh') ?? 0.5,
             ],
+            'apiKey'         => setting('ML.apiKey') ?? env('ML_API_KEY') ?? 'my_super_secret_shared_token_key_123!',
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
         ];
 
         return view('admin/ml', $data);
+    }
+
+    public function mlStats()
+    {
+        $photoModel  = new PhotoModel();
+        $faceModel   = new \App\Models\FaceEncodingModel();
+        $personModel = new \App\Models\PersonModel();
+
+        $totalEncodings = $faceModel->countAllResults();
+        $totalPersons   = $personModel->countAllResults();
+        $unassigned     = $faceModel->where('person_id', null)->countAllResults();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'stats' => [
+                'total_encodings' => $totalEncodings,
+                'total_persons'   => $totalPersons,
+                'unassigned'      => $unassigned,
+                'total_photos'    => $photoModel->countAllResults(),
+                'scanned_faces'   => $photoModel->where('scanned_face', 1)->countAllResults(),
+                'scanned_tags'    => $photoModel->where('scanned_tag', 1)->countAllResults(),
+                'scanned_clips'   => $photoModel->where('scanned_clip', 1)->countAllResults(),
+            ]
+        ]);
+    }
+
+    public function regenerateApiKey()
+    {
+        $newKey = bin2hex(random_bytes(32));
+        setting()->set('ML.apiKey', $newKey);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'New ML API Key generated successfully.',
+            'apiKey'  => $newKey
+        ]);
     }
 
     public function saveMlSettings()
@@ -132,6 +176,9 @@ class Admin extends BaseController
             'faceModelPack'     => 'required|in_list[buffalo_l,buffalo_m,buffalo_s,buffalo_sc]',
             'faceDetThresh'     => 'required|numeric|greater_than_equal_to[0.1]|less_than_equal_to[1.0]',
             'hdbscanMinCluster' => 'required|integer|greater_than_equal_to[1]',
+            'hdbscanMinSamples' => 'required|integer|greater_than_equal_to[1]',
+            'clipModelName'     => 'required|string',
+            'objectDetThresh'   => 'required|numeric|greater_than_equal_to[0.1]|less_than_equal_to[1.0]',
         ];
 
         if (! $this->validate($rules)) {
@@ -145,25 +192,41 @@ class Admin extends BaseController
         $faceDetThresh     = $this->request->getPost('faceDetThresh');
         $includeSensitive  = (bool) $this->request->getPost('includeSensitive');
         $hdbscanMinCluster = $this->request->getPost('hdbscanMinCluster');
+        $hdbscanMinSamples = $this->request->getPost('hdbscanMinSamples');
+        $clipModelName     = $this->request->getPost('clipModelName');
+        $objectDetThresh   = $this->request->getPost('objectDetThresh');
 
         setting()->set('ML.faceModelPack', $faceModelPack);
         setting()->set('ML.faceDetThresh', (float) $faceDetThresh);
         setting()->set('ML.includeSensitive', $includeSensitive);
         setting()->set('ML.hdbscanMinCluster', (int) $hdbscanMinCluster);
+        setting()->set('ML.hdbscanMinSamples', (int) $hdbscanMinSamples);
+        setting()->set('ML.clipModelName', $clipModelName);
+        setting()->set('ML.objectDetThresh', (float) $objectDetThresh);
 
         // Tell FastAPI service to reload models dynamically
         try {
             $client = service('curlrequest', [
                 'connect_timeout' => 5,
                 'timeout'         => 60,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
             ]);
 
-            $response = $client->post(self::DEFAULT_ML_URL . '/models/reload?model_pack=' . urlencode($faceModelPack));
+            $url = self::DEFAULT_ML_URL . '/api/v1/models/reload?' . http_build_query([
+                'model_pack'           => $faceModelPack,
+                'face_det_thresh'      => $faceDetThresh,
+                'clip_model_name'      => $clipModelName,
+                'object_det_threshold' => $objectDetThresh,
+            ]);
+
+            $response = $client->post($url);
 
             if ($response->getStatusCode() === 200) {
                 return $this->response->setJSON([
                     'status'  => 'success',
-                    'message' => 'ML parameters saved and model pack (' . $faceModelPack . ') reloaded successfully.'
+                    'message' => 'ML parameters saved and backend models reloaded successfully.'
                 ]);
             }
         } catch (\Exception $e) {
@@ -311,6 +374,9 @@ class Admin extends BaseController
             $client = service('curlrequest', [
                 'connect_timeout' => 5,
                 'timeout'         => 30,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
             ]);
 
             $response = $client->delete(self::DEFAULT_ML_URL . '/api/v1/faces/reset');
@@ -341,9 +407,17 @@ class Admin extends BaseController
             $client = service('curlrequest', [
                 'connect_timeout' => 5,
                 'timeout'         => 30,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
             ]);
 
-            $response = $client->post(self::DEFAULT_ML_URL . '/api/v1/faces/cluster');
+            $minCluster = setting('ML.hdbscanMinCluster') ?? 2;
+            $minSamples = setting('ML.hdbscanMinSamples') ?? 1;
+
+            $response = $client->post(
+                self::DEFAULT_ML_URL . '/api/v1/faces/cluster?min_cluster_size=' . $minCluster . '&min_samples=' . $minSamples
+            );
 
             if ($response->getStatusCode() === 200) {
                 return $this->response->setJSON([
@@ -363,6 +437,74 @@ class Admin extends BaseController
                 'message' => 'Failed to reach ML Engine: ' . $e->getMessage()
             ])->setStatusCode(500);
         }
+    }
+
+    public function rescan()
+    {
+        $type = $this->request->getPost('type'); // 'faces', 'tags', 'clip'
+        $mode = $this->request->getPost('mode'); // 'all', 'missing'
+
+        if (!in_array($type, ['faces', 'tags', 'clip'])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid scan type.']);
+        }
+
+        $photoModel = new PhotoModel();
+
+        $query = $photoModel->select('id');
+        if ($mode === 'missing') {
+            if ($type === 'faces') {
+                $query->where('scanned_face', 0);
+            } elseif ($type === 'tags') {
+                $query->where('scanned_tag', 0);
+            } elseif ($type === 'clip') {
+                $query->where('scanned_clip', 0);
+            }
+        }
+
+        $photos = $query->findAll();
+        $total = count($photos);
+
+        if ($total === 0) {
+            return $this->response->setJSON(['status' => 'success', 'message' => "No photos require processing for {$type}."]);
+        }
+
+        if ($mode === 'all') {
+            $db = \Config\Database::connect();
+            $col = $type === 'faces' ? 'scanned_face' : ($type === 'tags' ? 'scanned_tag' : 'scanned_clip');
+            $db->table('photos')->update([$col => 0]);
+        }
+
+        $client = service('curlrequest', [
+            'connect_timeout' => 2,
+            'timeout'         => 5,
+            'headers'         => [
+                'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+            ]
+        ]);
+
+        $queued = 0;
+        foreach ($photos as $p) {
+            $photoId = (int) $p['id'];
+            try {
+                $client->post(self::DEFAULT_ML_URL . '/api/v1/faces/encode', [
+                    'form_params' => [
+                        'photo_id'   => $photoId,
+                        'scan_faces' => $type === 'faces' ? 1 : 0,
+                        'scan_tags'  => $type === 'tags' ? 1 : 0,
+                        'scan_clip'  => $type === 'clip' ? 1 : 0,
+                        'async_task' => 1,
+                    ]
+                ]);
+                $queued++;
+            } catch (\Exception $e) {
+                log_message('error', "Rescan queuing failed for photo {$photoId}: " . $e->getMessage());
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'message' => "Successfully queued {$queued} of {$total} photos for {$type} processing."
+        ]);
     }
 
     public function updateRole()
@@ -665,6 +807,76 @@ class Admin extends BaseController
         ])->setStatusCode(500);
     }
 
+    public function verifyEventEmail()
+    {
+        $eventType = $this->request->getPost('event_type');
+        $recipient = $this->request->getPost('recipient_email') ?: auth()->user()->email;
+
+        $eventsMap = [
+            'welcome' => [
+                'subject' => 'Welcome to Chege Photos - Account Ready',
+                'body'    => "Welcome to Chege Photos!\n\nYour account is active. You can now backup, organize, and search your photo collection using AI semantics and face recognition.\n\nBest regards,\nChege Photos Team"
+            ],
+            'storage_warning' => [
+                'subject' => 'Storage Threshold Warning Notice',
+                'body'    => "Notice: Your account storage usage has exceeded 85% of your quota allocation.\n\nPlease review your library trash or clean temporary files to prevent upload interruptions.\n\nBest regards,\nStorage Manager"
+            ],
+            'password_reset' => [
+                'subject' => 'Security Notice - Password Reset Requested',
+                'body'    => "Hello,\n\nA request to reset your password was received. If you initiated this request, use your secure verification code below.\n\nCode: 948-201\n\nIf you did not request this, please secure your account immediately."
+            ],
+            'system_alert' => [
+                'subject' => 'System Administrative Alert - ML Task Completed',
+                'body'    => "System Alert: The scheduled background ML processing sweep completed successfully.\n\nStatus: Healthy\nQueue Status: Idle\n\nSystem Administration Console"
+            ],
+        ];
+
+        if (! isset($eventsMap[$eventType])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid event type selected.'])->setStatusCode(400);
+        }
+
+        $email = service('email');
+        $trackingId = 'EVT-' . strtoupper(bin2hex(random_bytes(8)));
+        $db = \Config\Database::connect();
+
+        $event = $eventsMap[$eventType];
+        $email->setTo($recipient);
+        $email->setSubject($event['subject'] . ' [' . $trackingId . ']');
+        $email->setMessage($event['body'] . "\n\nTracking ID: " . $trackingId);
+
+        if ($email->send()) {
+            $db->table('email_logs')->insert([
+                'tracking_id' => $trackingId,
+                'recipient'   => $recipient,
+                'subject'     => $event['subject'],
+                'status'      => 'sent',
+                'debug_log'   => 'Event trigger email dispatched successfully.',
+                'sent_at'     => date('Y-m-d H:i:s'),
+            ]);
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => "Event '{$eventType}' email successfully sent to {$recipient} (Tracking ID: {$trackingId})"
+            ]);
+        }
+
+        $debugger = $email->printDebugger(['headers', 'subject', 'body']);
+        $db->table('email_logs')->insert([
+            'tracking_id' => $trackingId,
+            'recipient'   => $recipient,
+            'subject'     => $event['subject'],
+            'status'      => 'failed',
+            'debug_log'   => strip_tags($debugger),
+            'sent_at'     => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON([
+            'status'  => 'error',
+            'message' => "Failed to send event '{$eventType}' email. Debug logs recorded.",
+            'debug'   => strip_tags($debugger)
+        ])->setStatusCode(500);
+    }
+
     public function crons()
     {
         $userId     = auth()->id();
@@ -684,6 +896,7 @@ class Admin extends BaseController
             'settings' => [
                 'trashPurge' => setting('Cron.trashPurge') ?? '0 2 * * *',
                 'mlCluster'  => setting('Cron.mlCluster') ?? '0 * * * *',
+                'mlSweep'    => setting('Cron.mlSweep') ?? '*/5 * * * *',
                 'cleanTemp'  => setting('Cron.cleanTemp') ?? '30 1 * * *',
             ],
             'storageUsed'    => $this->formatBytes($totalBytes),
@@ -698,6 +911,7 @@ class Admin extends BaseController
         $rules = [
             'trashPurge' => 'required|string',
             'mlCluster'  => 'required|string',
+            'mlSweep'    => 'required|string',
             'cleanTemp'  => 'required|string',
         ];
 
@@ -710,6 +924,7 @@ class Admin extends BaseController
 
         setting()->set('Cron.trashPurge', $this->request->getPost('trashPurge'));
         setting()->set('Cron.mlCluster', $this->request->getPost('mlCluster'));
+        setting()->set('Cron.mlSweep', $this->request->getPost('mlSweep'));
         setting()->set('Cron.cleanTemp', $this->request->getPost('cleanTemp'));
 
         return $this->response->setJSON([
@@ -724,9 +939,12 @@ class Admin extends BaseController
             $client = service('curlrequest', [
                 'connect_timeout' => 2,
                 'timeout'         => 3,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
             ]);
 
-            $response = $client->get(self::DEFAULT_ML_URL . '/health');
+            $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
 
             if ($response->getStatusCode() === 200) {
                 $body = json_decode($response->getBody(), true);
@@ -736,6 +954,8 @@ class Admin extends BaseController
                     'db'      => $body['db_connected'] ?? false,
                     'qdrant'  => $body['qdrant_connected'] ?? false,
                     'models'  => $body['models_loaded'] ?? false,
+                    'clip'    => $body['clip_loaded'] ?? false,
+                    'yolo'    => $body['yolo_loaded'] ?? false,
                 ];
             }
         } catch (\Exception $e) {
@@ -748,6 +968,200 @@ class Admin extends BaseController
             'db'      => false,
             'qdrant'  => false,
             'models'  => false,
+            'clip'    => false,
+            'yolo'    => false,
         ];
+    }
+
+    public function health()
+    {
+        $userId     = auth()->id();
+        $photoModel = new PhotoModel();
+        $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+
+        $data = [
+            'counts'         => $this->getSidebarCounts(),
+            'mlHealth'       => $this->getMlHealth(),
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('admin/health', $data);
+    }
+
+    public function testService(): ResponseInterface
+    {
+        $serviceName = $this->request->getPost('service');
+
+        if (empty($serviceName)) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Missing service name parameter.'
+            ])->setStatusCode(400);
+        }
+
+        switch ($serviceName) {
+            case 'mysql':
+                try {
+                    $db = \Config\Database::connect();
+                    $start = microtime(true);
+                    $db->query("SELECT 1");
+                    $elapsed = round((microtime(true) - $start) * 1000, 2);
+                    return $this->response->setJSON([
+                        'status'  => 'success',
+                        'message' => "Successfully connected to MySQL database '{$db->database}' in {$elapsed}ms."
+                    ]);
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'MySQL connection failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            case 'phpmyadmin':
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 3,
+                    ]);
+                    $start = microtime(true);
+                    $response = $client->get('http://shared-phpmyadmin:80');
+                    $elapsed = round((microtime(true) - $start) * 1000, 2);
+                    if ($response->getStatusCode() === 200 || $response->getStatusCode() === 302) {
+                        return $this->response->setJSON([
+                            'status'  => 'success',
+                            'message' => "phpMyAdmin console is online & reachable in {$elapsed}ms."
+                        ]);
+                    }
+                    throw new \Exception("Status code: " . $response->getStatusCode());
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'phpMyAdmin console check failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            case 'ml':
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 3,
+                        'headers'         => [
+                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        ]
+                    ]);
+                    $start = microtime(true);
+                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    $elapsed = round((microtime(true) - $start) * 1000, 2);
+                    if ($response->getStatusCode() === 200) {
+                        $body = json_decode($response->getBody(), true);
+                        return $this->response->setJSON([
+                            'status'  => 'success',
+                            'message' => "FastAPI ML service is online & responding in {$elapsed}ms (status: " . ($body['status'] ?? 'unknown') . ")."
+                        ]);
+                    }
+                    throw new \Exception("Status code: " . $response->getStatusCode());
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'ML service check failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            case 'qdrant':
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 3,
+                    ]);
+                    $start = microtime(true);
+                    $response = $client->get('http://ml-qdrant:6333/collections');
+                    $elapsed = round((microtime(true) - $start) * 1000, 2);
+                    if ($response->getStatusCode() === 200) {
+                        $body = json_decode($response->getBody(), true);
+                        $count = count($body['result']['collections'] ?? []);
+                        return $this->response->setJSON([
+                            'status'  => 'success',
+                            'message' => "Qdrant Vector database is online in {$elapsed}ms. Collections registered: {$count}."
+                        ]);
+                    }
+                    throw new \Exception("Status code: " . $response->getStatusCode());
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'Qdrant check failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            case 'clip':
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 3,
+                        'headers'         => [
+                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        ]
+                    ]);
+                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    if ($response->getStatusCode() === 200) {
+                        $body = json_decode($response->getBody(), true);
+                        if ($body['clip_loaded'] ?? false) {
+                            return $this->response->setJSON([
+                                'status'  => 'success',
+                                'message' => 'CLIP model (ViT-B/32) is fully loaded and ready in ML memory.'
+                            ]);
+                        } else {
+                            return $this->response->setJSON([
+                                'status'  => 'warning',
+                                'message' => 'CLIP model is unloaded (it will load automatically on next query).'
+                            ]);
+                        }
+                    }
+                    throw new \Exception("Unreachable ML server");
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'CLIP model check failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            case 'yolo':
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 3,
+                        'headers'         => [
+                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        ]
+                    ]);
+                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    if ($response->getStatusCode() === 200) {
+                        $body = json_decode($response->getBody(), true);
+                        if ($body['yolo_loaded'] ?? false) {
+                            return $this->response->setJSON([
+                                'status'  => 'success',
+                                'message' => 'YOLOv8 ONNX model is fully loaded and ready in ML memory.'
+                            ]);
+                        } else {
+                            return $this->response->setJSON([
+                                'status'  => 'warning',
+                                'message' => 'YOLOv8 model is unloaded (it will load automatically on next upload/scan).'
+                            ]);
+                        }
+                    }
+                    throw new \Exception("Unreachable ML server");
+                } catch (\Exception $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'YOLOv8 model check failed: ' . $e->getMessage()
+                    ]);
+                }
+
+            default:
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => 'Unknown service request.'
+                ])->setStatusCode(400);
+        }
     }
 }

@@ -23,14 +23,25 @@ class Settings extends BaseController
 
         $user = auth()->user();
 
-        // ML Stats
-        $faceModel = new \App\Models\FaceEncodingModel();
-        $personModel = new \App\Models\PersonModel();
-        $scanned = $faceModel->distinct()->select('photo_id')->countAllResults();
+        // ML Stats – scoped to current user via photo_id join
+        $db = \Config\Database::connect();
+
+        $scanned = (int) $db->table('face_encoding fe')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->countAllResults();
+
         $totalImages = $photoModel->where('user_id', $userId)
             ->where('mime_type NOT LIKE', 'video/%')
             ->countAllResults();
-        $persons = $personModel->countAllResults();
+
+        $persons = (int) $db->table('person pr')
+            ->join('face_encoding fe', 'fe.person_id = pr.id')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->distinct()
+            ->select('pr.id')
+            ->countAllResults();
 
         $data = [
             'user'    => $user,
@@ -276,7 +287,10 @@ class Settings extends BaseController
             try {
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
                 $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
-                    'headers' => ['Content-Type' => 'application/json'],
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    ],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);
             } catch (\Exception $e) {
@@ -358,7 +372,10 @@ class Settings extends BaseController
             try {
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
                 $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
-                    'headers' => ['Content-Type' => 'application/json'],
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    ],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);
             } catch (\Exception $e) {

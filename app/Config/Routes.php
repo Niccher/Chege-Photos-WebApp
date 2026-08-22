@@ -8,12 +8,11 @@ use CodeIgniter\Router\RouteCollection;
 
 // All app routes require an authenticated session
 // API Auth
-// API Auth
 $routes->get('test-ping', 'TestAuth::ping', ['filter' => null]);
-$routes->get('api/test', function() { return 'API is working'; });
-$routes->get('api/test2', 'Api\TestController::counts');
-$routes->post('api/login', 'Api\Auth::login');
-$routes->post('api/auth-with-token', 'Api\Auth::authWithToken');
+$routes->get('api/v1/test', function() { return 'API is working'; });
+$routes->get('api/v1/test2', 'Api\TestController::counts');
+$routes->post('api/v1/login', 'Api\Auth::login');
+$routes->post('api/v1/auth-with-token', 'Api\Auth::authWithToken');
 
 // Public pages (no auth required)
 $routes->get('/', 'Home::index');
@@ -23,17 +22,17 @@ $routes->get('ml', 'Home::ml');
 $routes->get('setup', 'Home::setup');
 $routes->get('faq', 'Home::faq');
 
-// Web-only face action endpoints — inside main chain group
-$routes->post('api/faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1', ['filter' => 'chain']);
-$routes->post('api/faces/scan-all',    '\App\Controllers\Faces::apiScanAll', ['filter' => 'chain']);
-$routes->post('api/faces/cluster',     '\App\Controllers\Faces::apiCluster', ['filter' => 'chain']);
-$routes->post('api/faces/reset',       '\App\Controllers\Faces::apiResetScans', ['filter' => 'chain']);
-$routes->post('api/faces/force-scan',  '\App\Controllers\Faces::apiForceScanAll', ['filter' => 'chain']);
-$routes->get('api/faces/scan-job/(:num)', '\App\Controllers\Faces::apiScanJobStatus/$1', ['filter' => 'chain']);
-$routes->post('api/faces/search',      '\App\Controllers\Faces::apiSearch', ['filter' => 'chain']);
+// Web-only face action endpoints — inside main chain group (now versioned v1)
+$routes->post('api/v1/faces/scan/(:num)', '\App\Controllers\Faces::apiScan/$1', ['filter' => 'chain']);
+$routes->post('api/v1/faces/scan-all',    '\App\Controllers\Faces::apiScanAll', ['filter' => 'chain']);
+$routes->post('api/v1/faces/cluster',     '\App\Controllers\Faces::apiCluster', ['filter' => 'chain']);
+$routes->post('api/v1/faces/reset',       '\App\Controllers\Faces::apiResetScans', ['filter' => 'chain']);
+$routes->post('api/v1/faces/force-scan',  '\App\Controllers\Faces::apiForceScanAll', ['filter' => 'chain']);
+$routes->get('api/v1/faces/scan-job/(:num)', '\App\Controllers\Faces::apiScanJobStatus/$1', ['filter' => 'chain']);
+$routes->post('api/v1/faces/search',      '\App\Controllers\Faces::apiSearch', ['filter' => 'chain']);
 
 // API Data Endpoints (token auth for Android app)
-$routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens'], function ($routes) {
+$routes->group('api/v1', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens'], function ($routes) {
     $routes->get('photos', 'ApiController::index');
     $routes->get('albums', 'ApiController::albums');
     $routes->get('albums/(:num)/photos', 'ApiController::albumPhotos/$1');
@@ -41,11 +40,20 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
     $routes->put('albums/(:num)', 'ApiController::updateAlbum/$1');
     $routes->delete('albums/(:num)', 'ApiController::deleteAlbum/$1');
     $routes->post('upload', '\App\Controllers\Photos::upload');
+    $routes->post('photos/check-hashes', 'ApiController::checkHashes');
+    $routes->post('photos/exists-by-hash', 'ApiController::checkHashes');
     $routes->get('memories', 'ApiController::memories');
     $routes->get('favorites', 'ApiController::favorites');
     $routes->get('archive', 'ApiController::archive');
     $routes->get('trash', 'ApiController::trash');
     $routes->get('explore', 'ApiController::explore');
+
+    // Mapped photo action API endpoints under tokens authentication for Android
+    $routes->post('photos/delete/(:num)',  '\App\Controllers\Photos::deletePhoto/$1');
+    $routes->post('photos/restore/(:num)', '\App\Controllers\Photos::restorePhoto/$1');
+    $routes->post('photos/archive/(:num)', '\App\Controllers\Photos::archivePhoto/$1');
+    $routes->post('photos/favorite/(:num)','\App\Controllers\Photos::toggleFavorite/$1');
+    $routes->post('albums/add-photo',      '\App\Controllers\Photos::addPhotoToAlbum');
 
     // Face API endpoints (Android — token auth)
     $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1');
@@ -54,17 +62,25 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens
     $routes->get('faces/by-person/(:num)', '\App\Controllers\Faces::apiPersonPhotos/$1');
     $routes->post('faces/persons/name/(:num)', '\App\Controllers\Faces::apiNamePerson/$1');
     $routes->post('faces/persons/merge',       '\App\Controllers\Faces::apiMergePersons');
+    $routes->post('faces/assign-face',         '\App\Controllers\Faces::apiAssignFaceToPerson');
+    $routes->post('faces/update-metadata',     '\App\Controllers\Faces::apiUpdateFaceMetadata');
     $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan');
 });
 
 // All app routes require an authenticated session or token
 $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('photos', 'Photos::index');
-    $routes->get('scan', 'Photos::scan');
     $routes->get('backfill-exif', 'Photos::backfillExif');
     $routes->get('faces',          'Faces::index');
     $routes->get('faces/person/(:num)', 'Faces::personPhotos/$1');
     $routes->get('faces/photo/(:num)', 'Faces::photo/$1');
+    $routes->get('faces/unassigned', 'Faces::apiUnassigned');
+    $routes->post('faces/persons/merge', 'Faces::apiMergePersons');
+    $routes->post('faces/assign-face', 'Faces::apiAssignFaceToPerson');
+    $routes->post('faces/bulk-assign', 'Faces::apiBulkAssign');
+    $routes->post('faces/update-metadata', 'Faces::apiUpdateFaceMetadata');
+    $routes->post('photos/tags/add', 'Photos::addTag');
+    $routes->post('photos/tags/remove', 'Photos::removeTag');
     $routes->post('upload', 'Photos::upload');
     $routes->get('explore', 'Photos::explore');
     $routes->get('sharing', 'Photos::sharing');
@@ -127,12 +143,16 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->get('smtp', 'Admin::smtp');
     $routes->post('smtp/save', 'Admin::saveSmtp');
     $routes->post('smtp/test', 'Admin::testEmail');
+    $routes->post('smtp/verify-event', 'Admin::verifyEventEmail');
 
     // ML Configurations & Triggers
     $routes->get('ml', 'Admin::ml');
+    $routes->get('ml/stats', 'Admin::mlStats');
     $routes->post('ml/save', 'Admin::saveMlSettings');
     $routes->post('ml/reset', 'Admin::resetMl');
     $routes->post('ml/cluster', 'Admin::triggerCluster');
+    $routes->post('ml/rescan', 'Admin::rescan');
+    $routes->post('ml/regenerate-key', 'Admin::regenerateApiKey');
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');
@@ -141,6 +161,10 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     // Cron Jobs History & Configs
     $routes->get('crons', 'Admin::crons');
     $routes->post('crons/save', 'Admin::saveCronSettings');
+
+    // Health Diagnostics Dashboard
+    $routes->get('health', 'Admin::health');
+    $routes->post('health/test', 'Admin::testService');
 });
 
 // Public Sharing Routes

@@ -20,6 +20,7 @@ class CronRun extends BaseCommand
         $jobs = [
             'trash:purge'         => setting('Cron.trashPurge') ?? '0 2 * * *',
             'ml:cluster'          => setting('Cron.mlCluster') ?? '0 * * * *',
+            'ml:sweep'            => setting('Cron.mlSweep') ?? '*/5 * * * *',
             'storage:clean-temp'  => setting('Cron.cleanTemp') ?? '30 1 * * *',
         ];
 

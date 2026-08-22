@@ -22,9 +22,12 @@ class MlCluster extends BaseCommand
             $client = service('curlrequest', [
                 'connect_timeout' => 5,
                 'timeout'         => 180,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
             ]);
 
-            $response = $client->post($mlUrl . '/clusters/recluster');
+            $response = $client->post($mlUrl . '/api/v1/faces/cluster');
             $body = json_decode($response->getBody(), true);
             $outputMsg = isset($body['message']) ? $body['message'] : 'Face clustering triggered successfully.';
 

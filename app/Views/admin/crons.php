@@ -60,9 +60,31 @@
                                 </div>
                             </div>
 
-                            <!-- Task 2: Trash Auto-Purge -->
+                            <!-- Task 2: ML Auto-Recovery Sweep -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">2. Trash Auto-Purge (`trash:purge`)</h6>
+                                <h6 class="small fw-bold mb-1">2. ML Pipeline Sweep (`ml:sweep`)</h6>
+                                <p class="text-muted small mb-3">Sweeps the library database and automatically queues any unprocessed image frames for analysis.</p>
+                                <div class="row g-3">
+                                    <div class="col-md-7">
+                                        <label class="form-label small fw-bold mb-1">Cron Expression</label>
+                                        <input type="text" name="mlSweep" class="form-control bg-light border-0 py-2 font-monospace" value="<?= esc($settings['mlSweep']) ?>" required placeholder="e.g. */5 * * * *">
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label small fw-bold mb-1">Preset Quick-select</label>
+                                        <select class="form-select bg-light border-0 py-2 preset-select" data-target="mlSweep">
+                                            <option value="">-- Select Preset --</option>
+                                            <option value="*/1 * * * *">Every minute</option>
+                                            <option value="*/5 * * * *">Every 5 minutes (Default)</option>
+                                            <option value="*/15 * * * *">Every 15 minutes</option>
+                                            <option value="0 * * * *">Hourly</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Task 3: Trash Auto-Purge -->
+                            <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
+                                <h6 class="small fw-bold mb-1">3. Trash Auto-Purge (`trash:purge`)</h6>
                                 <p class="text-muted small mb-3">Cleans soft-deleted user photos exceeding the retention storage policy threshold.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -81,9 +103,9 @@
                                 </div>
                             </div>
 
-                            <!-- Task 3: Temp Uploads Cleanup -->
+                            <!-- Task 4: Temp Uploads Cleanup -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">3. Stale Temp Uploads (`storage:clean-temp`)</h6>
+                                <h6 class="small fw-bold mb-1">4. Stale Temp Uploads (`storage:clean-temp`)</h6>
                                 <p class="text-muted small mb-3">Clears stale exports and incomplete temporary chunk directories older than 24 hours.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -164,15 +186,55 @@
                                                 <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1 small">Failed</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="text-muted small text-break"><?= esc($log['output']) ?></td>
+                                        <td class="text-muted small text-break"><?= esc(mb_strimwidth($log['output'], 0, 80, '...')) ?></td>
                                         <td class="small"><?= number_format($log['duration_seconds'], 3) ?>s</td>
                                         <td class="small text-muted"><?= esc($log['run_at']) ?></td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 small btn-view-cron-log"
+                                                data-job="<?= esc($log['job_name']) ?>"
+                                                data-status="<?= esc($log['status']) ?>"
+                                                data-output="<?= esc($log['output']) ?>"
+                                                data-duration="<?= number_format($log['duration_seconds'], 3) ?>s"
+                                                data-time="<?= esc($log['run_at']) ?>">
+                                                <i class="bi bi-eye me-1"></i> View Output
+                                            </button>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cron Log Output Viewer -->
+<div class="modal fade" id="cronLogModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 bg-light">
+                <h5 class="modal-title h6 fw-bold mb-0">
+                    <i class="bi bi-terminal me-2 text-primary"></i> Execution Log Output Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <div>
+                        <span class="fw-bold me-2 font-monospace" id="modalCronJob"></span>
+                        <span id="modalCronBadge"></span>
+                    </div>
+                    <div class="small text-muted">
+                        <span id="modalCronTime"></span> | Duration: <span id="modalCronDuration" class="fw-bold text-dark"></span>
+                    </div>
+                </div>
+                <label class="form-label small fw-bold text-muted">Raw Log Stream Output:</label>
+                <pre class="bg-dark text-success p-3 rounded font-monospace small mb-0" id="modalCronOutput" style="max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -189,6 +251,24 @@
             if (val) {
                 $('input[name="' + target + '"]').val(val);
             }
+        });
+
+        // Open Cron Log Modal
+        $('.btn-view-cron-log').on('click', function() {
+            var btn = $(this);
+            $('#modalCronJob').text(btn.data('job'));
+            $('#modalCronTime').text(btn.data('time'));
+            $('#modalCronDuration').text(btn.data('duration'));
+            $('#modalCronOutput').text(btn.data('output'));
+
+            var status = btn.data('status');
+            var badgeHtml = status === 'success'
+                ? '<span class="badge bg-success rounded-pill px-3">Success</span>'
+                : '<span class="badge bg-danger rounded-pill px-3">Failed</span>';
+            $('#modalCronBadge').html(badgeHtml);
+
+            var modal = new bootstrap.Modal(document.getElementById('cronLogModal'));
+            modal.show();
         });
 
         // Save Cron Configurations

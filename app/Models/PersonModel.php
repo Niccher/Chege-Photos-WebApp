@@ -29,4 +29,19 @@ class PersonModel extends Model
             ->get()
             ->getResultArray();
     }
+
+    public function getPersonsWithFaceCountForUser(int $userId): array
+    {
+        $db = \Config\Database::connect();
+        return $db->table('person p')
+            ->select('p.*, COUNT(fe.id) AS face_count')
+            ->join('face_encoding fe', 'fe.person_id = p.id', 'left')
+            ->join('photos ph', 'ph.id = fe.photo_id', 'left')
+            ->where('ph.user_id', $userId)
+            ->groupBy('p.id')
+            ->having('face_count >', 0)
+            ->orderBy('p.id')
+            ->get()
+            ->getResultArray();
+    }
 }

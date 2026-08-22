@@ -16,6 +16,9 @@ class Faces extends BaseController
         $client = service('curlrequest', [
             'connect_timeout' => 30,
             'timeout'        => 120,
+            'headers'        => [
+                'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+            ]
         ]);
         $url = self::ML_BASE . $path;
 
@@ -37,12 +40,21 @@ class Faces extends BaseController
 
     public function index()
     {
+        $userId      = auth()->id();
         $personModel = new PersonModel();
         $faceModel   = new FaceEncodingModel();
         $photoModel  = new \App\Models\PhotoModel();
 
-        $persons = $personModel->getPersonsWithFaceCount();
-        $unassignedCount = $faceModel->where('person_id', null)->countAllResults();
+        // Only persons whose faces appear in the current user's photos
+        $persons = $personModel->getPersonsWithFaceCountForUser($userId);
+
+        // Only unassigned faces that belong to the current user's photos
+        $db = \Config\Database::connect();
+        $unassignedCount = (int) $db->table('face_encoding fe')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->where('fe.person_id IS NULL')
+            ->countAllResults();
 
         // Attach thumbnail data for each person (first face's photo + bbox + attributes)
         foreach ($persons as &$person) {
@@ -71,9 +83,18 @@ class Faces extends BaseController
         }
         unset($person);
 
-        // Attach thumbnail data for unassigned faces
-        $unassigned = $faceModel->where('person_id', null)->orderBy('id')->findAll();
-        foreach ($unassigned as &$uface) {
+        // Attach thumbnail data for unassigned faces scoped to user
+        $unassignedRows = $db->table('face_encoding fe')
+            ->select('fe.*')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->where('fe.person_id IS NULL')
+            ->orderBy('fe.id')
+            ->get()
+            ->getResultArray();
+
+        $unassigned = [];
+        foreach ($unassignedRows as &$uface) {
             $uface['thumbnail'] = null;
             $photo = $photoModel->find($uface['photo_id']);
             if ($photo) {
@@ -89,6 +110,7 @@ class Faces extends BaseController
                     'ph'   => $ph,
                 ];
             }
+            $unassigned[] = $uface;
         }
         unset($uface);
 
@@ -139,6 +161,9 @@ class Faces extends BaseController
         $photoModel = new \App\Models\PhotoModel();
         $photo = $photoModel->find($photoId);
 
+        $tagModel = new \App\Models\PhotoTagModel();
+        $tags = $tagModel->where('photo_id', $photoId)->orderBy('tag', 'ASC')->findAll();
+
         $highlightPersonId = $this->request->getGet('person');
         if ($highlightPersonId) {
             $highlightPersonId = (int) $highlightPersonId;
@@ -165,6 +190,7 @@ class Faces extends BaseController
         return view('photos/faces_photo', [
             'photo'              => $photo,
             'faces'              => $faces,
+            'tags'               => $tags,
             'highlightPersonId'  => $highlightPersonId,
             'personPhotos'       => $personPhotos,
             'currentIndex'       => $currentIndex,
@@ -250,21 +276,45 @@ class Faces extends BaseController
 
     public function apiUnassigned(): ResponseInterface
     {
-        $faceModel = new FaceEncodingModel();
-        $faces = $faceModel->getUnassigned();
+        $userId = auth()->id();
+        if (!$userId) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Unauthorized',
+            ])->setStatusCode(401);
+        }
 
-        return $this->response->setJSON([
-            'status' => 'success',
-            'faces'  => array_map(fn($f) => [
+        $db = \Config\Database::connect();
+        $faces = $db->table('face_encoding fe')
+            ->select('fe.*')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->where('fe.person_id IS NULL')
+            ->orderBy('fe.id')
+            ->get()
+            ->getResultArray();
+
+        $photoModel = new \App\Models\PhotoModel();
+        $result = [];
+        foreach ($faces as $f) {
+            $photo = $photoModel->find($f['photo_id']);
+            $result[] = [
                 'face_id'  => (int) $f['id'],
                 'photo_id' => (int) $f['photo_id'],
+                'photo_path' => $photo ? base_url($photo['path']) : '',
                 'bbox'     => [
                     'x' => (float) $f['bbox_x'],
                     'y' => (float) $f['bbox_y'],
                     'w' => (float) $f['bbox_w'],
                     'h' => (float) $f['bbox_h'],
                 ],
-            ], $faces),
+                'photo_width' => $photo ? (float)($photo['width'] ?: 800) : 800,
+                'photo_height' => $photo ? (float)($photo['height'] ?: 600) : 600,
+            ];
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'faces'  => $result,
         ]);
     }
 
@@ -373,6 +423,143 @@ class Faces extends BaseController
         return $this->response->setJSON([
             'status' => 'success',
             'person' => ['id' => (int) $personId, 'name' => $name],
+        ]);
+    }
+
+    public function apiAssignFaceToPerson(): ResponseInterface
+    {
+        $faceId = (int) $this->request->getPost('face_id');
+        $personIdInput = $this->request->getPost('person_id');
+
+        $faceModel = new FaceEncodingModel();
+        $face = $faceModel->find($faceId);
+        if (!$face) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Face not found',
+            ])->setStatusCode(404);
+        }
+
+        $newPersonId = null;
+        if ($personIdInput === 'new') {
+            $personModel = new PersonModel();
+            $newPersonId = $personModel->insert(['name' => null]);
+        } elseif ($personIdInput !== null && $personIdInput !== '' && $personIdInput !== 'null') {
+            $newPersonId = (int) $personIdInput;
+            $personModel = new PersonModel();
+            if (!$personModel->find($newPersonId)) {
+                return $this->response->setJSON([
+                    'status' => 'error', 'message' => 'Target person not found',
+                ])->setStatusCode(404);
+            }
+        }
+
+        $oldPersonId = $face['person_id'];
+
+        $faceModel->update($faceId, ['person_id' => $newPersonId]);
+
+        // Cleanup empty persons
+        if ($oldPersonId) {
+            $count = $faceModel->where('person_id', $oldPersonId)->countAllResults();
+            if ($count === 0) {
+                model('App\Models\PersonModel')->delete($oldPersonId);
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'face_id' => $faceId,
+            'person_id' => $newPersonId,
+        ]);
+    }
+
+    public function apiUpdateFaceMetadata(): ResponseInterface
+    {
+        $faceId = (int) $this->request->getPost('face_id');
+        $gender = $this->request->getPost('gender');
+        $age = $this->request->getPost('age');
+        $emotion = $this->request->getPost('emotion');
+
+        $faceModel = new FaceEncodingModel();
+        $face = $faceModel->find($faceId);
+        if (!$face) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Face not found',
+            ])->setStatusCode(404);
+        }
+
+        $updateData = [];
+        if ($gender !== null) {
+            $updateData['gender'] = ($gender === '' || $gender === 'null') ? null : strtolower($gender);
+        }
+        if ($age !== null) {
+            $updateData['age'] = ($age === '' || $age === 'null') ? null : (int)$age;
+        }
+        if ($emotion !== null) {
+            $updateData['emotion'] = ($emotion === '' || $emotion === 'null') ? null : $emotion;
+        }
+
+        if (!empty($updateData)) {
+            $faceModel->update($faceId, $updateData);
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'face_id' => $faceId,
+            'updated' => $updateData,
+        ]);
+    }
+
+    public function apiBulkAssign(): ResponseInterface
+    {
+        $faceIds = $this->request->getPost('face_ids');
+        $personIdInput = $this->request->getPost('person_id');
+
+        if (empty($faceIds) || !is_array($faceIds)) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'No face IDs provided',
+            ])->setStatusCode(400);
+        }
+
+        $newPersonId = null;
+        if ($personIdInput === 'new') {
+            $personModel = new PersonModel();
+            $newPersonId = $personModel->insert(['name' => null]);
+        } elseif ($personIdInput !== null && $personIdInput !== '' && $personIdInput !== 'null') {
+            $newPersonId = (int) $personIdInput;
+            $personModel = new PersonModel();
+            if (!$personModel->find($newPersonId)) {
+                return $this->response->setJSON([
+                    'status' => 'error', 'message' => 'Target person not found',
+                ])->setStatusCode(404);
+            }
+        }
+
+        $faceModel = new FaceEncodingModel();
+        $oldPersonIds = [];
+        foreach ($faceIds as $faceId) {
+            $face = $faceModel->find((int)$faceId);
+            if ($face) {
+                if ($face['person_id'] && $face['person_id'] != $newPersonId) {
+                    $oldPersonIds[] = $face['person_id'];
+                }
+                $faceModel->update($face['id'], ['person_id' => $newPersonId]);
+            }
+        }
+
+        if (!empty($oldPersonIds)) {
+            $oldPersonIds = array_unique($oldPersonIds);
+            foreach ($oldPersonIds as $oldId) {
+                $count = $faceModel->where('person_id', $oldId)->countAllResults();
+                if ($count === 0) {
+                    model('App\Models\PersonModel')->delete($oldId);
+                }
+            }
+        }
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'updated_count' => count($faceIds),
+            'person_id' => $newPersonId,
         ]);
     }
 

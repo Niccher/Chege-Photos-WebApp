@@ -340,34 +340,49 @@ body {
 /* Lightbox — true black regardless of theme */
 #lightboxModal .modal-content { background-color: #000 !important; }
 #lightboxModal .text-white    { color: #ffffff !important; }
+
+/* Unified Floating Pill Toolbar (Google Photos style) */
 #lightboxModal .lightbox-toolbar {
-    background: rgba(30,30,36,0.85) !important;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 8px !important;
+    background: rgba(20, 20, 20, 0.78) !important;
+    backdrop-filter: blur(14px) saturate(1.6);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 50px !important;   /* full pill shape */
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55) !important;
+    /* auto-hide when not hovered */
+    opacity: 0.6;
+    transition: opacity 0.25s ease;
+}
+#lightboxModal:hover .lightbox-toolbar,
+#lightboxModal .lightbox-toolbar:hover {
+    opacity: 1;
 }
 #lightboxModal .lightbox-toolbar .btn-link {
     color: #ffffff !important;
-    opacity: 0.85;
-    transition: opacity 0.15s, transform 0.15s;
+    opacity: 0.82;
+    transition: opacity 0.15s, transform 0.15s, background 0.15s;
+    border-radius: 50% !important;
+    text-decoration: none !important;
 }
 #lightboxModal .lightbox-toolbar .btn-link:hover {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.12);
+    background: rgba(255, 255, 255, 0.12) !important;
 }
-#lightboxModal .lightbox-toolbar .btn-link {
-    color: #ffffff !important;
-    opacity: 0.85;
-    transition: opacity 0.15s, transform 0.15s;
+#lightboxModal .lightbox-toolbar .btn-link:active {
+    transform: scale(0.96);
 }
-#lightboxModal .lightbox-toolbar .btn-link:hover {
-    opacity: 1;
-    transform: scale(1.1);
+/* Make the VR dividers visible inside the pill */
+#lightboxModal .lightbox-toolbar .vr {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    width: 1px;
+    align-self: center;
 }
 
-/* Shadows suppressed */
-.shadow-sm, .shadow, .shadow-lg { box-shadow: none !important; }
+/* Shadows suppressed (except inside lightbox toolbar) */
+:not(#lightboxModal .lightbox-toolbar).shadow-sm,
+:not(#lightboxModal .lightbox-toolbar).shadow,
+:not(#lightboxModal .lightbox-toolbar).shadow-lg { box-shadow: none !important; }
 
 
 /* ===================================================================

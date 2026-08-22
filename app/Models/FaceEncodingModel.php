@@ -20,12 +20,10 @@ class FaceEncodingModel extends Model
         'landmark_nose_x', 'landmark_nose_y',
         'landmark_left_mouth_x', 'landmark_left_mouth_y',
         'landmark_right_mouth_x', 'landmark_right_mouth_y',
-        'detection_score', 'face_image_path', 'age', 'gender',
+        'detection_score', 'face_image_path', 'age', 'gender', 'emotion',
     ];
 
-    protected $useTimestamps = true;
-    protected $createdField  = 'created_at';
-    protected $updatedField  = 'updated_at';
+    protected $useTimestamps = false;
 
     public function getFacesByPhoto(int $photoId): array
     {

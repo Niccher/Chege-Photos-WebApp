@@ -3,6 +3,7 @@
 .vscode
 .env
 .env.testing
+.env.docker
 node_modules
 writable/logs/*
 writable/cache/*
@@ -17,8 +18,11 @@ phpunit.xml.dist
 tests
 README.md
 LICENSE
+composer.lock
 !writable/logs/index.html
 !writable/cache/index.html
 !writable/session/index.html
 !writable/debugbar/index.html
 !writable/uploads/index.html
+*.db
+*.sqlite

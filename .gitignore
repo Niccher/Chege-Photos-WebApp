@@ -6,25 +6,30 @@
 /writable/logs/*
 /writable/session/*
 /writable/uploads/*
+/writable/exports/*
+/writable/backups/*
 !/writable/cache/.gitkeep
 !/writable/debugbar/.gitkeep
 !/writable/logs/.gitkeep
 !/writable/session/.gitkeep
 !/writable/uploads/.gitkeep
+!/writable/exports/.gitkeep
+!/writable/backups/.gitkeep
 
-# Public user-uploaded content (if applicable)
+# Public user-uploaded content
 /public/uploads/*
 /public/thumbnails/*
 !/public/uploads/.gitkeep
 !/public/thumbnails/.gitkeep
 
-# IDE and OS files
+# IDE, OS and development files
 .idea/
 .vscode/
 *.swp
 *.bak
 .DS_Store
 Thumbs.db
+node_modules/
 
 # Ignore writable logs and debugbar
 writable/logs/*

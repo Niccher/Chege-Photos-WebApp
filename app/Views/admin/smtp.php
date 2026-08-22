@@ -166,13 +166,9 @@
                                         </td>
                                         <td class="small text-muted"><?= esc($log['sent_at']) ?></td>
                                         <td class="text-end">
-                                            <?php if ($log['status'] === 'failed' && !empty($log['debug_log'])): ?>
-                                                <button class="btn btn-outline-danger btn-sm rounded-pill px-3 py-0.5 btn-view-debug" data-debug="<?= esc($log['debug_log']) ?>">
-                                                    <i class="bi bi-bug me-1"></i> Debug
-                                                </button>
-                                            <?php else: ?>
-                                                <span class="text-muted small">-</span>
-                                            <?php endif; ?>
+                                            <button class="btn btn-outline-primary btn-sm rounded-pill px-3 py-0.5 btn-view-debug" data-debug="<?= esc(!empty($log['debug_log']) ? $log['debug_log'] : 'Sent successfully.') ?>">
+                                                <i class="bi bi-eye me-1"></i> View Trail
+                                            </button>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -192,7 +188,7 @@
                 </h5>
                 <p class="text-muted small mb-4">Emails are dynamically dispatched from the platform under the following transaction conditions:</p>
 
-                <div class="row g-4">
+                <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <div class="p-3 border rounded h-100" style="border-color: var(--border-color) !important; background: rgba(0,0,0,0.01);">
                             <h6 class="small fw-bold mb-2"><i class="bi bi-person-check text-primary me-2"></i>User Registration &amp; Verification</h6>
@@ -218,6 +214,37 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Event Trigger Verifier Card -->
+                <div class="card border-0 shadow-sm p-4" style="background: rgba(0,0,0,0.02); border: 1px dashed var(--border-color) !important;">
+                    <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="bi bi-send text-primary"></i>
+                        <span>Trigger Event Verifier</span>
+                    </h6>
+                    <p class="text-muted small mb-3">Simulate application events to verify email template compilation and dispatch triggers.</p>
+                    <form id="formVerifyEvent">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold">Select Application Event</label>
+                                <select name="event_type" class="form-select bg-light border-0 py-2" required>
+                                    <option value="welcome">Welcome &amp; Account Setup</option>
+                                    <option value="storage_warning">Storage Quota Warning (85%)</option>
+                                    <option value="password_reset">Password Recovery Request</option>
+                                    <option value="system_alert">Administrative System Alert</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Recipient Address</label>
+                                <input type="email" name="recipient_email" class="form-control bg-light border-0 py-2" value="<?= esc(auth()->user()->email) ?>" required placeholder="user@domain.com">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary rounded-pill w-100 py-2">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> Fire Event Email
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -227,13 +254,13 @@
 <div class="modal fade" id="debugEmailModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-lg" style="color: var(--text-primary);">
-            <div class="modal-header border-0 bg-danger text-white">
-                <h6 class="modal-title fw-bold"><i class="bi bi-bug me-2"></i>SMTP Debug Logs</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header border-0 bg-dark text-white">
+                <h6 class="modal-title fw-bold"><i class="bi bi-journal-text me-2"></i>Outbound Email Transaction Log</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <p class="small text-muted mb-2">The SMTP server rejected connection or handshake request. Detailed logs:</p>
-                <pre class="bg-dark text-light p-3 rounded small overflow-auto" id="debugLogsArea" style="max-height: 400px; white-space: pre-wrap;"></pre>
+                <p class="small text-muted mb-2">Detailed communication log and transaction headers:</p>
+                <pre class="bg-dark text-success p-3 rounded small overflow-auto" id="debugLogsArea" style="max-height: 400px; white-space: pre-wrap; word-break: break-word;"></pre>
             </div>
         </div>
     </div>
@@ -293,6 +320,33 @@
                 }
             }).fail(function(xhr) {
                 btn.prop('disabled', false).html('<i class="bi bi-send-check me-1"></i> Test Sample Email');
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast(err, 'danger');
+                if (xhr.responseJSON && xhr.responseJSON.debug) {
+                    $('#debugLogsArea').text(xhr.responseJSON.debug);
+                    new bootstrap.Modal(document.getElementById('debugEmailModal')).show();
+                }
+            });
+        });
+
+        // Trigger Event Verifier Form
+        $('#formVerifyEvent').on('submit', function(e) {
+            e.preventDefault();
+            var form = $(this);
+            var btn = form.find('button[type="submit"]');
+
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Firing Event...');
+
+            $.post(BASE_URL + 'admin/smtp/verify-event', form.serialize(), function(res) {
+                btn.prop('disabled', false).html('<i class="bi bi-lightning-charge-fill me-1"></i> Fire Event Email');
+                if (res.status === 'success') {
+                    showToast(res.message, 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html('<i class="bi bi-lightning-charge-fill me-1"></i> Fire Event Email');
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast(err, 'danger');
                 if (xhr.responseJSON && xhr.responseJSON.debug) {

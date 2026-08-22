@@ -44,16 +44,21 @@
                 <img src="<?= base_url('app_icon.png') ?>" alt="Logo" width="32" height="32" class="me-2 rounded shadow-sm">
                 <span>Photos</span>
             </a>
+        <?php $isAdminRoute = str_starts_with((uri_string() ?? ''), 'admin'); ?>
+        <?php if (!$isAdminRoute): ?>
         <form class="ms-3 flex-grow-1 d-none d-lg-block" style="max-width: 400px;" onsubmit="return false;">
             <div class="input-group input-group-sm">
                 <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="searchInput" class="form-control bg-light border-start-0" placeholder="Search photos..." value="<?= $searchQuery ?? '' ?>">
             </div>
         </form>
+        <?php endif; ?>
         <div class="ms-auto d-flex align-items-center gap-2">
+            <?php if (!$isAdminRoute): ?>
             <button class="btn btn-outline-secondary btn-sm px-3 d-none d-sm-inline-block" id="btnToggleSelect" title="Select photos">
                 <i class="bi bi-check2-square"></i> <span id="selectModeText">Select</span>
             </button>
+            <?php endif; ?>
             <div class="dropdown mx-1">
                 <button class="btn btn-link text-dark p-2" id="btnThemeDropdown" data-bs-toggle="dropdown" title="Change Theme">
                     <i class="bi bi-palette fs-5"></i>
@@ -67,12 +72,22 @@
                     <li><a class="dropdown-item rounded-3 theme-opt" href="#" data-theme="grey"><i class="bi bi-circle-half me-2"></i>Grey</a></li>
                 </ul>
             </div>
+            <?php if ($isAdminRoute): ?>
+            <button class="btn btn-link text-dark p-2 position-relative me-2" id="btnNavMlJobs" data-bs-toggle="modal" data-bs-target="#mlJobsModal" title="ML Background Jobs">
+                <i class="bi bi-cpu fs-5"></i>
+                <span class="position-absolute top-1 start-75 translate-middle badge rounded-pill bg-danger d-none" id="mlJobsActiveBadge" style="font-size:0.55rem; padding:0.25em 0.4em;">
+                    <span class="spinner-grow spinner-grow-sm" role="status" style="width: 6px; height: 6px;"></span>
+                </span>
+            </button>
+            <?php endif; ?>
+            <?php if (!$isAdminRoute): ?>
             <button class="btn btn-outline-primary btn-sm" id="btnScan" title="Scan uploads folder">
                 <i class="bi bi-arrow-repeat"></i> <span class="d-none d-md-inline">Scan</span>
             </button>
             <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal" title="Upload photos">
                 <i class="bi bi-cloud-upload"></i> <span class="d-none d-md-inline">Upload</span>
             </button>
+            <?php endif; ?>
             <?php if (auth()->loggedIn()): ?>
             <?php $navUser = auth()->user(); $navAvatar = $navUser->avatar ?? null; ?>
             <div class="dropdown">
@@ -152,6 +167,11 @@
                 <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--timeline <?= (uri_string() === 'admin/crons') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/crons') ?>">
                         <span><i class="bi bi-clock-history"></i> System Crons</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--sharing <?= (uri_string() === 'admin/health') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/health') ?>">
+                        <span><i class="bi bi-heart-pulse"></i> Diagnostics</span>
                     </a>
                 </li>
                 
@@ -336,9 +356,16 @@
 <div class="modal fade" id="lightboxModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content bg-black border-0 flex-row">
-            <div class="modal-header border-0 p-3 position-absolute top-0 start-0 w-100 d-flex justify-content-between" style="z-index: 1056; background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);">
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                <div class="d-flex align-items-center lightbox-toolbar px-2">
+            <div class="modal-header border-0 p-3 position-absolute top-0 start-0 w-100 d-flex justify-content-center" style="z-index: 1056; background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent); pointer-events: none;">
+                <div class="d-flex align-items-center lightbox-toolbar px-3 py-1 shadow-lg" style="pointer-events: auto;">
+                    <!-- Exit / Close Button -->
+                    <button type="button" class="btn btn-link text-white p-2" data-bs-dismiss="modal" aria-label="Close" title="Close (Esc)">
+                        <i class="bi bi-x-lg fs-6"></i>
+                    </button>
+                    
+                    <div class="vr bg-white opacity-25 mx-2" style="height: 20px;"></div>
+
+                    <!-- Photo Action Buttons -->
                     <button type="button" class="btn btn-link text-white p-2" id="btnShareLink" title="Create Public Link">
                         <i class="bi bi-link-45deg fs-5"></i>
                     </button>
@@ -363,9 +390,17 @@
                     <button type="button" class="btn btn-link text-white p-2" id="btnSlideshow" title="Start Slideshow">
                         <i class="bi bi-play-fill fs-5"></i>
                     </button>
-                    <button type="button" class="btn btn-link text-white p-2 ms-2 border-start border-secondary" id="btnInfo" title="Info">
+
+                    <div class="vr bg-white opacity-25 mx-2" style="height: 20px;"></div>
+
+                    <!-- Info Toggle Button -->
+                    <button type="button" class="btn btn-link text-white p-2" id="btnInfo" title="Info & Details">
                         <i class="bi bi-info-circle fs-5"></i>
                     </button>
+
+                    <div class="vr bg-white opacity-25 mx-2" style="height: 20px;"></div>
+                    <!-- Photo Counter -->
+                    <span id="lightboxCounter" class="text-white opacity-75 small font-monospace align-self-center px-1">0 / 0</span>
                 </div>
             </div>
             
@@ -398,34 +433,153 @@
             </button>
             
             <!-- Metadata Panel -->
-            <div id="metadataPanel" class="bg-white p-4 h-100 d-none overflow-auto" style="width: 360px; z-index: 1057;">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="mb-0">Details</h5>
-                    <button type="button" class="btn-close" id="btnCloseMetadata"></button>
+            <div id="metadataPanel" class="h-100 d-none overflow-auto" style="width: 340px; z-index: 1057; background: #111; color: #e8e8e8; border-left: 1px solid rgba(255,255,255,0.08);">
+
+                <!-- Panel Header -->
+                <div class="d-flex justify-content-between align-items-center px-4 pt-4 pb-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <span class="fw-semibold" style="font-size: 1rem; letter-spacing: 0.02em;">Details</span>
+                    <button type="button" class="btn btn-link p-1 text-white opacity-50" id="btnCloseMetadata" title="Close panel">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
-                <div class="mb-3">
-                    <label class="small text-muted d-block">Filename</label>
-                    <span id="metaFilename" class="text-break"></span>
-                </div>
-                <div class="mb-3">
-                    <label class="small text-muted d-block">Created</label>
-                    <span id="metaDate"></span>
-                </div>
-                <div class="mb-3">
-                    <label class="small text-muted d-block">Size</label>
-                    <span id="metaSize"></span>
-                </div>
-                <div class="mb-3">
-                    <label class="small text-muted d-block">Dimensions</label>
-                    <span id="metaDimensions"></span>
-                </div>
-                <div class="mb-3" id="metaExifContainer" style="display:none;">
-                    <label class="small text-muted d-block">Camera</label>
-                    <span id="metaExif" class="small"></span>
-                </div>
-                <div class="mb-3" id="metaLocationContainer" style="display:none;">
-                    <label class="small text-muted d-block">Location</label>
-                    <a href="#" id="metaLocation" target="_blank" class="small text-decoration-none"></a>
+
+                <div class="px-4 py-3">
+
+                    <!-- ── FILE INFO SECTION ── -->
+                    <p class="text-uppercase mb-2" style="font-size: 0.67rem; letter-spacing: 0.12em; color: #888;">File Info</p>
+
+                    <!-- Filename -->
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <i class="bi bi-file-earmark-image mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                        <div>
+                            <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Filename</div>
+                            <div id="metaFilename" class="text-break" style="font-size: 0.88rem; word-break: break-all;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Created date -->
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <i class="bi bi-calendar3 mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                        <div>
+                            <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Created</div>
+                            <div id="metaDate" style="font-size: 0.88rem;"></div>
+                        </div>
+                    </div>
+
+                    <!-- File size -->
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <i class="bi bi-hdd mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                        <div>
+                            <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Size</div>
+                            <div id="metaSize" style="font-size: 0.88rem;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dimensions -->
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <i class="bi bi-aspect-ratio mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                        <div>
+                            <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Dimensions</div>
+                            <div id="metaDimensions" style="font-size: 0.88rem;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Location (hidden until populated) -->
+                    <div class="d-flex align-items-start gap-3 mb-3" id="metaLocationContainer" style="display:none !important;">
+                        <i class="bi bi-geo-alt mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                        <div>
+                            <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Location</div>
+                            <a href="#" id="metaLocation" target="_blank" class="text-decoration-none" style="font-size: 0.88rem; color: #7aacff;"></a>
+                        </div>
+                    </div>
+
+                    <!-- ── CAMERA SPECS SECTION ── -->
+                    <div id="metaExifContainer" style="display:none;">
+                        <hr style="border-color: rgba(255,255,255,0.08); margin: 1rem 0;">
+                        <p class="text-uppercase mb-2" style="font-size: 0.67rem; letter-spacing: 0.12em; color: #888;">Camera Specs</p>
+
+                        <!-- Camera model -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaCameraRow" style="display:none !important;">
+                            <i class="bi bi-camera mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Camera</div>
+                                <div id="metaCameraModel" style="font-size: 0.92rem; font-weight: 500;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Shutter speed -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaShutterRow" style="display:none !important;">
+                            <i class="bi bi-stopwatch mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Shutter Speed</div>
+                                <div id="metaShutter" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Aperture -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaApertureRow" style="display:none !important;">
+                            <i class="bi bi-circle-half mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Aperture</div>
+                                <div id="metaAperture" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- ISO -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaIsoRow" style="display:none !important;">
+                            <i class="bi bi-brightness-high mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">ISO</div>
+                                <div id="metaIso" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Focal length -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaFocalRow" style="display:none !important;">
+                            <i class="bi bi-zoom-in mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Focal Length</div>
+                                <div id="metaFocal" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Flash -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaFlashRow" style="display:none !important;">
+                            <i class="bi bi-lightning mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Flash</div>
+                                <div id="metaFlash" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- White balance -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaWbRow" style="display:none !important;">
+                            <i class="bi bi-thermometer-half mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">White Balance</div>
+                                <div id="metaWb" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Metering mode -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaMeteringRow" style="display:none !important;">
+                            <i class="bi bi-bullseye mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Metering Mode</div>
+                                <div id="metaMetering" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- GPS Altitude -->
+                        <div class="d-flex align-items-start gap-3 mb-3" id="metaAltitudeRow" style="display:none !important;">
+                            <i class="bi bi-bar-chart-steps mt-1" style="font-size: 1.1rem; color: #aaa; min-width: 20px;"></i>
+                            <div>
+                                <div style="font-size: 0.72rem; color: #888; margin-bottom: 2px;">Altitude</div>
+                                <div id="metaAltitude" style="font-size: 0.88rem;"></div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -465,7 +619,7 @@
                     <div class="dz-message needsclick">
                         <i class="bi bi-cloud-arrow-up display-4 text-primary mb-3"></i><br>
                         <h4>Drop photos here or click to upload.</h4>
-                        <span class="text-muted note needsclick">(This is just a demo dropzone. Selected files are actually uploaded.)</span>
+                        <span class="text-muted note needsclick">Supports JPG, PNG, WEBP, GIF, MP4, MOV, WEBM (up to 500MB per file)</span>
                     </div>
                 </form>
             </div>
@@ -548,6 +702,89 @@
     </div>
 </div>
 
+<!-- ML Jobs Progress Modal (Admin Only) -->
+<?php if ($isAdminRoute): ?>
+<div class="modal fade" id="mlJobsModal" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-md" style="max-width: 450px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; background: #ffffff; color: #212529; border: 1px solid rgba(0,0,0,0.1);">
+            <div class="modal-header border-0 pb-0 px-4 pt-4">
+                <h6 class="modal-title fw-bold d-flex align-items-center gap-2 text-dark" style="font-size: 1.05rem;">
+                    <i class="bi bi-cpu text-primary"></i>
+                    <span>ML Pipeline Status</span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 py-3">
+                <!-- Faces progress -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold text-dark"><i class="bi bi-person-bounding-box text-primary me-2"></i>Face Recognition</span>
+                        <span class="badge bg-secondary" id="statusBadgeFaces" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
+                        <span id="navScannedFaces" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                    </div>
+                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                        <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated" id="barNavScannedFaces" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
+                    </div>
+                </div>
+                
+                <!-- Tags progress -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold text-dark"><i class="bi bi-tags text-success me-2"></i>YOLOv8 Object Tags</span>
+                        <span class="badge bg-secondary" id="statusBadgeTags" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
+                        <span id="navScannedTags" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                    </div>
+                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" id="barNavScannedTags" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
+                    </div>
+                </div>
+                
+                <!-- CLIP progress -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold text-dark"><i class="bi bi-lightning-charge text-info me-2"></i>CLIP Semantic Search</span>
+                        <span class="badge bg-secondary" id="statusBadgeClips" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
+                        <span id="navScannedClips" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                    </div>
+                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                        <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" id="barNavScannedClips" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Metrics / Speed Stats Card -->
+                <div class="p-3 rounded-3" style="background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.06);" id="mlJobStatsCard">
+                    <div class="d-flex justify-content-between mb-1" style="font-size: 0.75rem;">
+                        <span class="text-muted"><i class="bi bi-activity me-2"></i>Status:</span>
+                        <span class="fw-semibold text-dark" id="mlJobsStatusText">Idle (Waiting)</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsStartRow" style="font-size: 0.75rem;">
+                        <span class="text-muted"><i class="bi bi-clock me-2"></i>Started At:</span>
+                        <span class="fw-semibold text-dark" id="mlJobsStartedAt">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsSpeedRow" style="font-size: 0.75rem;">
+                        <span class="text-muted"><i class="bi bi-speedometer2 me-2"></i>Processing Speed:</span>
+                        <span class="fw-semibold text-dark" id="mlJobsSpeed">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between d-none" id="mlJobsEtaRow" style="font-size: 0.75rem;">
+                        <span class="text-muted"><i class="bi bi-hourglass-split me-2"></i>Est. Time Left:</span>
+                        <span class="fw-semibold text-danger" id="mlJobsEta">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- jQuery -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 Bundle JS -->
@@ -572,6 +809,156 @@
 </script>
 <!-- Custom JS -->
 <script src="<?= base_url('js/app.js') ?>"></script>
+<?php if ($isAdminRoute): ?>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var navPollInterval = null;
+        
+        function formatElapsedTime(ms) {
+            var secs = Math.floor(ms / 1000);
+            var mins = Math.floor(secs / 60);
+            secs = secs % 60;
+            return mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+        }
+
+        function updateNavMlStats() {
+            $.getJSON(BASE_URL + 'admin/ml/stats', function(res) {
+                if (res.status === 'success' && res.stats) {
+                    var stats = res.stats;
+                    var total = parseInt(stats.total_photos) || 0;
+                    
+                    var faces = parseInt(stats.scanned_faces) || 0;
+                    var tags = parseInt(stats.scanned_tags) || 0;
+                    var clips = parseInt(stats.scanned_clips) || 0;
+                    
+                    // Update Text
+                    $('#navScannedFaces').text(faces + ' / ' + total);
+                    $('#navScannedTags').text(tags + ' / ' + total);
+                    $('#navScannedClips').text(clips + ' / ' + total);
+                    
+                    // Update Bars
+                    var fPct = total > 0 ? (faces / total) * 100 : 0;
+                    var tPct = total > 0 ? (tags / total) * 100 : 0;
+                    var cPct = total > 0 ? (clips / total) * 100 : 0;
+                    
+                    $('#barNavScannedFaces').css('width', fPct + '%');
+                    $('#barNavScannedTags').css('width', tPct + '%');
+                    $('#barNavScannedClips').css('width', cPct + '%');
+
+                    // Determine Active tasks
+                    var facesActive = faces < total;
+                    var tagsActive = tags < total;
+                    var clipsActive = clips < total;
+                    var anyActive = facesActive || tagsActive || clipsActive;
+
+                    // Update Status Badges
+                    if (facesActive) {
+                        $('#statusBadgeFaces').text('Processing...').attr('class', 'badge bg-primary progress-bar-animated');
+                    } else {
+                        $('#statusBadgeFaces').text('Idle').attr('class', 'badge bg-secondary');
+                    }
+
+                    if (tagsActive) {
+                        $('#statusBadgeTags').text('Processing...').attr('class', 'badge bg-success progress-bar-animated');
+                    } else {
+                        $('#statusBadgeTags').text('Idle').attr('class', 'badge bg-secondary');
+                    }
+
+                    if (clipsActive) {
+                        $('#statusBadgeClips').text('Processing...').attr('class', 'badge bg-info text-dark progress-bar-animated');
+                    } else {
+                        $('#statusBadgeClips').text('Idle').attr('class', 'badge bg-secondary');
+                    }
+
+                    // Track & calculate speed and ETA metrics
+                    if (anyActive) {
+                        $('#mlJobsStatusText').text('Processing sequential pipeline...').removeClass('text-white-50').addClass('text-primary fw-bold');
+                        
+                        var now = Date.now();
+                        var startTime = sessionStorage.getItem('ml_jobs_start_time');
+                        if (!startTime) {
+                            startTime = now;
+                            sessionStorage.setItem('ml_jobs_start_time', startTime);
+                            // Store initial values to compute delta
+                            sessionStorage.setItem('ml_jobs_init_faces', faces);
+                            sessionStorage.setItem('ml_jobs_init_tags', tags);
+                            sessionStorage.setItem('ml_jobs_init_clips', clips);
+                        }
+                        
+                        var elapsedMs = now - parseInt(startTime);
+                        var initFaces = parseInt(sessionStorage.getItem('ml_jobs_init_faces') || faces);
+                        var initTags = parseInt(sessionStorage.getItem('ml_jobs_init_tags') || tags);
+                        var initClips = parseInt(sessionStorage.getItem('ml_jobs_init_clips') || clips);
+                        
+                        var processedDelta = (faces - initFaces) + (tags - initTags) + (clips - initClips);
+                        
+                        // Render Started At
+                        var startDate = new Date(parseInt(startTime));
+                        $('#mlJobsStartedAt').text(startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}));
+                        $('#mlJobsStartRow').removeClass('d-none');
+
+                        if (processedDelta > 0 && elapsedMs > 1000) {
+                            var secPerImg = (elapsedMs / 1000) / processedDelta;
+                            $('#mlJobsSpeed').text(secPerImg.toFixed(1) + 's / photo');
+                            $('#mlJobsSpeedRow').removeClass('d-none');
+                            
+                            // ETA
+                            var remainingPhotos = (total - faces) + (total - tags) + (total - clips);
+                            var etaSeconds = remainingPhotos * secPerImg;
+                            if (etaSeconds > 0) {
+                                $('#mlJobsEta').text(formatElapsedTime(etaSeconds * 1000));
+                                $('#mlJobsEtaRow').removeClass('d-none');
+                            } else {
+                                $('#mlJobsEtaRow').addClass('d-none');
+                            }
+                        } else {
+                            $('#mlJobsSpeed').text('Estimating speed...');
+                            $('#mlJobsSpeedRow').removeClass('d-none');
+                            $('#mlJobsEtaRow').addClass('d-none');
+                        }
+                    } else {
+                        // Reset all to Idle
+                        $('#mlJobsStatusText').text('Idle (Waiting)').removeClass('text-primary fw-bold').addClass('text-white-50');
+                        $('#mlJobsStartRow, #mlJobsSpeedRow, #mlJobsEtaRow').addClass('d-none');
+                        sessionStorage.removeItem('ml_jobs_start_time');
+                        sessionStorage.removeItem('ml_jobs_init_faces');
+                        sessionStorage.removeItem('ml_jobs_init_tags');
+                        sessionStorage.removeItem('ml_jobs_init_clips');
+                    }
+                    
+                    // Show or hide the active indicator pulse badge
+                    if (anyActive) {
+                        $('#mlJobsActiveBadge').removeClass('d-none');
+                        $('#btnNavMlJobs i').addClass('text-primary');
+                    } else {
+                        $('#mlJobsActiveBadge').addClass('d-none');
+                        $('#btnNavMlJobs i').removeClass('text-primary');
+                        if (navPollInterval) {
+                            clearInterval(navPollInterval);
+                            navPollInterval = null;
+                        }
+                    }
+                }
+            });
+        }
+        
+        updateNavMlStats();
+        navPollInterval = setInterval(updateNavMlStats, 5000);
+        
+        // Listen to rescan trigger buttons to start tracking instantly
+        $(document).on('click', '.btn-rescan, #btnTriggerCluster', function() {
+            var type = $(this).data('type') || 'all';
+            sessionStorage.removeItem('ml_jobs_start_time'); // force recalculation on next poll
+            setTimeout(function() {
+                updateNavMlStats();
+                if (!navPollInterval) {
+                    navPollInterval = setInterval(updateNavMlStats, 5000);
+                }
+            }, 1000);
+        });
+    });
+</script>
+<?php endif; ?>
 <?= $this->renderSection('scripts') ?>
 </body>
 </html>

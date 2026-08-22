@@ -195,6 +195,52 @@ class ApiController extends BaseController
         }
     }
 
+    public function checkHashes()
+    {
+        try {
+            $sha256 = $this->request->getPost('sha256') ?? $this->request->getVar('sha256');
+
+            if (empty($sha256)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'sha256 parameter is required'
+                ])->setStatusCode(400);
+            }
+
+            $photoModel = new \App\Models\PhotoModel();
+            $userId = auth()->id();
+
+            if (!$userId) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'User not authenticated'
+                ])->setStatusCode(401);
+            }
+
+            $existing = $photoModel->where('file_hash', $sha256)
+                                  ->where('user_id', $userId)
+                                  ->first();
+
+            if ($existing) {
+                return $this->response->setJSON([
+                    'status' => 'success',
+                    'message' => 'Photo exists',
+                    'photo' => $this->formatPhotoForApi($existing)
+                ]);
+            }
+
+            return $this->response->setJSON([
+                'status' => 'not_found',
+                'message' => 'Photo does not exist'
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
     public function createAlbum()
     {
         try {

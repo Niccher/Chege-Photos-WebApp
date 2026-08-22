@@ -96,8 +96,10 @@ $(document).ready(function () {
             
             const $targetGrid = $('.photo-grid').last();
             const isFav = photo.is_favorite ? '1' : '0';
-            const exifB64 = photo.exif_data ? btoa(unescape(encodeURIComponent(photo.exif_data))) : '';
-            const locationStr = photo.latitude && photo.longitude ? photo.latitude + ',' + photo.longitude : '';
+            const exifB64 = exifToBase64(photo.exif_data || '');
+            const locationStr = (photo.latitude && photo.longitude &&
+                                 parseFloat(photo.latitude) !== 0 && parseFloat(photo.longitude) !== 0)
+                                 ? photo.latitude + ',' + photo.longitude : '';
             const photoHtml = `
                 <div class="photo-item" 
                      draggable="true"
@@ -116,7 +118,7 @@ $(document).ready(function () {
                             <i class="bi bi-check-lg d-none"></i>
                         </div>
                     </div>
-                    ${photo.is_favorite ? '<div class="position-absolute top-0 start-0 p-2" style="z-index: 5;"><i class="bi bi-heart-fill text-danger shadow-sm"></i></div>' : ''}
+                    ${photo.is_favorite == '1' ? '<div class="position-absolute top-0 start-0 p-2" style="z-index: 5;"><i class="bi bi-heart-fill text-danger shadow-sm"></i></div>' : ''}
                     ${photo.mime_type.startsWith('video/') 
                         ? `<video src="${baseUrl + photo.path}" class="w-100 h-100 object-fit-cover" muted loop preload="metadata" onmouseover="this.play()" onmouseout="this.pause()"></video>
                            <div class="position-absolute bottom-0 end-0 p-1 m-1 bg-dark bg-opacity-75 text-white rounded small" style="pointer-events: none;"><i class="bi bi-play-btn me-1"></i>Video</div>`
@@ -125,6 +127,35 @@ $(document).ready(function () {
                 </div>`;
             $targetGrid.append(photoHtml);
         });
+    }
+
+    // ── EXIF helpers — defined at module level so they're always available ──────
+    function rationalToFloat(v) {
+        if (typeof v === 'number') return v;
+        if (typeof v !== 'string') return null;
+        const parts = v.split('/');
+        if (parts.length === 2) {
+            const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+            return d ? n / d : null;
+        }
+        return parseFloat(v) || null;
+    }
+
+    function formatExposure(val) {
+        const f = rationalToFloat(val);
+        if (!f) return val;
+        return f >= 1 ? f.toFixed(1) + 's' : '1/' + Math.round(1 / f) + 's';
+    }
+
+    // Safe UTF-8 base64 encoder for EXIF (used by appendPhotos for infinite scroll)
+    function exifToBase64(jsonStr) {
+        if (!jsonStr) return '';
+        try {
+            const bytes = new TextEncoder().encode(jsonStr);
+            let binary = '';
+            bytes.forEach(b => binary += String.fromCharCode(b));
+            return btoa(binary);
+        } catch(e) { return ''; }
     }
 
     // Corrected $loading variable initialization
@@ -136,6 +167,7 @@ $(document).ready(function () {
         if (index < 0 || index >= $allPhotos.length) return;
 
         currentIndex = index;
+        $('#lightboxCounter').text((currentIndex + 1) + ' / ' + $allPhotos.length);
         const $this = $allPhotos.eq(index);
         const fullUrl = $this.data('full');
         const dataType = $this.data('type') || 'image';
@@ -154,67 +186,138 @@ $(document).ready(function () {
             $('#btnArchive i').attr('class', context === 'archive' ? 'bi bi-archive-fill fs-5' : 'bi bi-archive fs-5');
         }
 
-        $('#metaFilename').text($this.data('filename') || 'Unknown');
-        $('#metaDate').text($this.data('date') || '-');
-        $('#metaSize').text($this.data('size') || '-');
-        $('#metaDimensions').text($this.data('dimensions') || '-');
+        // ── Basic file info ──────────────────────────────────────────────────────
+        $('#metaFilename').text($this[0].getAttribute('data-filename') || 'Unknown');
+        $('#metaDate').text($this[0].getAttribute('data-date') || '-');
+        $('#metaSize').text($this[0].getAttribute('data-size') || '-');
+        $('#metaDimensions').text($this[0].getAttribute('data-dimensions') || '-');
 
-        // Favorite status
-        const isFavorite = $this.data('favorite') == '1';
+        // Favorite button icon
+        const isFavorite = $this[0].getAttribute('data-favorite') === '1';
         $('#btnFavorite i').attr('class', isFavorite ? 'bi bi-heart-fill text-danger fs-5' : 'bi bi-heart fs-5');
 
-        const exifB64 = $this.data('exif-b64');
-        const photoExif = exifB64 ? JSON.parse(decodeURIComponent(escape(atob(exifB64)))) : null;
-        const photoLocation = $this.data('location');
-
-        function rationalToFloat(v) {
-            if (typeof v === 'number') return v;
-            if (typeof v !== 'string') return null;
-            const parts = v.split('/');
-            if (parts.length === 2) {
-                const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
-                return d ? n / d : null;
-            }
-            return parseFloat(v) || null;
-        }
-
-        function formatExposure(val) {
-            const f = rationalToFloat(val);
-            if (!f) return val;
-            return f >= 1 ? f.toFixed(1) + 's' : '1/' + Math.round(1 / f) + 's';
-        }
-
-        // Reset and populate EXIF
-        $('#metaExifContainer').hide();
-        if (photoExif) {
+        // ── Decode EXIF ──────────────────────────────────────────────────────────
+        const exifB64 = $this[0].getAttribute('data-exif-b64') || '';
+        let photoExif = null;
+        if (exifB64) {
             try {
-                const exif = typeof photoExif === 'string' ? JSON.parse(photoExif) : photoExif;
-                let exifHtml = '';
-                if (exif.Make || exif.Model) {
-                    exifHtml += `<strong>${[exif.Make, exif.Model].filter(Boolean).join(' ')}</strong><br>`;
-                }
-                if (exif.ExposureTime) exifHtml += `Exposure: ${formatExposure(exif.ExposureTime)}, `;
-                const fNum = rationalToFloat(exif.FNumber);
-                if (fNum) exifHtml += `f/${fNum.toFixed(1)}, `;
-                if (exif.ISOSpeedRatings) exifHtml += `ISO ${exif.ISOSpeedRatings}`;
-
-                $('#metaExif').html(exifHtml);
-                $('#metaExifContainer').show();
+                const binStr = atob(exifB64);
+                const byteArr = new Uint8Array(binStr.length);
+                for (let i = 0; i < binStr.length; i++) byteArr[i] = binStr.charCodeAt(i);
+                photoExif = JSON.parse(new TextDecoder('utf-8').decode(byteArr));
             } catch (e) {
-                console.error('Error parsing EXIF:', e);
+                console.warn('[EXIF decode error]', e.message);
             }
         }
 
-        // Reset and populate Location
-        $('#metaLocationContainer').hide();
-        if (photoLocation) {
-            const parts = photoLocation.split(',');
+        // ── Always reset every metadata row first ────────────────────────────────
+        const exifRowIds = ['#metaCameraRow','#metaShutterRow','#metaApertureRow',
+                            '#metaIsoRow','#metaFocalRow','#metaFlashRow',
+                            '#metaWbRow','#metaMeteringRow','#metaAltitudeRow'];
+        exifRowIds.forEach(id => {
+            const el = document.querySelector(id);
+            if (el) {
+                el.style.display = 'none';
+                const val = el.querySelector('[id]');
+                if (val) val.textContent = '';
+            }
+        });
+        document.getElementById('metaExifContainer').style.display = 'none';
+
+        // Always clear and hide location too
+        const locContainer = document.getElementById('metaLocationContainer');
+        const locLink      = document.getElementById('metaLocation');
+        locContainer.style.display = 'none';
+        locLink.textContent = '';
+        locLink.removeAttribute('href');
+
+        // ── Populate EXIF ────────────────────────────────────────────────────────
+        if (photoExif && typeof photoExif === 'object') {
+            let anyExif = false;
+
+            function setRow(rowId, valueId, text) {
+                if (!text && text !== 0) return;
+                document.getElementById(valueId).textContent = text;
+                document.getElementById(rowId).style.display = 'flex';
+                anyExif = true;
+            }
+
+            // Camera make + model
+            if (photoExif.Make || photoExif.Model) {
+                setRow('metaCameraRow', 'metaCameraModel',
+                    [photoExif.Make, photoExif.Model].filter(Boolean).join(' '));
+            }
+
+            // Shutter speed
+            if (photoExif.ExposureTime) {
+                setRow('metaShutterRow', 'metaShutter', formatExposure(photoExif.ExposureTime));
+            }
+
+            // Aperture — FNumber rational first, fallback ApertureFNumber string
+            const fNum = rationalToFloat(photoExif.FNumber);
+            if (fNum && fNum > 0) {
+                setRow('metaApertureRow', 'metaAperture', 'f/' + fNum.toFixed(1));
+            } else if (photoExif.ApertureFNumber) {
+                setRow('metaApertureRow', 'metaAperture', photoExif.ApertureFNumber);
+            }
+
+            // ISO
+            if (photoExif.ISOSpeedRatings) {
+                setRow('metaIsoRow', 'metaIso', photoExif.ISOSpeedRatings);
+            }
+
+            // Focal length
+            const focal = rationalToFloat(photoExif.FocalLength);
+            if (focal && focal > 0) {
+                let focalText = focal.toFixed(1) + ' mm';
+                if (photoExif.FocalLengthIn35mmFilm > 0) {
+                    focalText += '  (' + photoExif.FocalLengthIn35mmFilm + ' mm equiv.)';
+                }
+                setRow('metaFocalRow', 'metaFocal', focalText);
+            }
+
+            // Flash
+            if (photoExif.Flash != null) {
+                setRow('metaFlashRow', 'metaFlash',
+                    (parseInt(photoExif.Flash) & 0x1) ? 'Fired' : 'Did not fire');
+            }
+
+            // White Balance
+            if (photoExif.WhiteBalance != null) {
+                const wb = { 0: 'Auto', 1: 'Manual' };
+                setRow('metaWbRow', 'metaWb', wb[photoExif.WhiteBalance] ?? 'Unknown');
+            }
+
+            // Metering Mode
+            if (photoExif.MeteringMode != null) {
+                const mm = { 0:'Unknown', 1:'Average', 2:'Center-Weighted',
+                             3:'Spot', 4:'Multi-Spot', 5:'Multi-Segment', 6:'Partial', 255:'Other' };
+                setRow('metaMeteringRow', 'metaMetering', mm[photoExif.MeteringMode] ?? ('Mode ' + photoExif.MeteringMode));
+            }
+
+            // GPS Altitude
+            const alt = rationalToFloat(photoExif.GPSAltitude);
+            if (alt && alt > 0) {
+                const below = (photoExif.GPSAltitudeRef && photoExif.GPSAltitudeRef.charCodeAt(0) === 1)
+                              ? ' below sea level' : ' m';
+                setRow('metaAltitudeRow', 'metaAltitude', Math.round(alt) + below);
+            }
+
+            if (anyExif) document.getElementById('metaExifContainer').style.display = 'block';
+        }
+
+        // ── Populate Location ─────────────────────────────────────────────────────
+        const rawLocation = $this[0].getAttribute('data-location') || '';
+        if (rawLocation) {
+            const parts = rawLocation.split(',');
             if (parts.length === 2) {
-                const lat = parts[0];
-                const lng = parts[1];
-                $('#metaLocation').attr('href', `https://www.google.com/maps?q=${lat},${lng}`)
-                    .text(`${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`);
-                $('#metaLocationContainer').show();
+                const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+                // Only show if coords are non-zero (0,0 is invalid / default)
+                if (lat !== 0 || lng !== 0) {
+                    locLink.href = `https://www.google.com/maps?q=${lat},${lng}`;
+                    locLink.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                    locContainer.style.display = 'flex';
+                }
             }
         }
 

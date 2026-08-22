@@ -25,17 +25,20 @@ class Photos extends BaseController
                             ->orderBy('taken_at', 'DESC');
 
         $q = $this->request->getGet('q');
-        if (!empty($q)) {
-            $query->groupStart()
-                  ->like('filename', $q)
-                  ->orLike('exif_data', $q)
-                  ->orLike('taken_at', $q)
-                  ->groupEnd();
+        $query = $this->applySearchQuery($query, $q);
+
+        $currentPage = (int) ($this->request->getGet('page') ?? 1);
+        $paginatedPhotos = $query->paginate(100);
+        $pager = $photoModel->pager;
+        
+        // If requested page is out of bounds, prevent CI4 fallback to page 1
+        if ($currentPage > $pager->getPageCount() && $pager->getPageCount() > 0) {
+            $paginatedPhotos = [];
         }
 
         $data = [
-            'photos'         => $query->paginate(100),
-            'pager'          => $photoModel->pager,
+            'photos'         => $paginatedPhotos,
+            'pager'          => $pager,
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
             'counts'         => $counts,
@@ -45,7 +48,7 @@ class Photos extends BaseController
         if ($this->request->isAJAX()) {
             return $this->response->setJSON([
                 'photos' => $data['photos'],
-                'hasMore' => $query->pager->hasMore()
+                'hasMore' => $pager->hasMore()
             ]);
         }
         
@@ -67,13 +70,7 @@ class Photos extends BaseController
                             ->where('is_archived', false);
 
         $q = $this->request->getGet('q');
-        if (!empty($q)) {
-            $query->groupStart()
-                  ->like('filename', $q)
-                  ->orLike('exif_data', $q)
-                  ->orLike('taken_at', $q)
-                  ->groupEnd();
-        }
+        $query = $this->applySearchQuery($query, $q);
 
         $data = [
             'locations'      => $query->findAll(),
@@ -86,77 +83,7 @@ class Photos extends BaseController
         return view('photos/explore', $data);
     }
 
-    public function scan()
-    {
-        ini_set('memory_limit', '512M'); // Temporarily increase memory completely for high-res images
 
-        $photoModel = new \App\Models\PhotoModel();
-        $uploadPath = FCPATH . 'uploads/';
-        $thumbnailPath = FCPATH . 'thumbnails/';
-
-        $files = scandir($uploadPath);
-        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'webm'];
-        $count = 0;
-
-        foreach ($files as $file) {
-            if ($file === '.' || $file === '..') continue;
-
-            $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowedExtensions)) continue;
-
-            $fullPath = $uploadPath . $file;
-            $fileHash = md5_file($fullPath);
-            $userId = auth()->id();
-
-            // 1. Check if already in DB by filename (backfill missing hashes)
-            $existingByFile = $photoModel->where('filename', $file)->where('user_id', $userId)->first();
-            if ($existingByFile) {
-                if (empty($existingByFile['file_hash'])) {
-                    $photoModel->update($existingByFile['id'], ['file_hash' => $fileHash]);
-                }
-                continue;
-            }
-
-            // 2. Check if already in DB by hash (prevent duplicates with different names)
-            if ($photoModel->where('file_hash', $fileHash)->where('user_id', $userId)->first()) continue;
-
-            $isVideo = in_array($ext, ['mp4', 'mov', 'webm']);
-            $imageInfo = $isVideo ? false : @getimagesize($fullPath);
-            $metadata = $isVideo ? null : $this->getMergedMetadata($fullPath);
-
-            // Determine mime type
-            $mime = $isVideo ? 'video/' . $ext : ($imageInfo['mime'] ?? 'image/' . $ext);
-
-            $data = [
-                'user_id'        => $userId,
-                'filename'       => $file,
-                'path'           => 'uploads/' . $file,
-                'mime_type'      => $mime,
-                'width'          => $imageInfo ? $imageInfo[0] : null,
-                'height'         => $imageInfo ? $imageInfo[1] : null,
-                'size'           => filesize($fullPath),
-                'file_hash'      => $fileHash,
-                'taken_at'       => $metadata['taken_at'] ?? date('Y-m-d H:i:s', filemtime($fullPath)),
-                'thumbnail_path' => 'thumbnails/' . $file,
-                'latitude'       => $metadata['lat'] ?? null,
-                'longitude'      => $metadata['lng'] ?? null,
-                'exif_data'      => $metadata['exif'] ?? null,
-            ];
-
-            // Generate thumbnail placeholder if generation fails, or if it's a video
-            if (!$isVideo) {
-                try {
-                    $this->generateThumbnail($fullPath, $thumbnailPath . $file);
-                } catch (\Exception $e) { }
-            }
-
-            $photoModel->insert($data);
-        $this->clearSidebarCountsCache();
-            $count++;
-        }
-
-        return $this->response->setJSON(['status' => 'success', 'message' => "Scanned. Updated/Added $count files."]);
-    }
 
     public function upload()
     {
@@ -182,7 +109,7 @@ class Photos extends BaseController
         $mimeType = $file->getMimeType();
         $size = $file->getSize();
         $tempPath = $file->getTempName();
-        $fileHash = md5_file($tempPath);
+        $fileHash = hash_file('sha256', $tempPath);
 
         $photoModel = new \App\Models\PhotoModel();
         
@@ -609,13 +536,7 @@ class Photos extends BaseController
         $query = $photoModel->where('user_id', $userId)->where('is_archived', true)->orderBy('taken_at', 'DESC');
 
         $q = $this->request->getGet('q');
-        if (!empty($q)) {
-            $query->groupStart()
-                  ->like('filename', $q)
-                  ->orLike('exif_data', $q)
-                  ->orLike('taken_at', $q)
-                  ->groupEnd();
-        }
+        $query = $this->applySearchQuery($query, $q);
 
         $data = [
             'photos'      => $query->paginate(100),
@@ -636,13 +557,7 @@ class Photos extends BaseController
         $query = $photoModel->where('user_id', $userId)->onlyDeleted()->orderBy('deleted_at', 'DESC');
 
         $q = $this->request->getGet('q');
-        if (!empty($q)) {
-            $query->groupStart()
-                  ->like('filename', $q)
-                  ->orLike('exif_data', $q)
-                  ->orLike('taken_at', $q)
-                  ->groupEnd();
-        }
+        $query = $this->applySearchQuery($query, $q);
 
         $data = [
             'photos'      => $query->paginate(100),
@@ -666,13 +581,7 @@ class Photos extends BaseController
                             ->orderBy('taken_at', 'DESC');
 
         $q = $this->request->getGet('q');
-        if (!empty($q)) {
-            $query->groupStart()
-                  ->like('filename', $q)
-                  ->orLike('exif_data', $q)
-                  ->orLike('taken_at', $q)
-                  ->groupEnd();
-        }
+        $query = $this->applySearchQuery($query, $q);
 
         $data = [
             'title'       => 'Favorites',
@@ -1266,7 +1175,16 @@ class Photos extends BaseController
                 'timeout'        => 60,
             ]);
             $client->post('http://ml-chege-photos:8000/api/v1/faces/encode', [
-                'form_params' => ['photo_id' => $photoId],
+                'headers' => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ],
+                'form_params' => [
+                    'photo_id'   => $photoId,
+                    'async_task' => 1,
+                    'scan_faces' => 1,
+                    'scan_tags'  => 1,
+                    'scan_clip'  => 1,
+                ],
             ]);
         } catch (\Exception $e) {
             log_message('error', "Auto face scan failed for photo {$photoId}: " . $e->getMessage());
@@ -1279,7 +1197,16 @@ class Photos extends BaseController
         curl_setopt_array($ch, [
             CURLOPT_URL => 'http://ml-chege-photos:8000/api/v1/faces/encode',
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query(['photo_id' => $photoId]),
+            CURLOPT_HTTPHEADER => [
+                'X-API-KEY: ' . (env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!')
+            ],
+            CURLOPT_POSTFIELDS => http_build_query([
+                'photo_id'   => $photoId,
+                'async_task' => 1,
+                'scan_faces' => 1,
+                'scan_tags'  => 1,
+                'scan_clip'  => 1,
+            ]),
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_TIMEOUT_MS => 100,
             CURLOPT_CONNECTTIMEOUT_MS => 100,
@@ -1287,5 +1214,109 @@ class Photos extends BaseController
         ]);
         curl_exec($ch);
         curl_close($ch);
+    }
+
+    public function addTag(): ResponseInterface
+    {
+        $photoId = (int) $this->request->getPost('photo_id');
+        $tag = trim($this->request->getPost('tag'));
+
+        if (!$photoId || empty($tag)) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Photo ID and tag are required',
+            ])->setStatusCode(400);
+        }
+
+        $tagModel = new \App\Models\PhotoTagModel();
+        $exists = $tagModel->where('photo_id', $photoId)->where('tag', $tag)->first();
+        if ($exists) {
+            return $this->response->setJSON([
+                'status' => 'success', 'message' => 'Tag already exists',
+            ]);
+        }
+
+        $tagModel->insert([
+            'photo_id'   => $photoId,
+            'tag'        => $tag,
+            'confidence' => 1.0,
+        ]);
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'tag'    => $tag,
+        ]);
+    }
+
+    public function removeTag(): ResponseInterface
+    {
+        $photoId = (int) $this->request->getPost('photo_id');
+        $tag = trim($this->request->getPost('tag'));
+
+        if (!$photoId || empty($tag)) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Photo ID and tag are required',
+            ])->setStatusCode(400);
+        }
+
+        $tagModel = new \App\Models\PhotoTagModel();
+        $tagModel->where('photo_id', $photoId)->where('tag', $tag)->delete();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+        ]);
+    }
+
+    private function applySearchQuery($query, $q)
+    {
+        if (empty($q)) {
+            return $query;
+        }
+
+        $db = \Config\Database::connect();
+        $matchedPhotoIds = $db->table('photo_tags')
+                              ->select('photo_id')
+                              ->like('tag', $q)
+                              ->get()
+                              ->getResultArray();
+        $photoIds = array_column($matchedPhotoIds, 'photo_id');
+
+        // Query FastAPI ML service for CLIP semantic search
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 3,
+                'timeout'         => 10,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
+            ]);
+
+            $url = (env('ML_URL') ?: 'http://ml-chege-photos:8000') . '/api/v1/search/semantic?' . http_build_query([
+                'query' => $q,
+                'limit' => 100
+            ]);
+
+            $response = $client->get($url);
+            if ($response->getStatusCode() === 200) {
+                $body = json_decode($response->getBody(), true);
+                if (!empty($body['results'])) {
+                    $semanticPhotoIds = array_column($body['results'], 'photo_id');
+                    $photoIds = array_merge($photoIds, $semanticPhotoIds);
+                    $photoIds = array_values(array_unique($photoIds));
+                }
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'CLIP semantic search call failed: ' . $e->getMessage());
+        }
+
+        $query->groupStart()
+              ->like('filename', $q)
+              ->orLike('exif_data', $q)
+              ->orLike('taken_at', $q);
+        if (!empty($photoIds)) {
+            $query->orWhereIn('id', $photoIds);
+        }
+        $query->groupEnd();
+
+        return $query;
     }
 }
