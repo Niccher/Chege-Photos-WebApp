@@ -42,6 +42,12 @@ class Auth extends BaseController
             $result = $authenticator->check($credentials);
 
             if (! $result->isOK()) {
+                helper('audit');
+                log_security_action('LOGIN_ATTEMPT', 'FAILURE', [
+                    'email'  => $credentials['email'],
+                    'reason' => $result->reason(),
+                    'method' => 'API_PASSWORD'
+                ]);
                 return $this->response->setJSON([
                     'status'  => 'error',
                     'message' => $result->reason(),
@@ -49,6 +55,11 @@ class Auth extends BaseController
             }
 
             $user = $result->extraInfo();
+            helper('audit');
+            log_security_action('LOGIN_ATTEMPT', 'SUCCESS', [
+                'email'  => $credentials['email'],
+                'method' => 'API_PASSWORD'
+            ], $user->id);
             $token = $user->generateAccessToken($this->request->getPost('device_name'));
 
             $photoModel = new PhotoModel();
@@ -101,6 +112,11 @@ class Auth extends BaseController
             $record = $model->where('token', $tokenRaw)->where('is_used', 0)->first();
 
             if (! $record) {
+                helper('audit');
+                log_security_action('TOKEN_AUTH', 'FAILURE', [
+                    'token'  => $tokenRaw,
+                    'reason' => 'Invalid or already used token.'
+                ]);
                 return $this->response->setJSON([
                     'status'  => 'error',
                     'message' => 'Invalid or already used token.',
@@ -121,13 +137,32 @@ class Auth extends BaseController
             $user = $userModel->findById($record['user_id']);
 
             if (! $user) {
+                helper('audit');
+                log_security_action('TOKEN_AUTH', 'FAILURE', [
+                    'token'  => $tokenRaw,
+                    'reason' => 'Token owner not found.'
+                ]);
                 return $this->response->setJSON([
                     'status'  => 'error',
                     'message' => 'Token owner not found.',
                 ])->setStatusCode(500);
             }
 
-            $token = $user->generateAccessToken($deviceName . ' (token)');
+            $scopes = ['*'];
+            if (!empty($record['scopes'])) {
+                $decoded = json_decode($record['scopes'], true);
+                if (is_array($decoded)) {
+                    $scopes = $decoded;
+                }
+            }
+
+            $token = $user->generateAccessToken($deviceName . ' (token)', $scopes);
+            helper('audit');
+            log_security_action('TOKEN_AUTH', 'SUCCESS', [
+                'token'       => $tokenRaw,
+                'device_id'   => $deviceId,
+                'device_name' => $deviceName
+            ], $user->id);
 
             $photoModel = new PhotoModel();
             $lastPhoto = $photoModel->where('user_id', $user->id)

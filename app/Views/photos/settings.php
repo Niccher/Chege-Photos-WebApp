@@ -233,60 +233,60 @@
                                 <!-- Stats row -->
                                 <div class="row g-3 mb-4">
                                     <div class="col-md-4">
-                                        <div class="p-3 border rounded-3 text-center">
-                                            <div class="fs-3 fw-bold text-primary"><?= (int) ($mlStats['scanned'] ?? 0) ?></div>
-                                            <div class="small text-muted">Scanned Photos</div>
+                                        <div class="p-3 border border-opacity-10 rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-primary"><i class="bi bi-person-badge"></i> <?= (int) ($mlStats['detected_faces'] ?? 0) ?></div>
+                                            <div class="small text-muted mt-1">Detected Faces</div>
                                         </div>
                                     </div>
                                     <div class="col-md-4">
-                                        <div class="p-3 border rounded-3 text-center">
-                                            <div class="fs-3 fw-bold text-success"><?= (int) ($mlStats['total_images'] ?? 0) ?></div>
-                                            <div class="small text-muted">Total Images</div>
+                                        <div class="p-3 border border-opacity-10 rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-success"><i class="bi bi-shield-check"></i> <?= (int) ($mlStats['analyzed_images'] ?? 0) ?> / <?= (int) ($mlStats['total_images'] ?? 0) ?></div>
+                                            <div class="small text-muted mt-1">Analysis Coverage</div>
                                         </div>
                                     </div>
                                     <div class="col-md-4">
-                                        <div class="p-3 border rounded-3 text-center">
-                                            <div class="fs-3 fw-bold text-info"><?= (int) ($mlStats['persons'] ?? 0) ?></div>
-                                            <div class="small text-muted">Identified Persons</div>
+                                        <div class="p-3 border border-opacity-10 rounded-3 text-center">
+                                            <div class="fs-3 fw-bold text-info"><i class="bi bi-people"></i> <?= (int) ($mlStats['persons'] ?? 0) ?></div>
+                                            <div class="small text-muted mt-1">Identified Persons</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Scan Unscanned -->
+                                <!-- Analyze New Photos -->
                                 <div class="border rounded-3 p-4 mb-3">
                                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                                         <div>
-                                            <h6 class="mb-1 fw-bold"><i class="bi bi-search me-1"></i> Scan Unscanned Photos</h6>
-                                            <p class="text-muted small mb-0">Process all images that haven't been scanned for faces yet.</p>
+                                            <h6 class="mb-1 fw-bold"><i class="bi bi-search me-1"></i> Analyze New Photos</h6>
+                                            <p class="text-muted small mb-0">Find people, identify objects, and index scenes in all newly uploaded photos.</p>
                                         </div>
                                         <button class="btn btn-primary rounded-pill px-4 flex-shrink-0" id="btnScanUnscanned">
-                                            <i class="bi bi-play-fill me-1"></i> Scan Unscanned
+                                            <i class="bi bi-play-fill me-1"></i> Analyze New
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Re-cluster -->
+                                <!-- Re-group Similar Faces -->
                                 <div class="border rounded-3 p-4 mb-3">
                                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                                         <div>
-                                            <h6 class="mb-1 fw-bold"><i class="bi bi-diagram-3 me-1"></i> Re-cluster Faces</h6>
-                                            <p class="text-muted small mb-0">Re-run HDBSCAN clustering on all existing face embeddings to regroup persons.</p>
+                                            <h6 class="mb-1 fw-bold"><i class="bi bi-diagram-3 me-1"></i> Re-group Similar Faces</h6>
+                                            <p class="text-muted small mb-0">Re-organize face groupings to clean up matches and merge duplicate profiles based on face shapes.</p>
                                         </div>
                                         <button class="btn btn-outline-info rounded-pill px-4 flex-shrink-0" id="btnRecluster">
-                                            <i class="bi bi-arrow-repeat me-1"></i> Re-cluster
+                                            <i class="bi bi-arrow-repeat me-1"></i> Re-group Faces
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Danger Zone: Force Rescan -->
+                                <!-- Danger Zone: Re-analyze Entire Library -->
                                 <div class="border border-danger rounded-3 p-4">
                                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                                         <div>
-                                            <h6 class="mb-1 fw-bold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Force Rescan All</h6>
-                                            <p class="text-muted small mb-0">Deletes all existing face data and rescans every image from scratch. This cannot be undone.</p>
+                                            <h6 class="mb-1 fw-bold text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Re-analyze Entire Library</h6>
+                                            <p class="text-muted small mb-0">Deletes all current face and search metadata and re-scans every photo from scratch. This action is irreversible.</p>
                                         </div>
                                         <button class="btn btn-danger rounded-pill px-4 flex-shrink-0" data-bs-toggle="modal" data-bs-target="#forceRescanModal">
-                                            <i class="bi bi-arrow-clockwise me-1"></i> Force Rescan
+                                            <i class="bi bi-arrow-clockwise me-1"></i> Re-analyze All
                                         </button>
                                     </div>
                                 </div>
@@ -294,30 +294,54 @@
 
                             <!-- About -->
                             <div class="tab-pane fade" id="mlAbout" role="tabpanel">
-                                <h5 class="mb-1"><i class="bi bi-cpu me-2"></i>ML / Face Recognition</h5>
-                                <p class="text-muted small mb-4">Face detection, recognition, and clustering powered by Insightface + Qdrant.</p>
+                                <h5 class="mb-1 fw-bold"><i class="bi bi-info-circle me-2"></i>About the AI Engine</h5>
+                                <p class="text-muted small mb-4">Learn how the background artificial intelligence processes your photo library.</p>
 
-                                <div class="mb-4">
-                                    <h6 class="fw-bold mb-2">About the Model</h6>
-                                    <div class="small text-muted" style="line-height:1.7;">
-                                        <p class="mb-1"><strong>Model:</strong> Insightface Buffalo-L — a ResNet-100 backbone trained on MS1MV3 with ArcFace loss, producing 512-dimensional embeddings.</p>
-                                        <p class="mb-1"><strong>Detection:</strong> RetinaFace (Mobilenet0.25) for face detection with landmark localisation. Detection threshold: 0.5.</p>
-                                        <p class="mb-1"><strong>Why this model?</strong> Buffalo-L offers the best accuracy/speed trade-off for CPU inference. It is widely benchmarked and achieves 99.8%+ on LFW with robust occlusion and pose handling.</p>
-                                        <p class="mb-1"><strong>Vector DB:</strong> Qdrant stores embeddings for cosine-similarity search. Each face is converted to a 512-d float vector and indexed with HNSW for fast approximate nearest-neighbour lookups.</p>
-                                        <p class="mb-1"><strong>Clustering:</strong> HDBSCAN groups similar embeddings into persons without requiring a predefined number of clusters. New faces are automatically assigned to existing clusters or flagged as unknown.</p>
+                                <div class="row g-3">
+                                    <!-- Face Detection -->
+                                    <div class="col-md-6">
+                                        <div class="p-3 border border-opacity-10 rounded-3 h-100">
+                                            <h6 class="fw-bold d-flex align-items-center gap-2 mb-2">
+                                                <i class="bi bi-person-bounding-box text-primary"></i> Face Recognition
+                                            </h6>
+                                            <p class="text-muted small mb-0" style="font-size: 0.8rem; line-height: 1.5;">
+                                                Finds human faces in photos, extracts facial shapes, and groups identical people together. You can name these groups to quickly find photos of specific friends and family.
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-
-                                <div>
-                                    <h6 class="fw-bold mb-2">How It Works</h6>
-                                    <div class="small text-muted" style="line-height:1.7;">
-                                        <ol class="mb-0 ps-3">
-                                            <li><strong>Detection</strong> — When a photo is uploaded (or scanned manually), it is sent to the ML service. RetinaFace finds all faces in the image and returns bounding boxes and 5-point facial landmarks.</li>
-                                            <li><strong>Embedding</strong> — Each detected face is aligned using the landmarks, then passed through the Buffalo-L ResNet-100 model to produce a 512-dimensional feature vector.</li>
-                                            <li><strong>Storage</strong> — The embedding is stored in Qdrant for similarity search, and metadata (bbox, score, photo_id) is stored in MySQL for fast relational queries.</li>
-                                            <li><strong>Clustering</strong> — HDBSCAN scans all stored embeddings and groups them into person clusters based on cosine distance. Cluster labels are saved to the <code>person</code> table.</li>
-                                            <li><strong>Search</strong> — Upload a photo → detect + embed → search Qdrant for the nearest neighbours → return ranked results with similarity scores.</li>
-                                        </ol>
+                                    <!-- Scene Tagging -->
+                                    <div class="col-md-6">
+                                        <div class="p-3 border border-opacity-10 rounded-3 h-100">
+                                            <h6 class="fw-bold d-flex align-items-center gap-2 mb-2">
+                                                <i class="bi bi-tags text-success"></i> Category Tagging
+                                            </h6>
+                                            <p class="text-muted small mb-0" style="font-size: 0.8rem; line-height: 1.5;">
+                                                Automatically scans your photos for objects, settings, and scenes (like "beach", "sunset", "food", or "cars"). This lets you browse photos by categories without manual labeling.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <!-- Semantic search -->
+                                    <div class="col-md-6">
+                                        <div class="p-3 border border-opacity-10 rounded-3 h-100">
+                                            <h6 class="fw-bold d-flex align-items-center gap-2 mb-2">
+                                                <i class="bi bi-search text-info"></i> Semantic Search
+                                                <span class="badge bg-secondary-subtle text-muted extra-small" style="font-size: 0.65rem;">CLIP</span>
+                                            </h6>
+                                            <p class="text-muted small mb-0" style="font-size: 0.8rem; line-height: 1.5;">
+                                                Allows you to search using descriptive sentences instead of just keywords. For example, search for "a cat sleeping on a blue couch" or "people eating dinner at a restaurant".
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <!-- Secure Storage -->
+                                    <div class="col-md-6">
+                                        <div class="p-3 border border-opacity-10 rounded-3 h-100">
+                                            <h6 class="fw-bold d-flex align-items-center gap-2 mb-2">
+                                                <i class="bi bi-shield-lock text-warning"></i> Privacy & Storage
+                                            </h6>
+                                            <p class="text-muted small mb-0" style="font-size: 0.8rem; line-height: 1.5;">
+                                                All intelligence processing runs locally on your server. Your photos never leave your device/server, and face vectors are stored securely inside a private vector index.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -436,6 +460,27 @@
                                     </button>
                                     <button class="btn btn-outline-secondary rounded-pill px-3 ms-2" id="btnCancelToken">Cancel</button>
                                 </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold d-block">Scopes / Permissions</label>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input token-scope-checkbox" type="checkbox" value="*" id="scopeAll" checked>
+                                            <label class="form-check-label small" for="scopeAll">Full Access (*)</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input token-scope-checkbox" type="checkbox" value="photos:read" id="scopePhotosRead" disabled>
+                                            <label class="form-check-label small" for="scopePhotosRead">Read Photos</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input token-scope-checkbox" type="checkbox" value="photos:write" id="scopePhotosWrite" disabled>
+                                            <label class="form-check-label small" for="scopePhotosWrite">Upload/Write Photos</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input token-scope-checkbox" type="checkbox" value="faces:write" id="scopeFacesWrite" disabled>
+                                            <label class="form-check-label small" for="scopeFacesWrite">Manage Faces</label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -458,20 +503,39 @@
                         </div>
 
                         <!-- Token list -->
-                        <div class="table-responsive">
+                        <div class="table-responsive mb-5">
                             <table class="table table-hover align-middle mb-0" id="tokensTable">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Token</th>
+                                        <th>Pairing Token</th>
                                         <th>Description</th>
                                         <th>Status</th>
-                                        <th>Used</th>
+                                        <th>Used At</th>
                                         <th>Device</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tokensTableBody">
                                     <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Active Authenticated Devices Section -->
+                        <h5 class="mt-4 mb-3"><i class="bi bi-phone me-2"></i>Active Authenticated Devices</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="devicesTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Device / Client</th>
+                                        <th>Scopes / Permissions</th>
+                                        <th>First Linked</th>
+                                        <th>Last Active</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="devicesTableBody">
+                                    <tr><td colspan="5" class="text-center text-muted py-4">Loading active devices...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -520,12 +584,12 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header border-0 bg-danger text-white">
-                <h6 class="modal-title fw-bold"><i class="bi bi-arrow-clockwise me-2"></i>Force Rescan All</h6>
+                <h6 class="modal-title fw-bold"><i class="bi bi-arrow-clockwise me-2"></i>Re-analyze Entire Library</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <p class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i> This will delete all existing face data!</p>
-                <p class="text-muted small mb-3">This permanently deletes <strong>all face encodings, person assignments, and Qdrant vectors</strong>, then rescans every image from scratch. Clustering will need to be re-run afterwards.</p>
+                <p class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i> This will delete all current face groupings and search indexes!</p>
+                <p class="text-muted small mb-3">This permanently deletes <strong>all identified face tags, custom person groupings, and search data</strong>, then re-scans all photos from scratch. Your custom named face groupings will need to be re-computed afterward.</p>
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Type <span class="text-danger fw-bold">RESCAN</span> to confirm:</label>
                     <input type="text" id="forceRescanConfirmInput" class="form-control" placeholder="Type RESCAN here">
@@ -534,7 +598,7 @@
             <div class="modal-footer border-0">
                 <button class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
                 <button class="btn btn-danger rounded-pill px-4" id="btnConfirmForceRescan" disabled>
-                    <i class="bi bi-arrow-clockwise me-1"></i> Force Rescan
+                    <i class="bi bi-arrow-clockwise me-1"></i> Re-analyze Library
                 </button>
             </div>
         </div>
@@ -612,20 +676,32 @@ function loadTokens() {
         if (res.status !== 'success') return;
         var html = '';
         if (res.tokens.length === 0) {
-            html = '<tr><td colspan="6" class="text-center text-muted py-4">No tokens generated yet.</td></tr>';
+            html = '<tr><td colspan="6" class="text-center text-muted py-4">No pairing tokens generated yet.</td></tr>';
         } else {
             res.tokens.forEach(function(t) {
                 var statusBadge = t.is_used
-                    ? '<span class="badge bg-secondary bg-opacity-25 text-secondary">Used</span>'
-                    : '<span class="badge bg-success bg-opacity-25 text-success">Active</span>';
+                     ? '<span class="badge bg-secondary bg-opacity-25 text-secondary">Used</span>'
+                     : '<span class="badge bg-success bg-opacity-25 text-success">Active / Unused</span>';
                 var usedAt = t.used_at ? new Date(t.used_at).toLocaleString() : '—';
                 var deviceInfo = t.device_name ? (t.device_name + '<br><small class="text-muted">' + (t.device_id || '') + '</small>') : '—';
+                var scopesBadge = '';
+                if (t.scopes) {
+                    try {
+                        var parsed = JSON.parse(t.scopes);
+                        if (Array.isArray(parsed)) {
+                            parsed.forEach(function(s) {
+                                scopesBadge += '<span class="badge bg-info bg-opacity-10 text-info me-1 small">' + s + '</span>';
+                            });
+                        }
+                    } catch(e) {}
+                }
+                var descriptionCell = (t.description || '—') + (scopesBadge ? '<br><small class="text-muted">' + scopesBadge + '</small>' : '');
                 var revokeBtn = t.is_used
-                    ? ''
-                    : '<button class="btn btn-outline-danger btn-sm" onclick="revokeToken(' + t.id + ')"><i class="bi bi-x-circle"></i></button>';
+                     ? ''
+                     : '<button class="btn btn-outline-danger btn-sm" onclick="revokeToken(' + t.id + ')" title="Revoke pairing code"><i class="bi bi-trash"></i></button>';
                 html += '<tr>' +
                     '<td><code>' + t.token + '</code></td>' +
-                    '<td>' + (t.description || '—') + '</td>' +
+                    '<td>' + descriptionCell + '</td>' +
                     '<td>' + statusBadge + '</td>' +
                     '<td class="small">' + usedAt + '</td>' +
                     '<td class="small">' + deviceInfo + '</td>' +
@@ -634,12 +710,50 @@ function loadTokens() {
             });
         }
         $('#tokensTableBody').html(html);
+
+        // Populate active devices
+        var devHtml = '';
+        if (!res.active_devices || res.active_devices.length === 0) {
+            devHtml = '<tr><td colspan="5" class="text-center text-muted py-4">No active linked devices found.</td></tr>';
+        } else {
+            res.active_devices.forEach(function(d) {
+                var scopesList = '';
+                if (d.scopes && Array.isArray(d.scopes)) {
+                    d.scopes.forEach(function(s) {
+                        scopesList += '<span class="badge bg-primary bg-opacity-10 text-primary me-1">' + s + '</span>';
+                    });
+                }
+                var lastActive = d.last_used_at ? new Date(d.last_used_at).toLocaleString() : 'Just now';
+                var firstLinked = d.created_at ? new Date(d.created_at).toLocaleString() : '—';
+                var revokeDeviceBtn = '<button class="btn btn-sm btn-outline-danger" onclick="revokeDevice(' + d.id + ')" title="Log out / Revoke device"><i class="bi bi-box-arrow-right me-1"></i> Log Out</button>';
+                devHtml += '<tr>' +
+                    '<td><span class="fw-bold"><i class="bi bi-phone me-1"></i>' + d.name + '</span></td>' +
+                    '<td>' + (scopesList || '<span class="badge bg-secondary">none</span>') + '</td>' +
+                    '<td class="small">' + firstLinked + '</td>' +
+                    '<td class="small">' + lastActive + '</td>' +
+                    '<td>' + revokeDeviceBtn + '</td>' +
+                    '</tr>';
+            });
+        }
+        $('#devicesTableBody').html(devHtml);
     });
 }
 
 function revokeToken(id) {
-    if (!confirm('Revoke this token?')) return;
+    if (!confirm('Revoke this pairing token? This will prevent it from being used to pair new devices.')) return;
     $.post(BASE_URL + 'settings/tokens/revoke', { id: id }, function(res) {
+        if (res.status === 'success') {
+            showToast(res.message, 'success');
+            loadTokens();
+        } else {
+            showToast(res.message, 'danger');
+        }
+    });
+}
+
+function revokeDevice(id) {
+    if (!confirm('Log out and revoke access for this device? It will be instantly disconnected and forced to log in again.')) return;
+    $.post(BASE_URL + 'settings/tokens/revoke-device', { id: id }, function(res) {
         if (res.status === 'success') {
             showToast(res.message, 'success');
             loadTokens();
@@ -834,14 +948,36 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#btnCancelToken').on('click', function () {
         $('#tokenGenerateForm').addClass('d-none');
     });
+    // Toggle scopes based on Full Access checkbox
+    $('#scopeAll').on('change', function () {
+        var isChecked = $(this).is(':checked');
+        $('.token-scope-checkbox').not('#scopeAll').prop('disabled', isChecked);
+        if (isChecked) {
+            $('.token-scope-checkbox').not('#scopeAll').prop('checked', false);
+        }
+    });
+
     $('#btnCreateToken').on('click', function () {
         var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Creating...');
         var desc = $('#tokenDescription').val();
-        $.post(BASE_URL + 'settings/tokens/generate', { description: desc }, function (res) {
+        
+        var selectedScopes = [];
+        $('.token-scope-checkbox:checked').each(function() {
+            selectedScopes.push($(this).val());
+        });
+        if (selectedScopes.length === 0) {
+            selectedScopes.push('*');
+        }
+
+        $.post(BASE_URL + 'settings/tokens/generate', { description: desc, scopes: selectedScopes }, function (res) {
             if (res.status === 'success') {
                 var token = res.token;
                 $('#tokenGenerateForm').addClass('d-none');
                 $('#tokenDescription').val('');
+                // Reset checkboxes to default
+                $('#scopeAll').prop('checked', true);
+                $('.token-scope-checkbox').not('#scopeAll').prop('disabled', true).prop('checked', false);
+
                 $('#tokenCodeDisplay').text(token.token);
                 $('#tokenQrCode').empty();
                 new QRCode(document.getElementById('tokenQrCode'), {
@@ -890,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Scan Unscanned
     $('#btnScanUnscanned').on('click', function () {
         var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Scanning...');
-        $.post(BASE_URL + 'api/faces/scan-all', function (res) {
+        $.post(BASE_URL + 'api/v1/faces/scan-all', function (res) {
             if (res.status === 'success') {
                 var msg = 'Scanned ' + res.processed + ' new photos' + (res.skipped ? ', skipped ' + res.skipped : '') + '.';
                 if (res.errors && res.errors.length) msg += ' ' + res.errors.length + ' error(s).';
@@ -909,7 +1045,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Re-cluster
     $('#btnRecluster').on('click', function () {
         var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Clustering...');
-        $.post(BASE_URL + 'api/faces/cluster', function (res) {
+        $.post(BASE_URL + 'api/v1/faces/cluster', function (res) {
             if (res.status === 'success') {
                 var data = res.data || {};
                 showToast(
@@ -935,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Force Rescan
     $('#btnConfirmForceRescan').on('click', function () {
         var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Rescanning all...');
-        $.post(BASE_URL + 'api/faces/force-scan', function (res) {
+        $.post(BASE_URL + 'api/v1/faces/force-scan', function (res) {
             if (res.status === 'success') {
                 $('#forceRescanModal').modal('hide');
                 showToast(

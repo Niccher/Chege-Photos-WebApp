@@ -1291,8 +1291,9 @@ class Photos extends BaseController
             ]);
 
             $url = (env('ML_URL') ?: 'http://ml-chege-photos:8000') . '/api/v1/search/semantic?' . http_build_query([
-                'query' => $q,
-                'limit' => 100
+                'query'   => $q,
+                'limit'   => 100,
+                'user_id' => auth()->id() ?: 0
             ]);
 
             $response = $client->get($url);

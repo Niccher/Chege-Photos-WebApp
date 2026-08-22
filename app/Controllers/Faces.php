@@ -360,7 +360,8 @@ class Faces extends BaseController
 
     public function apiCluster(): ResponseInterface
     {
-        $result = $this->mlProxy('POST', '/api/v1/faces/cluster');
+        $mode = $this->request->getGet('mode') ?: 'incremental';
+        $result = $this->mlProxy('POST', "/api/v1/faces/cluster?mode={$mode}");
 
         return $this->response->setJSON([
             'status' => isset($result['error']) ? 'error' : 'success',
@@ -378,8 +379,12 @@ class Faces extends BaseController
             ])->setStatusCode(400);
         }
 
-        $limit = $this->request->getPost('limit') ?: 20;
-        $result = $this->mlProxy('POST', '/api/v1/faces/search', [
+        $limit  = $this->request->getPost('limit') ?: 20;
+        $userId = auth()->id() ?: 0;
+
+        // user_id is a Query param on the ML endpoint (not multipart), so we
+        // append it directly to the URL to ensure per-user Qdrant filtering.
+        $result = $this->mlProxy('POST', "/api/v1/faces/search?user_id={$userId}", [
             'multipart' => [
                 [
                     'name'     => 'file',
@@ -456,6 +461,35 @@ class Faces extends BaseController
         $oldPersonId = $face['person_id'];
 
         $faceModel->update($faceId, ['person_id' => $newPersonId]);
+
+        // Human-in-the-loop Active Learning Integration
+        $userId = auth()->id() ?: 0;
+        if ($newPersonId !== null) {
+            // Confirm/pin this face to the new person
+            $this->mlProxy('POST', "/api/v1/faces/{$faceId}/annotate", [
+                'form_params' => [
+                    'person_id'    => $newPersonId,
+                    'action'       => 'confirm',
+                    'annotated_by' => $userId,
+                ],
+            ]);
+        } else {
+            // Face is unassigned. Remove any previous confirmation pins
+            // and optionally record a reject annotation for the old person
+            if ($oldPersonId) {
+                // Remove previous confirm annotation
+                $this->mlProxy('DELETE', "/api/v1/faces/{$faceId}/annotate/{$oldPersonId}");
+
+                // Record a reject annotation to prevent HDBSCAN re-assigning it back
+                $this->mlProxy('POST', "/api/v1/faces/{$faceId}/annotate", [
+                    'form_params' => [
+                        'person_id'    => $oldPersonId,
+                        'action'       => 'reject',
+                        'annotated_by' => $userId,
+                    ],
+                ]);
+            }
+        }
 
         // Cleanup empty persons
         if ($oldPersonId) {
@@ -536,13 +570,38 @@ class Faces extends BaseController
 
         $faceModel = new FaceEncodingModel();
         $oldPersonIds = [];
+        $userId = auth()->id() ?: 0;
+
         foreach ($faceIds as $faceId) {
             $face = $faceModel->find((int)$faceId);
             if ($face) {
-                if ($face['person_id'] && $face['person_id'] != $newPersonId) {
-                    $oldPersonIds[] = $face['person_id'];
+                $oldPersonId = $face['person_id'];
+                if ($oldPersonId && $oldPersonId != $newPersonId) {
+                    $oldPersonIds[] = $oldPersonId;
                 }
                 $faceModel->update($face['id'], ['person_id' => $newPersonId]);
+
+                // Record confirm/reject in the ML service
+                if ($newPersonId !== null) {
+                    $this->mlProxy('POST', "/api/v1/faces/{$face['id']}/annotate", [
+                        'form_params' => [
+                            'person_id'    => $newPersonId,
+                            'action'       => 'confirm',
+                            'annotated_by' => $userId,
+                        ],
+                    ]);
+                } else {
+                    if ($oldPersonId) {
+                        $this->mlProxy('DELETE', "/api/v1/faces/{$face['id']}/annotate/{$oldPersonId}");
+                        $this->mlProxy('POST', "/api/v1/faces/{$face['id']}/annotate", [
+                            'form_params' => [
+                                'person_id'    => $oldPersonId,
+                                'action'       => 'reject',
+                                'annotated_by' => $userId,
+                            ],
+                        ]);
+                    }
+                }
             }
         }
 
@@ -618,7 +677,10 @@ class Faces extends BaseController
                 }
 
                 $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
-                    'form_params' => ['photo_id' => $photo['id']],
+                    'form_params' => [
+                        'photo_id'   => $photo['id'],
+                        'async_task' => 1,
+                    ],
                 ]);
 
                 if (isset($result['error'])) {
@@ -677,7 +739,10 @@ class Faces extends BaseController
 
         foreach ($photos as $photo) {
             $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
-                'form_params' => ['photo_id' => $photo['id']],
+                'form_params' => [
+                    'photo_id'   => $photo['id'],
+                    'async_task' => 1,
+                ],
             ]);
 
             if (isset($result['error'])) {
@@ -716,7 +781,10 @@ class Faces extends BaseController
         $results = [];
         foreach ($photoIds as $id) {
             $r = $this->mlProxy('POST', '/api/v1/faces/encode', [
-                'form_params' => ['photo_id' => (int) $id],
+                'form_params' => [
+                    'photo_id'   => (int) $id,
+                    'async_task' => 1,
+                ],
             ]);
             $results[(int) $id] = $r;
         }

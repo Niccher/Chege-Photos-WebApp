@@ -32,39 +32,39 @@ $routes->get('api/v1/faces/scan-job/(:num)', '\App\Controllers\Faces::apiScanJob
 $routes->post('api/v1/faces/search',      '\App\Controllers\Faces::apiSearch', ['filter' => 'chain']);
 
 // API Data Endpoints (token auth for Android app)
-$routes->group('api/v1', ['namespace' => 'App\Controllers\Api', 'filter' => 'tokens'], function ($routes) {
-    $routes->get('photos', 'ApiController::index');
-    $routes->get('albums', 'ApiController::albums');
-    $routes->get('albums/(:num)/photos', 'ApiController::albumPhotos/$1');
-    $routes->post('albums', 'ApiController::createAlbum');
-    $routes->put('albums/(:num)', 'ApiController::updateAlbum/$1');
-    $routes->delete('albums/(:num)', 'ApiController::deleteAlbum/$1');
-    $routes->post('upload', '\App\Controllers\Photos::upload');
-    $routes->post('photos/check-hashes', 'ApiController::checkHashes');
-    $routes->post('photos/exists-by-hash', 'ApiController::checkHashes');
-    $routes->get('memories', 'ApiController::memories');
-    $routes->get('favorites', 'ApiController::favorites');
-    $routes->get('archive', 'ApiController::archive');
-    $routes->get('trash', 'ApiController::trash');
-    $routes->get('explore', 'ApiController::explore');
+$routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($routes) {
+    $routes->get('photos', 'ApiController::index', ['filter' => 'tokens:photos:read']);
+    $routes->get('albums', 'ApiController::albums', ['filter' => 'tokens:photos:read']);
+    $routes->get('albums/(:num)/photos', 'ApiController::albumPhotos/$1', ['filter' => 'tokens:photos:read']);
+    $routes->post('albums', 'ApiController::createAlbum', ['filter' => 'tokens:photos:write']);
+    $routes->put('albums/(:num)', 'ApiController::updateAlbum/$1', ['filter' => 'tokens:photos:write']);
+    $routes->delete('albums/(:num)', 'ApiController::deleteAlbum/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('upload', '\App\Controllers\Photos::upload', ['filter' => 'tokens:photos:write']);
+    $routes->post('photos/check-hashes', 'ApiController::checkHashes', ['filter' => 'tokens:photos:read']);
+    $routes->post('photos/exists-by-hash', 'ApiController::checkHashes', ['filter' => 'tokens:photos:read']);
+    $routes->get('memories', 'ApiController::memories', ['filter' => 'tokens:photos:read']);
+    $routes->get('favorites', 'ApiController::favorites', ['filter' => 'tokens:photos:read']);
+    $routes->get('archive', 'ApiController::archive', ['filter' => 'tokens:photos:read']);
+    $routes->get('trash', 'ApiController::trash', ['filter' => 'tokens:photos:read']);
+    $routes->get('explore', 'ApiController::explore', ['filter' => 'tokens:photos:read']);
 
     // Mapped photo action API endpoints under tokens authentication for Android
-    $routes->post('photos/delete/(:num)',  '\App\Controllers\Photos::deletePhoto/$1');
-    $routes->post('photos/restore/(:num)', '\App\Controllers\Photos::restorePhoto/$1');
-    $routes->post('photos/archive/(:num)', '\App\Controllers\Photos::archivePhoto/$1');
-    $routes->post('photos/favorite/(:num)','\App\Controllers\Photos::toggleFavorite/$1');
-    $routes->post('albums/add-photo',      '\App\Controllers\Photos::addPhotoToAlbum');
+    $routes->post('photos/delete/(:num)',  '\App\Controllers\Photos::deletePhoto/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('photos/restore/(:num)', '\App\Controllers\Photos::restorePhoto/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('photos/archive/(:num)', '\App\Controllers\Photos::archivePhoto/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('photos/favorite/(:num)','\App\Controllers\Photos::toggleFavorite/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('albums/add-photo',      '\App\Controllers\Photos::addPhotoToAlbum', ['filter' => 'tokens:photos:write']);
 
     // Face API endpoints (Android — token auth)
-    $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1');
-    $routes->get('faces/persons',      '\App\Controllers\Faces::apiPersons');
-    $routes->get('faces/unassigned',   '\App\Controllers\Faces::apiUnassigned');
-    $routes->get('faces/by-person/(:num)', '\App\Controllers\Faces::apiPersonPhotos/$1');
-    $routes->post('faces/persons/name/(:num)', '\App\Controllers\Faces::apiNamePerson/$1');
-    $routes->post('faces/persons/merge',       '\App\Controllers\Faces::apiMergePersons');
-    $routes->post('faces/assign-face',         '\App\Controllers\Faces::apiAssignFaceToPerson');
-    $routes->post('faces/update-metadata',     '\App\Controllers\Faces::apiUpdateFaceMetadata');
-    $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan');
+    $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1', ['filter' => 'tokens:photos:read']);
+    $routes->get('faces/persons',      '\App\Controllers\Faces::apiPersons', ['filter' => 'tokens:photos:read']);
+    $routes->get('faces/unassigned',   '\App\Controllers\Faces::apiUnassigned', ['filter' => 'tokens:faces:write']);
+    $routes->get('faces/by-person/(:num)', '\App\Controllers\Faces::apiPersonPhotos/$1', ['filter' => 'tokens:photos:read']);
+    $routes->post('faces/persons/name/(:num)', '\App\Controllers\Faces::apiNamePerson/$1', ['filter' => 'tokens:faces:write']);
+    $routes->post('faces/persons/merge',       '\App\Controllers\Faces::apiMergePersons', ['filter' => 'tokens:faces:write']);
+    $routes->post('faces/assign-face',         '\App\Controllers\Faces::apiAssignFaceToPerson', ['filter' => 'tokens:faces:write']);
+    $routes->post('faces/update-metadata',     '\App\Controllers\Faces::apiUpdateFaceMetadata', ['filter' => 'tokens:faces:write']);
+    $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan', ['filter' => 'tokens:faces:write']);
 });
 
 // All app routes require an authenticated session or token
@@ -124,7 +124,9 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('settings/tokens', 'Tokens::index');
     $routes->post('settings/tokens/generate', 'Tokens::generate');
     $routes->post('settings/tokens/revoke', 'Tokens::revoke');
+    $routes->post('settings/tokens/revoke-device', 'Tokens::revokeDevice');
     $routes->get('settings/tokens/qr/(:any)', 'Tokens::qr/$1');
+    $routes->get('settings/ml-status', 'Settings::mlStatus');
 });
 
 // Admin Console Routes (restricted to superadmin group)

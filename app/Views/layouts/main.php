@@ -101,23 +101,84 @@
                     </div>
                     <?php endif; ?>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width:200px;">
-                    <li class="px-3 py-2">
+                <ul id="navbarUserDropdown" class="dropdown-menu dropdown-menu-end shadow border-0 p-2" style="min-width:280px; background: var(--card-bg); color: var(--text-primary);">
+                    <li class="px-3 py-2 border-bottom border-secondary border-opacity-10 mb-2">
                         <div class="fw-semibold" style="font-size:0.9rem;"><?= esc($navUser->name ?: ($navUser->username ?? '')) ?></div>
                         <div class="text-muted" style="font-size:0.78rem;"><?= esc($navUser->username ?? '') ?></div>
                         <div class="text-muted" style="font-size:0.72rem;"><?= esc($navUser->email) ?></div>
                     </li>
-                    <li><hr class="dropdown-divider my-1"></li>
+                    
+                    <!-- ML Task Tracker Section -->
+                    <li class="px-3 py-1 dropdown-header text-uppercase small fw-bold text-muted d-flex align-items-center gap-1">
+                        <i class="bi bi-cpu"></i> Photo Analysis Status
+                    </li>
+                    <li class="px-3 py-2" id="navTaskTrackerContainer">
+                        <div class="text-center text-muted py-2 small" id="navTaskLoading">
+                            <span class="spinner-border spinner-border-sm me-1" style="width:12px;height:12px;"></span> Loading status...
+                        </div>
+                        <div class="d-none" id="navTaskIdle">
+                            <div class="d-flex align-items-center gap-2 text-success small mb-2">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span class="fw-bold">Library Up to Date</span>
+                            </div>
+                            <div class="text-muted extra-small lh-sm mb-1" id="navPeopleCount" style="font-size: 0.72rem;">0 people identified</div>
+                            <div class="text-muted extra-small lh-sm" id="navTagsCount" style="font-size: 0.72rem;">0 objects categorized</div>
+                        </div>
+                        <div class="d-none" id="navTaskActive">
+                            <!-- Faces Progress -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small mb-1" style="font-size:0.72rem;">
+                                    <span>👤 People & Faces</span>
+                                    <span class="fw-semibold" id="navFacesPct">0%</span>
+                                </div>
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar bg-primary" id="navFacesBar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <!-- YOLO Tags Progress -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small mb-1" style="font-size:0.72rem;">
+                                    <span>🏷️ Object Tagging</span>
+                                    <span class="fw-semibold" id="navTagsPct">0%</span>
+                                </div>
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar bg-success" id="navTagsBar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <!-- CLIP Semantic Progress -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between small mb-1" style="font-size:0.72rem;">
+                                    <span>🔍 Semantic Search</span>
+                                    <span class="fw-semibold" id="navClipPct">0%</span>
+                                </div>
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar bg-info" id="navClipBar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+
+                    <li><hr class="dropdown-divider my-2 border-secondary border-opacity-10"></li>
+                    
                     <li>
-                        <a class="dropdown-item d-flex align-items-center gap-2" href="<?= base_url('settings') ?>">
+                        <a class="dropdown-item d-flex align-items-center gap-2 rounded-1" href="<?= base_url('settings') ?>">
                             <i class="bi bi-gear"></i>
                             <span>Settings</span>
                         </a>
                     </li>
+                    <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin')): ?>
                     <li>
-                        <a class="dropdown-item d-flex align-items-center gap-2" href="<?= url_to('logout') ?>">
+                        <a class="dropdown-item d-flex align-items-center gap-2 rounded-1" href="<?= base_url('admin/home') ?>">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Admin Console</span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <li><hr class="dropdown-divider my-1 border-secondary border-opacity-10"></li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 rounded-1" href="<?= url_to('logout') ?>">
                             <i class="bi bi-box-arrow-right text-danger"></i>
-                            <span>Sign out</span>
+                            <span class="text-danger">Sign out</span>
                         </a>
                     </li>
                 </ul>
@@ -956,6 +1017,65 @@
                 }
             }, 1000);
         });
+    });
+</script>
+<?php endif; ?>
+
+<?php if (auth()->loggedIn()): ?>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var dropdownMenu = document.getElementById('navbarUserDropdown');
+        if (dropdownMenu) {
+            $('.dropdown').on('show.bs.dropdown', function () {
+                updateDropdownMlStatus();
+            });
+        }
+
+        function updateDropdownMlStatus() {
+            $('#navTaskLoading').removeClass('d-none');
+            $('#navTaskIdle').addClass('d-none');
+            $('#navTaskActive').addClass('d-none');
+
+            $.getJSON(BASE_URL + 'settings/ml-status', function(res) {
+                $('#navTaskLoading').addClass('d-none');
+                if (res.status === 'success' && res.stats) {
+                    var stats = res.stats;
+                    var total = parseInt(stats.total_photos) || 0;
+                    var faces = parseInt(stats.scanned_faces) || 0;
+                    var tags = parseInt(stats.scanned_tags) || 0;
+                    var clips = parseInt(stats.scanned_clips) || 0;
+
+                    $('#navPeopleCount').text(stats.people_count + ' people identified');
+                    $('#navTagsCount').text(stats.tags_count + ' objects categorized');
+
+                    var facesActive = faces < total;
+                    var tagsActive = tags < total;
+                    var clipsActive = clips < total;
+                    var anyActive = facesActive || tagsActive || clipsActive;
+
+                    if (anyActive) {
+                        $('#navTaskIdle').addClass('d-none');
+                        $('#navTaskActive').removeClass('d-none');
+
+                        var fPct = (faces === total) ? 100 : (total > 0 ? Math.min(99, Math.floor((faces / total) * 100)) : 0);
+                        var tPct = (tags === total) ? 100 : (total > 0 ? Math.min(99, Math.floor((tags / total) * 100)) : 0);
+                        var cPct = (clips === total) ? 100 : (total > 0 ? Math.min(99, Math.floor((clips / total) * 100)) : 0);
+
+                        $('#navFacesPct').text(fPct + '% (' + (total - faces) + ' left)');
+                        $('#navFacesBar').css('width', fPct + '%');
+
+                        $('#navTagsPct').text(tPct + '% (' + (total - tags) + ' left)');
+                        $('#navTagsBar').css('width', tPct + '%');
+
+                        $('#navClipPct').text(cPct + '% (' + (total - clips) + ' left)');
+                        $('#navClipBar').css('width', cPct + '%');
+                    } else {
+                        $('#navTaskActive').addClass('d-none');
+                        $('#navTaskIdle').removeClass('d-none');
+                    }
+                }
+            });
+        }
     });
 </script>
 <?php endif; ?>

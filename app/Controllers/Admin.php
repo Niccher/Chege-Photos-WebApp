@@ -83,6 +83,12 @@ class Admin extends BaseController
         setting()->set('App.storageLimit', (int) $storageLimit);
         setting()->set('Auth.allowRegistration', $allowRegistration);
 
+        helper('audit');
+        log_security_action('SYSTEM_SETTINGS_CHANGE', 'SUCCESS', [
+            'storageLimit'      => $storageLimit,
+            'allowRegistration' => $allowRegistration
+        ]);
+
         return $this->response->setJSON([
             'status'  => 'success',
             'message' => 'System settings saved successfully.'
@@ -203,6 +209,17 @@ class Admin extends BaseController
         setting()->set('ML.hdbscanMinSamples', (int) $hdbscanMinSamples);
         setting()->set('ML.clipModelName', $clipModelName);
         setting()->set('ML.objectDetThresh', (float) $objectDetThresh);
+
+        helper('audit');
+        log_security_action('ML_SETTINGS_CHANGE', 'SUCCESS', [
+            'faceModelPack'     => $faceModelPack,
+            'faceDetThresh'     => $faceDetThresh,
+            'includeSensitive'  => $includeSensitive,
+            'hdbscanMinCluster' => $hdbscanMinCluster,
+            'hdbscanMinSamples' => $hdbscanMinSamples,
+            'clipModelName'     => $clipModelName,
+            'objectDetThresh'   => $objectDetThresh
+        ]);
 
         // Tell FastAPI service to reload models dynamically
         try {

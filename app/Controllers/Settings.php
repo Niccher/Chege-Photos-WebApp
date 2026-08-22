@@ -26,13 +26,18 @@ class Settings extends BaseController
         // ML Stats – scoped to current user via photo_id join
         $db = \Config\Database::connect();
 
-        $scanned = (int) $db->table('face_encoding fe')
+        $detectedFaces = (int) $db->table('face_encoding fe')
             ->join('photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->countAllResults();
 
         $totalImages = $photoModel->where('user_id', $userId)
             ->where('mime_type NOT LIKE', 'video/%')
+            ->countAllResults();
+
+        $analyzedImages = $photoModel->where('user_id', $userId)
+            ->where('mime_type NOT LIKE', 'video/%')
+            ->where('scanned_face', 1)
             ->countAllResults();
 
         $persons = (int) $db->table('person pr')
@@ -47,9 +52,10 @@ class Settings extends BaseController
             'user'    => $user,
             'counts'  => $this->getSidebarCounts(),
             'mlStats' => [
-                'scanned'      => $scanned,
-                'total_images' => $totalImages,
-                'persons'      => $persons,
+                'detected_faces'  => $detectedFaces,
+                'total_images'    => $totalImages,
+                'analyzed_images' => $analyzedImages,
+                'persons'         => $persons,
             ],
             'storage' => [
                 'total'   => $totalBytes,
@@ -536,14 +542,70 @@ class Settings extends BaseController
         }
 
         return $this->response->download($file, null)->setFileName('chege-photos-export.zip');
-    }
-
-    public function getSettings()
+    }    public function getSettings()
     {
         $userId = auth()->id();
 
         return $this->response->setJSON([
             'theme' => setting('App.theme', "user:{$userId}") ?? 'auto',
+        ]);
+    }
+
+    public function mlStatus()
+    {
+        $userId = auth()->id();
+        if (!$userId) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthenticated'])->setStatusCode(401);
+        }
+
+        $db = \Config\Database::connect();
+        
+        $totalPhotos = $db->table('photos')
+            ->where('user_id', $userId)
+            ->where('deleted_at', null)
+            ->countAllResults();
+
+        $scannedFaces = $db->table('photos')
+            ->where('user_id', $userId)
+            ->where('deleted_at', null)
+            ->where('scanned_face', 1)
+            ->countAllResults();
+
+        $scannedTags = $db->table('photos')
+            ->where('user_id', $userId)
+            ->where('deleted_at', null)
+            ->where('scanned_tag', 1)
+            ->countAllResults();
+
+        $scannedClips = $db->table('photos')
+            ->where('user_id', $userId)
+            ->where('deleted_at', null)
+            ->where('scanned_clip', 1)
+            ->countAllResults();
+
+        $peopleCount = $db->table('person pr')
+            ->join('face_encoding fe', 'fe.person_id = pr.id')
+            ->join('photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->distinct()
+            ->select('pr.id')
+            ->countAllResults();
+
+        $tagsCount = $db->table('photo_tags pt')
+            ->join('photos p', 'p.id = pt.photo_id')
+            ->where('p.user_id', $userId)
+            ->countAllResults();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'stats' => [
+                'total_photos'  => $totalPhotos,
+                'scanned_faces' => $scannedFaces,
+                'scanned_tags'  => $scannedTags,
+                'scanned_clips' => $scannedClips,
+                'people_count'  => $peopleCount,
+                'tags_count'    => $tagsCount,
+            ]
         ]);
     }
 }

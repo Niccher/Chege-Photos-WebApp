@@ -37,6 +37,7 @@ class Filters extends BaseFilters
         'session'       => \CodeIgniter\Shield\Filters\SessionAuth::class,
         'tokens'        => \CodeIgniter\Shield\Filters\TokenAuth::class,
         'chain'         => \CodeIgniter\Shield\Filters\ChainAuth::class,
+        'throttle'      => \CodeIgniter\Filters\Throttle::class,
     ];
 
     /**
@@ -109,5 +110,13 @@ class Filters extends BaseFilters
      *
      * @var array<string, array<string, list<string>>>
      */
-    public array $filters = [];
+    public array $filters = [
+        'throttle' => [
+            'before' => [
+                'api/v1/login',
+                'api/v1/auth-with-token',
+                'login',
+            ],
+        ],
+    ];
 }

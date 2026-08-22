@@ -149,7 +149,7 @@ $(function() {
     $('#btnRescanAll').on('click', function() {
         const btn = $(this).prop('disabled', true);
         btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Scanning...');
-        $.post(BASE_URL + 'api/faces/scan-all', function(res) {
+        $.post(BASE_URL + 'api/v1/faces/scan-all', function(res) {
             if (res.status === 'success') {
                 showToast('Scan complete: ' + (res.processed || 0) + ' processed, ' + (res.skipped || 0) + ' skipped');
                 if (res.processed > 0) location.reload();

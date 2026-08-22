@@ -108,6 +108,7 @@ The web app acts as both a standalone photo manager and a proxy to the ML servic
 ### System Logging Tables
 - `cron_logs` — Tracks background executions of CLI Spark commands (`trash:purge`, `ml:cluster`, `storage:clean-temp`), recording runtime statuses, outputs, execution durations, and run times.
 - `email_logs` — Records all outgoing SMTP emails, tracking subjects, recipients, execution times, success statuses, debug transaction trails, and unique tracking IDs.
+- `security_logs` — Logs security events such as login attempts, token creations, and administrative updates, storing IP address, user agent, action type, status, and custom details payload via `audit_helper.php`.
 
 ### Themes
 - **5 themes** — Auto (OS), Light (default), Dark, Solarized, Grey; persisted in the settings database and `localStorage`; toggle via sidebar
@@ -245,13 +246,14 @@ See [ML Chege Photos README](https://github.com/niccher/Chege-Photos-ML#database
 | `album_photos` | Many-to-many pivot (album ↔ photo) |
 | `photo_shares` | Photo sharing between users |
 | `shared_links` | Token-authenticated public share links |
-| `auth_tokens` | 8-char tokens for Android app authentication |
+| `auth_tokens` | 8-char tokens for Android app authentication (with configurable token `scopes`) |
+| `security_logs` | Logs system security audits and admin/auth events |
 | `photo_scan` | ML scan status per photo |
 | `scan_job` | Batch scan job progress |
 | `face_cluster` | Cluster centroid references and lineage |
 | `photo_tags` | Object detection tags associated with photos |
 
-> **Note:** `person`, `face_encoding`, `photo_scan`, `scan_job`, and `face_cluster` are created and managed by the [ML Chege Photos](https://github.com/niccher/Chege-Photos-ML) service (see its [Database Configuration](https://github.com/niccher/Chege-Photos-ML#database-configuration)), not by the web app's own migrations. `photo_tags` is managed by the web app migration.
+> **Note:** `person`, `face_encoding`, `photo_scan`, `scan_job`, and `face_cluster` are created and managed by the [ML Chege Photos](https://github.com/niccher/Chege-Photos-ML) service (see its [Database Configuration](https://github.com/niccher/Chege-Photos-ML#database-configuration)), not by the web app's own migrations. `photo_tags` and `security_logs` are managed by the web app migrations.
 
 ---
 

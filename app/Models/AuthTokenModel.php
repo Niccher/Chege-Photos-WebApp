@@ -12,7 +12,7 @@ class AuthTokenModel extends Model
     protected $returnType       = 'array';
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;
-    protected $allowedFields    = ['user_id', 'token', 'description', 'is_used',
+    protected $allowedFields    = ['user_id', 'token', 'description', 'scopes', 'is_used',
                                    'used_at', 'device_id', 'device_name', 'device_fingerprint'];
 
     protected bool $allowEmptyInserts = false;

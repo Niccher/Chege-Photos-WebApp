@@ -13,14 +13,39 @@ class Tokens extends BaseController
 
         $tokens = $model->where('user_id', $userId)->orderBy('created_at', 'DESC')->findAll();
 
-        return $this->response->setJSON(['status' => 'success', 'tokens' => $tokens]);
+        $activeAccessTokens = [];
+        $user = auth()->user();
+        if ($user) {
+            $rawAccessTokens = $user->accessTokens();
+            foreach ($rawAccessTokens as $at) {
+                $activeAccessTokens[] = [
+                    'id'           => $at->id,
+                    'name'         => $at->name,
+                    'scopes'       => $at->scopes,
+                    'last_used_at' => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i:s') : null,
+                    'created_at'   => $at->created_at ? $at->created_at->format('Y-m-d H:i:s') : null,
+                ];
+            }
+        }
+
+        return $this->response->setJSON([
+            'status'         => 'success',
+            'tokens'         => $tokens,
+            'active_devices' => $activeAccessTokens
+        ]);
     }
 
     public function generate()
     {
         $userId      = auth()->id();
         $description = $this->request->getPost('description') ?? '';
+        $scopesInput = $this->request->getPost('scopes');
         $model       = new AuthTokenModel();
+
+        $scopes = ['*'];
+        if ($scopesInput && is_array($scopesInput)) {
+            $scopes = array_map('trim', $scopesInput);
+        }
 
         $token = $this->generateUniqueToken($model);
         if (! $token) {
@@ -31,6 +56,7 @@ class Tokens extends BaseController
             'user_id'     => $userId,
             'token'       => $token,
             'description' => $description,
+            'scopes'      => json_encode($scopes),
         ]);
 
         $id = $model->getInsertID();
@@ -55,6 +81,32 @@ class Tokens extends BaseController
         return $this->response->setJSON(['status' => 'success', 'message' => 'Token revoked.']);
     }
 
+    public function revokeDevice()
+    {
+        $userId = auth()->id();
+        $id     = $this->request->getPost('id');
+        if (!$id) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Device ID required.'])->setStatusCode(400);
+        }
+
+        $db = \Config\Database::connect();
+        $record = $db->table('auth_identities')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->where('type', 'access_token')
+            ->get()
+            ->getRow();
+
+        if (!$record) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Active device not found.'])->setStatusCode(404);
+        }
+
+        $db->table('auth_identities')
+            ->where('id', $id)
+            ->delete();
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Device access revoked successfully.']);
+    }
     public function qr($token)
     {
         $model  = new AuthTokenModel();
