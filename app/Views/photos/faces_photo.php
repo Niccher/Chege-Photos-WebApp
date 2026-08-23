@@ -247,7 +247,7 @@
                                         <div class="fw-semibold text-truncate small"><?= $personName ? esc($personName) : 'Unassigned Face' ?></div>
                                         <div class="text-muted" style="font-size:10px; line-height: 1.2;">
                                             Sex: <?= $face['gender'] ? ucfirst($face['gender']) : 'Unknown' ?> | Age: <?= $face['age'] ? '~' . $face['age'] . 'y' : 'Unknown' ?><br>
-                                            Emotion: <?= esc($face['emotion'] ?: 'Auto detect') ?> | Coverage: <?= round($coverage, 2) ?>%
+                                            Emotion: <?= esc(($face['emotion'] ?? null) ?: 'Auto detect') ?> | Coverage: <?= round($coverage, 2) ?>%
                                         </div>
                                     </div>
                                     <div class="text-muted small"><i class="bi bi-chevron-right"></i></div>
@@ -821,7 +821,7 @@ $(function() {
         const a = $('#editAge').val();
         const em = $('#editEmotion').val();
 
-        $.post(BASE_URL + 'faces/update-metadata', {
+        $.post(BASE_URL + 'api/v1/faces/update-metadata', {
             face_id: currentFaceId,
             gender: g,
             age: a,

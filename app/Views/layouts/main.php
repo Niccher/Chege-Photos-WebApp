@@ -211,7 +211,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--sharing <?= (uri_string() === 'admin/smtp') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/smtp') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--sharing <?= (in_array(uri_string(), ['admin/smtp', 'admin/sent-mails', 'admin/trigger-events'], true)) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/smtp') ?>">
                         <span><i class="bi bi-envelope-at"></i> Email Config</span>
                     </a>
                 </li>
@@ -228,6 +228,16 @@
                 <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--timeline <?= (uri_string() === 'admin/crons') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/crons') ?>">
                         <span><i class="bi bi-clock-history"></i> System Crons</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--faces <?= (uri_string() === 'admin/devices') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/devices') ?>">
+                        <span><i class="bi bi-phone"></i> Paired Devices</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'admin/audits') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/audits') ?>">
+                        <span><i class="bi bi-shield-lock"></i> Security Audits</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -315,7 +325,7 @@
                 <!-- TOOLS SECTION -->
                 <li class="sidebar-section-title">Tools</li>
                 <li class="nav-item">
-                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (uri_string() === 'settings') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--settings <?= (str_starts_with(uri_string() ?? '', 'settings')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('settings') ?>">
                         <span><i class="bi bi-gear"></i> Settings</span>
                     </a>
                 </li>
@@ -850,6 +860,8 @@
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Bootstrap 5 Bundle JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {
     document.addEventListener('DOMContentLoaded', function () {

@@ -41,7 +41,12 @@
 
                             <!-- Task 1: ML Face Clustering -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">1. ML Face Clustering (`ml:cluster`)</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="small fw-bold mb-0">1. ML Face Clustering (`ml:cluster`)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="ml:cluster">
+                                        <i class="bi bi-play-fill"></i> Run Now
+                                    </button>
+                                </div>
                                 <p class="text-muted small mb-3">Re-groups unassigned face embeddings into unique identified People clusters.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -62,7 +67,12 @@
 
                             <!-- Task 2: ML Auto-Recovery Sweep -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">2. ML Pipeline Sweep (`ml:sweep`)</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="small fw-bold mb-0">2. ML Pipeline Sweep (`ml:sweep`)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="ml:sweep">
+                                        <i class="bi bi-play-fill"></i> Run Now
+                                    </button>
+                                </div>
                                 <p class="text-muted small mb-3">Sweeps the library database and automatically queues any unprocessed image frames for analysis.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -84,7 +94,12 @@
 
                             <!-- Task 3: Trash Auto-Purge -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">3. Trash Auto-Purge (`trash:purge`)</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="small fw-bold mb-0">3. Trash Auto-Purge (`trash:purge`)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="trash:purge">
+                                        <i class="bi bi-play-fill"></i> Run Now
+                                    </button>
+                                </div>
                                 <p class="text-muted small mb-3">Cleans soft-deleted user photos exceeding the retention storage policy threshold.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -105,7 +120,12 @@
 
                             <!-- Task 4: Temp Uploads Cleanup -->
                             <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <h6 class="small fw-bold mb-1">4. Stale Temp Uploads (`storage:clean-temp`)</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="small fw-bold mb-0">4. Stale Temp Uploads (`storage:clean-temp`)</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="storage:clean-temp">
+                                        <i class="bi bi-play-fill"></i> Run Now
+                                    </button>
+                                </div>
                                 <p class="text-muted small mb-3">Clears stale exports and incomplete temporary chunk directories older than 24 hours.</p>
                                 <div class="row g-3">
                                     <div class="col-md-7">
@@ -125,9 +145,12 @@
                             </div>
 
                             <!-- Form submit -->
-                            <div class="mt-4 pt-3 border-top" style="border-color: var(--border-color) !important;">
+                            <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
                                 <button type="submit" class="btn btn-primary px-4 rounded-pill">
                                     <i class="bi bi-check-lg me-1"></i> Save Task Schedules
+                                </button>
+                                <button type="button" class="btn btn-outline-warning px-4 rounded-pill" id="btnRunAllCrons">
+                                    <i class="bi bi-play-circle me-1"></i> Run Due Tasks Now
                                 </button>
                             </div>
                         </form>
@@ -290,6 +313,51 @@
                 btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save Task Schedules');
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Failed to save schedules: ' + err, 'danger');
+            });
+        });
+
+        // Run single job manually
+        $('.btn-run-single').on('click', function() {
+            var btn = $(this);
+            var job = btn.data('job');
+            var originalHtml = btn.html();
+
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.post(BASE_URL + 'admin/crons/run-job', { job: job }, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success') {
+                    showToast(res.message, 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast('Job run failed: ' + err, 'danger');
+            });
+        });
+
+        // Run all due crons manually
+        $('#btnRunAllCrons').on('click', function() {
+            var btn = $(this);
+            var originalHtml = btn.html();
+
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Executing...');
+
+            $.post(BASE_URL + 'admin/crons/run-all', {}, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success') {
+                    showToast(res.message, 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast('Cron runner execution failed: ' + err, 'danger');
             });
         });
     });

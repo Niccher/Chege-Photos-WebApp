@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class AlbumPhotoModel extends Model
 {
-    protected $table            = 'album_photos';
+    protected $table            = 'tbl_album_photos';
     protected $useAutoIncrement = false;
     protected $returnType       = 'array';
     protected $protectFields    = true;

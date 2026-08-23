@@ -84,9 +84,12 @@
                     </div>
 
                     <!-- Save submit -->
-                    <div class="mt-4 pt-3 border-top" style="border-color: var(--border-color) !important;">
+                    <div class="mt-4 pt-3 border-top d-flex align-items-center gap-2" style="border-color: var(--border-color) !important;">
                         <button type="submit" class="btn btn-primary px-4 rounded-pill">
                             <i class="bi bi-check-lg me-1"></i> Save ML Parameters
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary px-4 rounded-pill" id="btnResetMlDefaults">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to Defaults
                         </button>
                     </div>
                 </form>
@@ -381,6 +384,20 @@
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Failed to save settings: ' + err, 'danger');
             });
+        });
+
+        // Reset default values locally
+        $('#btnResetMlDefaults').on('click', function() {
+            $('select[name="faceModelPack"]').val('buffalo_l');
+            $('#detThreshSlider').val(0.5);
+            $('#detThreshValue').text(0.5);
+            $('input[name="clipModelName"]').val('openai/clip-vit-base-patch32');
+            $('#objThreshSlider').val(0.5);
+            $('#objThreshValue').text(0.5);
+            $('input[name="hdbscanMinCluster"]').val(2);
+            $('input[name="hdbscanMinSamples"]').val(1);
+            $('input[name="includeSensitive"]').prop('checked', false);
+            showToast('Form fields filled with default values. Click "Save ML Parameters" to submit.', 'info');
         });
 
         // Handle RESET text confirmation

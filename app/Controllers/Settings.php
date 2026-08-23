@@ -10,20 +10,97 @@ class Settings extends BaseController
 {
     public function index()
     {
+        return redirect()->to('settings/profile');
+    }
+
+    public function profile()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('photos/settings/profile', $data);
+    }
+
+    public function security()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+        $db = \Config\Database::connect();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'logs'           => $db->table('sys_security_logs')
+                ->where('user_id', $userId)
+                ->orderBy('created_at', 'DESC')
+                ->limit(50)
+                ->get()
+                ->getResultArray(),
+        ];
+
+        return view('photos/settings/security', $data);
+    }
+
+    public function preferences()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'theme'          => setting('App.theme', "user:{$userId}") ?? 'auto',
+        ];
+
+        return view('photos/settings/preferences', $data);
+    }
+
+    public function storage()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
         $photoModel = new \App\Models\PhotoModel();
-        $userId     = auth()->id();
 
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
-
         $videoBytes = $photoModel->where('user_id', $userId)
             ->like('mime_type', 'video/', 'after')
             ->selectSum('size')
             ->first()['size'] ?? 0;
         $photoBytes = $totalBytes - $videoBytes;
 
-        $user = auth()->user();
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storage' => [
+                'total'   => $totalBytes,
+                'photos'  => $photoBytes,
+                'videos'  => $videoBytes,
+                'percent' => min(100, ($totalBytes / (setting('App.storageLimit') ?: (1024 * 1024 * 1024))) * 100),
+                'limit'   => $this->formatBytes(setting('App.storageLimit') ?: (1024 * 1024 * 1024)),
+            ],
+        ];
 
-        // ML Stats – scoped to current user via photo_id join
+        return view('photos/settings/storage', $data);
+    }
+
+    public function ml()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+        $photoModel = new \App\Models\PhotoModel();
         $db = \Config\Database::connect();
 
         $detectedFaces = (int) $db->table('face_encoding fe')
@@ -49,27 +126,67 @@ class Settings extends BaseController
             ->countAllResults();
 
         $data = [
-            'user'    => $user,
-            'counts'  => $this->getSidebarCounts(),
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
             'mlStats' => [
                 'detected_faces'  => $detectedFaces,
                 'total_images'    => $totalImages,
                 'analyzed_images' => $analyzedImages,
                 'persons'         => $persons,
             ],
-            'storage' => [
-                'total'   => $totalBytes,
-                'photos'  => $photoBytes,
-                'videos'  => $videoBytes,
-                'percent' => min(100, ($totalBytes / (setting('App.storageLimit') ?: (1024 * 1024 * 1024))) * 100),
-                'limit'   => $this->formatBytes(setting('App.storageLimit') ?: (1024 * 1024 * 1024)),
-            ],
-            'theme'           => setting('App.theme', "user:{$userId}") ?? 'auto',
-            'storageUsed'     => $this->formatBytes($totalBytes),
-            'storagePercent'  => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
         ];
 
-        return view('photos/settings', $data);
+        return view('photos/settings/ml', $data);
+    }
+
+    public function export()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+        $photoModel = new \App\Models\PhotoModel();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('photos/settings/export', $data);
+    }
+
+    public function accessTokens()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+        $photoModel = new \App\Models\PhotoModel();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('photos/settings/access_tokens', $data);
+    }
+
+    public function danger()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+        $photoModel = new \App\Models\PhotoModel();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('photos/settings/danger', $data);
     }
 
     public function updateProfile()
@@ -209,6 +326,8 @@ class Settings extends BaseController
         $userModel      = new UserModel();
 
         if ($userModel->skipValidation(true)->save($user)) {
+            helper('audit');
+            log_security_action('PASSWORD_CHANGE', 'SUCCESS', ['user_id' => $user->id]);
             return $this->response->setJSON(['status' => 'success', 'message' => 'Password changed successfully.']);
         }
 

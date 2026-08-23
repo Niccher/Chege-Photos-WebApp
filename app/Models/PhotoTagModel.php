@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class PhotoTagModel extends Model
 {
-    protected $table            = 'photo_tags';
+    protected $table            = 'tbl_photo_tags';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';

@@ -37,7 +37,7 @@ class Filters extends BaseFilters
         'session'       => \CodeIgniter\Shield\Filters\SessionAuth::class,
         'tokens'        => \CodeIgniter\Shield\Filters\TokenAuth::class,
         'chain'         => \CodeIgniter\Shield\Filters\ChainAuth::class,
-        'throttle'      => \CodeIgniter\Filters\Throttle::class,
+        'throttle'      => \CodeIgniter\Shield\Filters\AuthRates::class,
     ];
 
     /**

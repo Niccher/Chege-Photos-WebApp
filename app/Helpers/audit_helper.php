@@ -22,7 +22,7 @@ if (! function_exists('log_security_action')) {
             // Default to current authenticated user if not provided
             $finalUserId = $userId ?: (auth()->id() ?: null);
 
-            $db->table('security_logs')->insert([
+            $db->table('sys_security_logs')->insert([
                 'user_id'    => $finalUserId,
                 'action'     => strtoupper($action),
                 'ip_address' => $ip,

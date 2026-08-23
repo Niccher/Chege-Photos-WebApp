@@ -6,14 +6,15 @@ use CodeIgniter\Model;
 
 class AuthTokenModel extends Model
 {
-    protected $table            = 'auth_tokens';
+    protected $table            = 'tbl_auth_tokens';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;
     protected $allowedFields    = ['user_id', 'token', 'description', 'scopes', 'is_used',
-                                   'used_at', 'device_id', 'device_name', 'device_fingerprint'];
+                                   'used_at', 'device_id', 'device_uuid', 'device_name', 'device_fingerprint',
+                                   'os_version', 'screen_metrics', 'locale', 'timezone', 'kernel_version'];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;

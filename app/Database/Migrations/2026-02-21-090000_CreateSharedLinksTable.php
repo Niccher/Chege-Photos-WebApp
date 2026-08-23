@@ -34,12 +34,12 @@ class CreateSharedLinksTable extends Migration
         ]);
 
         $this->forge->addKey('id', true);
-        $this->forge->addForeignKey('photo_id', 'photos', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('shared_links');
+        $this->forge->addForeignKey('photo_id', 'tbl_photos', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->createTable('tbl_shared_links');
     }
 
     public function down()
     {
-        $this->forge->dropTable('shared_links');
+        $this->forge->dropTable('tbl_shared_links');
     }
 }

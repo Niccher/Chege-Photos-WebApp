@@ -61,6 +61,10 @@ class Auth extends BaseController
                 'method' => 'API_PASSWORD'
             ], $user->id);
             $token = $user->generateAccessToken($this->request->getPost('device_name'));
+            log_security_action('NEW_DEVICE_REGISTERED', 'SUCCESS', [
+                'device_name' => $this->request->getPost('device_name'),
+                'method'      => 'API_PASSWORD_LOGIN'
+            ], $user->id);
 
             $photoModel = new PhotoModel();
             $lastPhoto = $photoModel->where('user_id', $user->id)
@@ -94,6 +98,12 @@ class Auth extends BaseController
                 'token'              => 'required|alpha_numeric|exact_length[8]',
                 'device_id'          => 'required',
                 'device_fingerprint' => 'required',
+                'device_uuid'        => 'permit_empty',
+                'os_version'         => 'permit_empty',
+                'screen_metrics'     => 'permit_empty',
+                'locale'             => 'permit_empty',
+                'timezone'           => 'permit_empty',
+                'kernel_version'     => 'permit_empty',
             ];
 
             if (! $this->validate($rules)) {
@@ -107,6 +117,12 @@ class Auth extends BaseController
             $deviceId = $this->request->getPost('device_id');
             $deviceFingerprint = $this->request->getPost('device_fingerprint');
             $deviceName = $this->request->getPost('device_name') ?? 'Unknown Device';
+            $deviceUuid = $this->request->getPost('device_uuid');
+            $osVersion = $this->request->getPost('os_version');
+            $screenMetrics = $this->request->getPost('screen_metrics');
+            $locale = $this->request->getPost('locale');
+            $timezone = $this->request->getPost('timezone');
+            $kernelVersion = $this->request->getPost('kernel_version');
 
             $model = new AuthTokenModel();
             $record = $model->where('token', $tokenRaw)->where('is_used', 0)->first();
@@ -128,8 +144,14 @@ class Auth extends BaseController
                 'is_used'           => 1,
                 'used_at'           => date('Y-m-d H:i:s'),
                 'device_id'         => $deviceId,
+                'device_uuid'       => $deviceUuid,
                 'device_name'       => $deviceName,
                 'device_fingerprint' => $deviceFingerprint,
+                'os_version'        => $osVersion,
+                'screen_metrics'    => $screenMetrics,
+                'locale'            => $locale,
+                'timezone'          => $timezone,
+                'kernel_version'    => $kernelVersion,
             ]);
 
             // Get the user who generated the token
@@ -158,10 +180,11 @@ class Auth extends BaseController
 
             $token = $user->generateAccessToken($deviceName . ' (token)', $scopes);
             helper('audit');
-            log_security_action('TOKEN_AUTH', 'SUCCESS', [
+            log_security_action('NEW_DEVICE_REGISTERED', 'SUCCESS', [
                 'token'       => $tokenRaw,
                 'device_id'   => $deviceId,
-                'device_name' => $deviceName
+                'device_name' => $deviceName,
+                'method'      => 'API_TOKEN_AUTH'
             ], $user->id);
 
             $photoModel = new PhotoModel();

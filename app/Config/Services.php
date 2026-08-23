@@ -19,14 +19,28 @@ use CodeIgniter\Config\BaseService;
  */
 class Services extends BaseService
 {
-    /*
-     * public static function example($getShared = true)
-     * {
-     *     if ($getShared) {
-     *         return static::getSharedInstance('example');
-     *     }
-     *
-     *     return new \CodeIgniter\Example();
-     * }
-     */
+    public static function email($config = null, bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('email', $config);
+        }
+
+        if (empty($config)) {
+            $config = config('Email');
+        }
+
+        // Dynamically override config properties with values from settings (database)
+        if (function_exists('setting')) {
+            $config->fromEmail   = setting('Email.fromEmail') ?? $config->fromEmail;
+            $config->fromName    = setting('Email.fromName') ?? $config->fromName;
+            $config->protocol    = setting('Email.protocol') ?? $config->protocol;
+            $config->SMTPHost    = setting('Email.SMTPHost') ?? $config->SMTPHost;
+            $config->SMTPUser    = setting('Email.SMTPUser') ?? $config->SMTPUser;
+            $config->SMTPPass    = setting('Email.SMTPPass') ?? $config->SMTPPass;
+            $config->SMTPPort    = setting('Email.SMTPPort') ?? $config->SMTPPort;
+            $config->SMTPCrypto  = setting('Email.SMTPCrypto') ?? $config->SMTPCrypto;
+        }
+
+        return new \CodeIgniter\Email\Email($config);
+    }
 }

@@ -53,3 +53,21 @@ Events::on('pre_system', static function (): void {
         }
     }
 });
+
+\CodeIgniter\Events\Events::on('register', static function ($user): void {
+    helper('audit');
+    log_security_action('NEW_USER_REGISTERED', 'SUCCESS', [
+        'user_id'  => $user->id,
+        'email'    => $user->email,
+        'username' => $user->username
+    ], $user->id);
+});
+
+\CodeIgniter\Events\Events::on('reset', static function ($user): void {
+    helper('audit');
+    log_security_action('PASSWORD_RECOVERY_SUCCESS', 'SUCCESS', [
+        'user_id'  => $user->id,
+        'email'    => $user->email,
+        'username' => $user->username
+    ], $user->id);
+});

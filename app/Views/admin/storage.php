@@ -63,7 +63,7 @@
         </div>
 
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm rounded-card p-4 bg-light bg-opacity-25" style="color: var(--text-primary);">
+            <div class="card border-0 shadow-sm rounded-card p-4 bg-light bg-opacity-25 mb-4" style="color: var(--text-primary);">
                 <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-1 text-primary"></i>Trash Lifecycle</h6>
                 <p class="text-muted small" style="line-height: 1.6;">
                     When users delete photos, they are sent to the Trash folder and soft-deleted.
@@ -71,6 +71,23 @@
                 <p class="text-muted small mb-0" style="line-height: 1.6;">
                     If Auto-Purge is enabled, a scheduled daily background task permanently clears files that have exceeded the selected retention threshold.
                 </p>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary); border-top: 4px solid var(--bs-danger) !important;">
+                <h6 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Danger Zone</h6>
+                <p class="text-muted small">Perform administrative data resets, empty trash files, or a complete factory reset.</p>
+                
+                <div class="d-flex flex-column gap-2 mt-3">
+                    <button type="button" class="btn btn-outline-warning btn-sm rounded-pill w-100 fw-bold py-2" id="btnResetData">
+                        <i class="bi bi-trash-fill me-1"></i> Clear Data (Keep Users)
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm rounded-pill w-100 fw-bold py-2" id="btnEmptyTrashAll">
+                        <i class="bi bi-trash3-fill me-1"></i> Empty Trash (All Users)
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm rounded-pill w-100 fw-bold py-2" id="btnWipeSystem">
+                        <i class="bi bi-shield-slash-fill me-1"></i> Factory Reset (Full Wipe)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -80,6 +97,22 @@
 <?php $this->section('scripts') ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        function promptConfirmation(title, text, callback) {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, proceed!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    callback();
+                }
+            });
+        }
+
         // Save Storage Settings
         $('#formAdminStorage').on('submit', function(e) {
             e.preventDefault();
@@ -88,7 +121,7 @@
 
             btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
-            $.post(BASE_URL + 'admin/storage/save', form.serialize(), function(res) {
+            $.post(BASE_URL + 'api/v1/admin/storage/save', form.serialize(), function(res) {
                 btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save Storage Config');
                 if (res.status === 'success') {
                     showToast(res.message, 'success');
@@ -100,6 +133,87 @@
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Failed to save settings: ' + err, 'danger');
             });
+        });
+
+        // Clear Data (Keep Users)
+        $('#btnResetData').on('click', function() {
+            promptConfirmation(
+                "CLEAR PLATFORM DATA?",
+                "This will permanently delete all uploaded photos, albums, shares, tokens, and logs. User accounts will remain intact.",
+                function() {
+                    var btn = $('#btnResetData');
+                    var originalHtml = btn.html();
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Clearing...');
+
+                    $.post(BASE_URL + 'api/v1/admin/storage/reset-data', {}, function(res) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        if (res.status === 'success') {
+                            showToast(res.message, 'success');
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else {
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Failed to clear data: ' + err, 'danger');
+                    });
+                }
+            );
+        });
+
+        // Factory Reset (Full Wipe)
+        $('#btnWipeSystem').on('click', function() {
+            promptConfirmation(
+                "FACTORY RESET / FULL SYSTEM WIPE?",
+                "WARNING: This will completely destroy all databases, drop all tables, delete all files, and run a fresh installation seeder. You will be logged out.",
+                function() {
+                    var btn = $('#btnWipeSystem');
+                    var originalHtml = btn.html();
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Wiping...');
+
+                    $.post(BASE_URL + 'api/v1/admin/storage/wipe-system', {}, function(res) {
+                        if (res.status === 'success') {
+                            showToast(res.message, 'success');
+                            setTimeout(function() { window.location.href = BASE_URL + 'login'; }, 2000);
+                        } else {
+                            btn.prop('disabled', false).html(originalHtml);
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Failed to wipe system: ' + err, 'danger');
+                    });
+                }
+            );
+        });
+
+        // Empty Trash (All Users)
+        $('#btnEmptyTrashAll').on('click', function() {
+            promptConfirmation(
+                "EMPTY ALL USER TRASH BINS?",
+                "This will permanently and irreversibly delete all soft-deleted photos and files from every user's trash bin.",
+                function() {
+                    var btn = $('#btnEmptyTrashAll');
+                    var originalHtml = btn.html();
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Purging...');
+
+                    $.post(BASE_URL + 'api/v1/admin/storage/empty-trash', {}, function(res) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        if (res.status === 'success') {
+                            showToast(res.message, 'success');
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else {
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Failed to empty trash: ' + err, 'danger');
+                    });
+                }
+            );
         });
     });
 </script>

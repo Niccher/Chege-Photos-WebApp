@@ -38,7 +38,7 @@ class CleanupTemp extends BaseCommand
         $duration = microtime(true) - $startTime;
         $outputMsg = sprintf('Cleaned %d stale temporary file(s) from uploads storage.', $cleaned);
 
-        $db->table('cron_logs')->insert([
+        $db->table('sys_cron_logs')->insert([
             'job_name'         => 'storage:clean-temp',
             'status'           => 'success',
             'output'           => $outputMsg,

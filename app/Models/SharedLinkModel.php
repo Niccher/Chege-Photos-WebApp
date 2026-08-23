@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class SharedLinkModel extends Model
 {
-    protected $table            = 'shared_links';
+    protected $table            = 'tbl_shared_links';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';

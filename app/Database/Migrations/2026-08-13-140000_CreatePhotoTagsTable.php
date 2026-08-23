@@ -33,13 +33,13 @@ class CreatePhotoTagsTable extends Migration
             ],
         ]);
         $this->forge->addKey('id', true);
-        $this->forge->addForeignKey('photo_id', 'photos', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('photo_id', 'tbl_photos', 'id', 'CASCADE', 'CASCADE');
         $this->forge->addKey('tag');
-        $this->forge->createTable('photo_tags');
+        $this->forge->createTable('tbl_photo_tags');
     }
 
     public function down()
     {
-        $this->forge->dropTable('photo_tags');
+        $this->forge->dropTable('tbl_photo_tags');
     }
 }

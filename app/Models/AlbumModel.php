@@ -7,7 +7,7 @@ use CodeIgniter\Model;
 
 class AlbumModel extends Model
 {
-    protected $table            = 'albums';
+    protected $table            = 'tbl_albums';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';

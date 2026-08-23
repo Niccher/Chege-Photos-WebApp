@@ -2,9 +2,16 @@
 
 <?= $this->section('content') ?>
 
-<div class="mb-4">
-    <h2 class="h4 mb-0">Trash</h2>
-    <p class="text-muted small mb-0">Deleted photos (items are permanently removed after 60 days)</p>
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <div>
+        <h2 class="h4 mb-0">Trash</h2>
+        <p class="text-muted small mb-0">Deleted photos (items are permanently removed after 60 days)</p>
+    </div>
+    <?php if (!empty($photos)): ?>
+        <button class="btn btn-outline-danger btn-sm rounded-pill px-4" id="btnEmptyTrash">
+            <i class="bi bi-trash3 me-1"></i> Empty Trash
+        </button>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($searchQuery) && empty($photos)): ?>
@@ -76,4 +83,30 @@
     </div>
 <?php endif; ?>
 
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        $('#btnEmptyTrash').on('click', function() {
+            if (confirm('Are you sure you want to permanently delete all items in your trash? This action cannot be undone.')) {
+                var btn = $(this);
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Purging...');
+                
+                $.post(BASE_URL + 'photos/empty-trash', {}, function(res) {
+                    if (res.status === 'success') {
+                        showToast(res.message, 'success');
+                        setTimeout(function() { location.reload(); }, 1200);
+                    } else {
+                        btn.prop('disabled', false).html('<i class="bi bi-trash3 me-1"></i> Empty Trash');
+                        showToast(res.message, 'danger');
+                    }
+                }).fail(function() {
+                    btn.prop('disabled', false).html('<i class="bi bi-trash3 me-1"></i> Empty Trash');
+                    showToast('Failed to empty trash folder.', 'danger');
+                });
+            }
+        });
+    });
+</script>
 <?= $this->endSection() ?>

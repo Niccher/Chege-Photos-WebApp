@@ -56,6 +56,7 @@ class Admin extends BaseController
             'settings' => [
                 'storageLimit'      => setting('App.storageLimit') ?: (1024 * 1024 * 1024), // 1GB default
                 'allowRegistration' => setting('Auth.allowRegistration') ?? true,
+                'maintenanceMode'   => setting('App.maintenanceMode') ?? false,
             ],
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
@@ -79,15 +80,26 @@ class Admin extends BaseController
 
         $storageLimit      = $this->request->getPost('storageLimit');
         $allowRegistration = (bool) $this->request->getPost('allowRegistration');
+        $maintenanceMode   = (bool) $this->request->getPost('maintenanceMode');
+
+        $oldMaintenance = setting('App.maintenanceMode') ?? false;
 
         setting()->set('App.storageLimit', (int) $storageLimit);
         setting()->set('Auth.allowRegistration', $allowRegistration);
+        setting()->set('App.maintenanceMode', $maintenanceMode);
 
         helper('audit');
         log_security_action('SYSTEM_SETTINGS_CHANGE', 'SUCCESS', [
             'storageLimit'      => $storageLimit,
-            'allowRegistration' => $allowRegistration
+            'allowRegistration' => $allowRegistration,
+            'maintenanceMode'   => $maintenanceMode
         ]);
+
+        if ($oldMaintenance !== $maintenanceMode) {
+            log_security_action('MAINTENANCE_MODE_SET', 'SUCCESS', [
+                'maintenance_mode' => $maintenanceMode ? 'ENABLED' : 'DISABLED'
+            ]);
+        }
 
         return $this->response->setJSON([
             'status'  => 'success',
@@ -311,6 +323,254 @@ class Admin extends BaseController
         ]);
     }
 
+    public function wipeSystem()
+    {
+        helper('audit');
+        try {
+            $db = \Config\Database::connect();
+            $db->disableForeignKeyChecks();
+
+            // Drop all tables
+            $tables = $db->listTables();
+            foreach ($tables as $table) {
+                $db->query("DROP TABLE IF EXISTS `{$table}`");
+            }
+
+            // Drop all views
+            $views = ['photos', 'albums', 'album_photos', 'photo_shares', 'shared_links', 'person', 'face_encoding', 'photo_tags', 'photo_scan', 'scan_job', 'face_cluster', 'face_annotation'];
+            foreach ($views as $view) {
+                $db->query("DROP VIEW IF EXISTS `{$view}`");
+            }
+
+            $db->enableForeignKeyChecks();
+
+            // Run migrations
+            $runner = \Config\Services::migrations();
+            $runner->latest();
+
+            // Recreate views
+            $db->query("CREATE OR REPLACE VIEW photos AS SELECT * FROM tbl_photos;");
+            $db->query("CREATE OR REPLACE VIEW albums AS SELECT * FROM tbl_albums;");
+            $db->query("CREATE OR REPLACE VIEW album_photos AS SELECT * FROM tbl_album_photos;");
+            $db->query("CREATE OR REPLACE VIEW photo_shares AS SELECT * FROM tbl_photo_shares;");
+            $db->query("CREATE OR REPLACE VIEW shared_links AS SELECT * FROM tbl_shared_links;");
+            $db->query("CREATE OR REPLACE VIEW person AS SELECT * FROM tbl_person;");
+            $db->query("CREATE OR REPLACE VIEW face_encoding AS SELECT * FROM tbl_face_encoding;");
+            $db->query("CREATE OR REPLACE VIEW photo_tags AS SELECT * FROM tbl_photo_tags;");
+            $db->query("CREATE OR REPLACE VIEW photo_scan AS SELECT * FROM tbl_photo_scan;");
+            $db->query("CREATE OR REPLACE VIEW scan_job AS SELECT * FROM tbl_scan_job;");
+            $db->query("CREATE OR REPLACE VIEW face_cluster AS SELECT * FROM tbl_face_cluster;");
+            $db->query("CREATE OR REPLACE VIEW face_annotation AS SELECT * FROM tbl_face_annotation;");
+
+            // Seed default settings and users
+            $seeder = \Config\Database::seeder();
+            $seeder->call('SystemDefaultSeeder');
+            $seeder->call('AdminSeeder');
+            $seeder->call('SuperAdminSeeder');
+
+            // Delete uploaded photos and thumbnails
+            $this->wipeUploadedFiles();
+
+            // Log security action (since DB was reset, we log a fresh action in the new table)
+            log_security_action('ADMIN_SYSTEM_WIPE', 'SUCCESS', ['admin_username' => 'superadmin']);
+
+            // Clear session to force fresh login
+            auth()->logout();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Factory reset completed successfully. The system has been completely wiped.'
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to wipe system: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function resetDataKeepUsers()
+    {
+        helper('audit');
+        try {
+            $db = \Config\Database::connect();
+            $db->disableForeignKeyChecks();
+
+            $tablesToTruncate = [
+                'tbl_photos', 'tbl_albums', 'tbl_album_photos', 'tbl_photo_shares', 
+                'tbl_shared_links', 'tbl_photo_tags', 'tbl_auth_tokens', 
+                'sys_cron_logs', 'sys_email_logs', 'sys_security_logs',
+                'tbl_face_encoding', 'tbl_person', 'tbl_photo_scan', 
+                'tbl_scan_job', 'tbl_face_cluster', 'tbl_face_annotation'
+            ];
+
+            foreach ($tablesToTruncate as $table) {
+                $db->table($table)->truncate();
+            }
+
+            $db->enableForeignKeyChecks();
+
+            // Delete uploaded photos and thumbnails
+            $this->wipeUploadedFiles();
+
+            log_security_action('ADMIN_DATA_RESET_KEEP_USERS', 'SUCCESS', ['admin_id' => auth()->id()]);
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Application data cleared successfully. User accounts remain active.'
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to clear data: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function emptyTrashAll()
+    {
+        helper('audit');
+        try {
+            $db = \Config\Database::connect();
+            $photos = $db->table('photos')
+                ->where('deleted_at IS NOT NULL')
+                ->get()
+                ->getResultArray();
+
+            $purged = 0;
+            foreach ($photos as $photo) {
+                $id = (int) $photo['id'];
+
+                // Clean related tables
+                $db->table('album_photos')->where('photo_id', $id)->delete();
+                $db->table('photo_shares')->where('photo_id', $id)->delete();
+                $db->table('shared_links')->where('photo_id', $id)->delete();
+
+                // Delete physical files
+                foreach (['path', 'thumbnail_path'] as $field) {
+                    if (! empty($photo[$field])) {
+                        $full = FCPATH . ltrim($photo[$field], '/');
+                        if (is_file($full)) {
+                            @unlink($full);
+                        }
+                    }
+                }
+
+                // Hard delete row
+                $db->table('photos')->where('id', $id)->delete();
+                $purged++;
+            }
+
+            log_security_action('ADMIN_PURGED_TRASH_ALL', 'SUCCESS', [
+                'admin_id' => auth()->id(),
+                'purged_count' => $purged
+            ]);
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => "Successfully emptied trash folders. Permanently deleted {$purged} photos."
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to empty trash: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function audits()
+    {
+        $userId     = auth()->id();
+        $photoModel = new PhotoModel();
+        $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+
+        $db = \Config\Database::connect();
+        $logs = $db->table('sys_security_logs sl')
+            ->select('sl.*, u.username')
+            ->join('users u', 'u.id = sl.user_id', 'left')
+            ->orderBy('sl.created_at', 'DESC')
+            ->limit(100)
+            ->get()
+            ->getResultArray();
+
+        $data = [
+            'counts' => $this->getSidebarCounts(),
+            'logs'   => $logs,
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('admin/audits', $data);
+    }
+
+    public function devices()
+    {
+        $userId     = auth()->id();
+        $photoModel = new PhotoModel();
+        $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+
+        $db = \Config\Database::connect();
+        $tokens = $db->table('tbl_auth_tokens t')
+            ->select('t.*, u.username')
+            ->join('users u', 'u.id = t.user_id', 'left')
+            ->where('t.device_uuid IS NOT NULL')
+            ->groupBy('t.device_uuid')
+            ->get()
+            ->getResultArray();
+
+        // Get image count for each device
+        foreach ($tokens as &$tk) {
+            $uuid = $tk['device_uuid'];
+            $tk['image_count'] = $photoModel->where('device_uuid', $uuid)->countAllResults();
+        }
+
+        $data = [
+            'counts' => $this->getSidebarCounts(),
+            'devices' => $tokens,
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('admin/devices', $data);
+    }
+
+    private function wipeUploadedFiles()
+    {
+        $uploadsDir = FCPATH . 'uploads';
+        $thumbsDir  = FCPATH . 'thumbnails';
+        
+        $this->deleteDirContents($uploadsDir, ['avatars', '.gitkeep']);
+        $this->deleteDirContents($thumbsDir, ['.gitkeep']);
+    }
+
+    private function deleteDirContents($dir, array $exclude = [])
+    {
+        if (!is_dir($dir)) return;
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+
+        foreach ($files as $fileinfo) {
+            $name = $fileinfo->getFilename();
+            $path = $fileinfo->getRealPath();
+            $shouldExclude = false;
+            foreach ($exclude as $ex) {
+                if (str_contains($path, DIRECTORY_SEPARATOR . $ex)) {
+                    $shouldExclude = true;
+                    break;
+                }
+            }
+            if ($shouldExclude) continue;
+
+            if ($fileinfo->isDir()) {
+                @rmdir($path);
+            } else {
+                @unlink($path);
+            }
+        }
+    }
+
     private function getDirectoryStats($path, $excludeDirs = [])
     {
         $bytes = 0;
@@ -369,6 +629,7 @@ class Admin extends BaseController
                 'photo_count'  => $photoCount,
                 'storage'      => $this->formatBytes($storageBytes),
                 'last_active'  => $lastActive,
+                'active'       => $user->active,
             ];
         }
 
@@ -549,6 +810,62 @@ class Admin extends BaseController
         return $this->response->setJSON(['status' => 'success', 'message' => 'User role successfully updated to ' . $role]);
     }
 
+    public function toggleUserStatus()
+    {
+        $userId = $this->request->getPost('user_id');
+        if (empty($userId)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Missing user ID.'])->setStatusCode(400);
+        }
+
+        if ((int)$userId === (int)auth()->id()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'You cannot modify your own status.'])->setStatusCode(400);
+        }
+
+        $userModel = new UserModel();
+        $user      = $userModel->find($userId);
+        if (! $user) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'User not found.'])->setStatusCode(404);
+        }
+
+        $newActive = $user->active ? 0 : 1;
+        $user->active = $newActive;
+        $user->status = $newActive ? 'active' : 'suspended';
+        $user->status_message = $newActive ? 'Account active' : 'Suspended by Administrator';
+
+        if ($userModel->skipValidation(true)->save($user)) {
+            helper('audit');
+            $action = $newActive ? 'ADMIN_UNSUSPEND_USER' : 'ADMIN_SUSPEND_USER';
+            log_security_action($action, 'SUCCESS', [
+                'target_user_id'  => $userId,
+                'target_username' => $user->username
+            ]);
+
+            // Dispatch email notification if user suspended
+            if (!$newActive) {
+                try {
+                    $email = service('email');
+                    $email->setTo($user->email);
+                    $email->setSubject('Security Notice - Account Suspended');
+                    $email->setMailType('html');
+                    $email->setMessage(view('emails/user_suspended', [
+                        'subject'  => 'Security Notice - Account Suspended',
+                        'username' => $user->username
+                    ]));
+                    $email->send();
+                } catch (\Exception $e) {
+                    log_message('error', 'Failed to send account suspension email: ' . $e->getMessage());
+                }
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => $newActive ? 'User account activated successfully.' : 'User account suspended successfully.'
+            ]);
+        }
+
+        return $this->response->setJSON(['status' => 'error', 'message' => 'Failed to update user status.'])->setStatusCode(500);
+    }
+
     public function purgeUserData()
     {
         $userId = $this->request->getPost('user_id');
@@ -624,6 +941,8 @@ class Admin extends BaseController
                 log_message('error', 'Failed to clear ML face data: ' . $e->getMessage());
             }
         }
+
+        log_security_action('ADMIN_PURGED_USER_DATA', 'SUCCESS', ['purged_user_id' => $userId, 'purged_username' => $user->username ?? '']);
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'User library successfully cleared. Profile reset to default.']);
     }
@@ -710,6 +1029,8 @@ class Admin extends BaseController
             }
         }
 
+        log_security_action('ADMIN_DELETE_USER', 'SUCCESS', ['deleted_user_id' => $userId, 'deleted_username' => $user->username ?? '']);
+
         return $this->response->setJSON(['status' => 'success', 'message' => 'User account and all data permanently deleted.']);
     }
 
@@ -718,13 +1039,6 @@ class Admin extends BaseController
         $userId = auth()->id();
         $photoModel = new PhotoModel();
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
-
-        $db = \Config\Database::connect();
-        $emailLogs = $db->table('email_logs')
-            ->orderBy('sent_at', 'DESC')
-            ->limit(50)
-            ->get()
-            ->getResultArray();
 
         $data = [
             'counts' => $this->getSidebarCounts(),
@@ -738,12 +1052,49 @@ class Admin extends BaseController
                 'SMTPPort'    => setting('Email.SMTPPort') ?? 465,
                 'SMTPCrypto'  => setting('Email.SMTPCrypto') ?? 'ssl',
             ],
-            'emailLogs'      => $emailLogs,
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
         ];
 
         return view('admin/smtp', $data);
+    }
+
+    public function sentMails()
+    {
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+
+        $db = \Config\Database::connect();
+        $emailLogs = $db->table('sys_email_logs')
+            ->orderBy('sent_at', 'DESC')
+            ->limit(100)
+            ->get()
+            ->getResultArray();
+
+        $data = [
+            'counts'         => $this->getSidebarCounts(),
+            'emailLogs'      => $emailLogs,
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('admin/sent_mails', $data);
+    }
+
+    public function triggerEvents()
+    {
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+
+        $data = [
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes($totalBytes),
+            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+        ];
+
+        return view('admin/trigger_events', $data);
     }
 
     public function saveSmtp()
@@ -790,10 +1141,14 @@ class Admin extends BaseController
 
         $email->setTo($adminEmail);
         $email->setSubject('Chege Photos - SMTP Test Email [' . $trackingId . ']');
-        $email->setMessage("Hello,\n\nThis is a sample test email from the Chege Photos WebApp. If you are reading this, your SMTP configuration is verified and working correctly!\n\nTracking ID: " . $trackingId . "\n\nBest regards,\nPhotos Administration Console.");
+        $email->setMailType('html');
+        $email->setMessage(view('emails/test_email', [
+            'subject'    => 'Chege Photos - SMTP Test Email',
+            'trackingId' => $trackingId
+        ]));
 
         if ($email->send()) {
-            $db->table('email_logs')->insert([
+            $db->table('sys_email_logs')->insert([
                 'tracking_id' => $trackingId,
                 'recipient'   => $adminEmail,
                 'subject'     => 'Chege Photos - SMTP Test Email',
@@ -808,7 +1163,7 @@ class Admin extends BaseController
         }
 
         $debugger = $email->printDebugger(['headers', 'subject', 'body']);
-        $db->table('email_logs')->insert([
+        $db->table('sys_email_logs')->insert([
             'tracking_id' => $trackingId,
             'recipient'   => $adminEmail,
             'subject'     => 'Chege Photos - SMTP Test Email',
@@ -832,19 +1187,59 @@ class Admin extends BaseController
         $eventsMap = [
             'welcome' => [
                 'subject' => 'Welcome to Chege Photos - Account Ready',
-                'body'    => "Welcome to Chege Photos!\n\nYour account is active. You can now backup, organize, and search your photo collection using AI semantics and face recognition.\n\nBest regards,\nChege Photos Team"
+                'view'    => 'emails/welcome'
             ],
             'storage_warning' => [
                 'subject' => 'Storage Threshold Warning Notice',
-                'body'    => "Notice: Your account storage usage has exceeded 85% of your quota allocation.\n\nPlease review your library trash or clean temporary files to prevent upload interruptions.\n\nBest regards,\nStorage Manager"
+                'view'    => 'emails/storage_warning'
             ],
             'password_reset' => [
                 'subject' => 'Security Notice - Password Reset Requested',
-                'body'    => "Hello,\n\nA request to reset your password was received. If you initiated this request, use your secure verification code below.\n\nCode: 948-201\n\nIf you did not request this, please secure your account immediately."
+                'view'    => 'emails/password_reset'
             ],
             'system_alert' => [
                 'subject' => 'System Administrative Alert - ML Task Completed',
-                'body'    => "System Alert: The scheduled background ML processing sweep completed successfully.\n\nStatus: Healthy\nQueue Status: Idle\n\nSystem Administration Console"
+                'view'    => 'emails/system_alert'
+            ],
+            'maintenance_on' => [
+                'subject' => 'System Notice - Maintenance Mode Active',
+                'view'    => 'emails/maintenance_on'
+            ],
+            'maintenance_off' => [
+                'subject' => 'System Notice - Maintenance Completed',
+                'view'    => 'emails/maintenance_off'
+            ],
+            'user_registration' => [
+                'subject' => 'Confirm Your Registration - Chege Photos',
+                'view'    => 'emails/user_registered'
+            ],
+            'user_deleted_data' => [
+                'subject' => 'Data Purge Confirmation - Chege Photos',
+                'view'    => 'emails/user_deleted_data'
+            ],
+            'new_features' => [
+                'subject' => 'Discover What\'s New in Chege Photos!',
+                'view'    => 'emails/new_features'
+            ],
+            'account_info' => [
+                'subject' => 'Security Alert - Profile Settings Updated',
+                'view'    => 'emails/account_info'
+            ],
+            'user_suspended' => [
+                'subject' => 'Security Notice - Account Suspended',
+                'view'    => 'emails/user_suspended'
+            ],
+            'login_alert' => [
+                'subject' => 'Security Alert - New Sign-in Detected',
+                'view'    => 'emails/login_alert'
+            ],
+            'weekly_summary' => [
+                'subject' => 'Your Weekly Library Summary',
+                'view'    => 'emails/weekly_summary'
+            ],
+            'album_invite' => [
+                'subject' => 'Shared Album Invitation',
+                'view'    => 'emails/album_invite'
             ],
         ];
 
@@ -857,12 +1252,26 @@ class Admin extends BaseController
         $db = \Config\Database::connect();
 
         $event = $eventsMap[$eventType];
+        $username = auth()->user()->username ?? 'Administrator';
+
         $email->setTo($recipient);
         $email->setSubject($event['subject'] . ' [' . $trackingId . ']');
-        $email->setMessage($event['body'] . "\n\nTracking ID: " . $trackingId);
+        $email->setMailType('html');
+        $email->setMessage(view($event['view'], [
+            'subject'     => $event['subject'],
+            'trackingId'  => $trackingId,
+            'username'    => $username,
+            'code'        => '948-201',
+            'token'       => 'sample_activation_token_123',
+            'device_name' => 'Chrome Browser on Linux',
+            'ip_address'  => '192.168.100.80',
+            'album_name'  => 'Family Gathering 2026',
+            'sender_name' => 'Admin',
+            'album_token' => 'invite_token_sample'
+        ]));
 
         if ($email->send()) {
-            $db->table('email_logs')->insert([
+            $db->table('sys_email_logs')->insert([
                 'tracking_id' => $trackingId,
                 'recipient'   => $recipient,
                 'subject'     => $event['subject'],
@@ -878,7 +1287,7 @@ class Admin extends BaseController
         }
 
         $debugger = $email->printDebugger(['headers', 'subject', 'body']);
-        $db->table('email_logs')->insert([
+        $db->table('sys_email_logs')->insert([
             'tracking_id' => $trackingId,
             'recipient'   => $recipient,
             'subject'     => $event['subject'],
@@ -901,7 +1310,7 @@ class Admin extends BaseController
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
 
         $db = \Config\Database::connect();
-        $cronLogs = $db->table('cron_logs')
+        $cronLogs = $db->table('sys_cron_logs')
             ->orderBy('run_at', 'DESC')
             ->limit(50)
             ->get()
@@ -948,6 +1357,59 @@ class Admin extends BaseController
             'status'  => 'success',
             'message' => 'System tasks schedules saved successfully.'
         ]);
+    }
+
+    public function runCronJob()
+    {
+        $job = $this->request->getPost('job');
+        $validJobs = ['ml:cluster', 'ml:sweep', 'trash:purge', 'storage:clean-temp'];
+
+        if (! in_array($job, $validJobs, true)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid job target.'])->setStatusCode(400);
+        }
+
+        try {
+            ob_start();
+            $result = command($job);
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => "Job '{$job}' completed successfully.",
+                'output'  => $output ?: 'Execution finished without output.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => "Job '{$job}' failed: " . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function runAllCronJobs()
+    {
+        try {
+            ob_start();
+            $result = command('cron:run');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Master cron runner executed successfully.',
+                'output'  => $output ?: 'No pending jobs were due to run.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cron runner failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
     }
 
     private function getMlHealth(): array

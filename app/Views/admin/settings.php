@@ -42,6 +42,17 @@
                         </div>
                     </div>
 
+                    <!-- System Maintenance Mode -->
+                    <div class="mb-4">
+                        <div class="form-check form-switch p-0 d-flex justify-content-between align-items-center">
+                            <div>
+                                <label class="form-label small fw-bold mb-0 d-block">System Maintenance Mode</label>
+                                <span class="text-muted small">Enable to show offline page and restrict user access.</span>
+                            </div>
+                            <input class="form-check-input ms-0 fs-4" type="checkbox" name="maintenanceMode" value="1" <?= (isset($settings['maintenanceMode']) && $settings['maintenanceMode']) ? 'checked' : '' ?>>
+                        </div>
+                    </div>
+
                     <!-- Form submission -->
                     <div class="mt-4 pt-3 border-top" style="border-color: var(--border-color) !important;">
                         <button type="submit" class="btn btn-primary px-4 rounded-pill">

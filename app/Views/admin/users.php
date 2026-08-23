@@ -34,7 +34,12 @@
                             <?php else: ?>
                                 <?php foreach ($users as $user): ?>
                                     <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td class="py-3 px-4 fw-semibold"><?= esc($user['username']) ?></td>
+                                        <td class="py-3 px-4 fw-semibold">
+                                            <?= esc($user['username']) ?>
+                                            <?php if (isset($user['active']) && !$user['active']): ?>
+                                                <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2 py-0.5 ms-1" style="font-size: 0.68rem;">Suspended</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="py-3"><?= esc($user['email']) ?></td>
                                         <td class="py-3"><?= esc($user['name']) ?></td>
                                         <td class="py-3 text-center">
@@ -62,6 +67,13 @@
                                                             data-role="<?= esc(in_array('superadmin', $groups, true) ? 'superadmin' : (in_array('admin', $groups, true) ? 'admin' : 'user')) ?>"
                                                             title="Change Role">
                                                         <i class="bi bi-shield-lock"></i> Role
+                                                    </button>
+                                                    <button class="btn <?= (isset($user['active']) && $user['active']) ? 'btn-outline-warning' : 'btn-outline-success' ?> btn-sm rounded-pill px-2 py-1 me-1 btn-toggle-status" 
+                                                            data-user-id="<?= $user['id'] ?>" 
+                                                            data-username="<?= esc($user['username']) ?>"
+                                                            data-active="<?= (isset($user['active']) && $user['active']) ? '1' : '0' ?>"
+                                                            title="<?= (isset($user['active']) && $user['active']) ? 'Suspend/Activate User' : 'Activate User' ?>">
+                                                        <i class="bi <?= (isset($user['active']) && $user['active']) ? 'bi-person-dash' : 'bi-person-check' ?>"></i> <?= (isset($user['active']) && $user['active']) ? 'Suspend' : 'Activate' ?>
                                                     </button>
                                                     <button class="btn btn-outline-warning btn-sm rounded-pill px-2 py-1 me-1 btn-purge-user" 
                                                             data-user-id="<?= $user['id'] ?>" 
@@ -286,6 +298,32 @@
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Deletion failed: ' + err, 'danger');
             });
+        });
+
+        // Toggle User Status (Suspend/Activate)
+        $('.btn-toggle-status').on('click', function() {
+            var btn = $(this);
+            var userId = btn.data('user-id');
+            var username = btn.data('username');
+            var isActive = btn.data('active') == '1';
+            var actionText = isActive ? 'suspend' : 'activate';
+
+            if (confirm('Are you sure you want to ' + actionText + ' user "' + username + '"?')) {
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+                $.post(BASE_URL + 'admin/users/toggle-status', { user_id: userId }, function(res) {
+                    if (res.status === 'success') {
+                        showToast(res.message, 'success');
+                        setTimeout(function() { location.reload(); }, 1000);
+                    } else {
+                        showToast(res.message, 'danger');
+                        location.reload();
+                    }
+                }).fail(function(xhr) {
+                    var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                    showToast('Failed to change status: ' + err, 'danger');
+                    location.reload();
+                });
+            }
         });
     });
 </script>

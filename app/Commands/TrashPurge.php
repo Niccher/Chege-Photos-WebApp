@@ -77,7 +77,7 @@ class TrashPurge extends BaseCommand
         $duration = microtime(true) - $startTime;
         $outputMsg = sprintf('Purged %d photo(s) older than 60 days from the trash.', $purged);
 
-        $db->table('cron_logs')->insert([
+        $db->table('sys_cron_logs')->insert([
             'job_name'         => 'trash:purge',
             'status'           => 'success',
             'output'           => $outputMsg,

@@ -6,13 +6,13 @@ use CodeIgniter\Model;
 
 class PhotoModel extends Model
 {
-    protected $table            = 'photos';
+    protected $table            = 'tbl_photos';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
     protected $useSoftDeletes   = true;
     protected $protectFields    = true;
-    protected $allowedFields    = ['user_id', 'device_id', 'filename', 'path', 'thumbnail_path', 'taken_at', 'width', 'height', 'size', 'file_hash', 'mime_type', 'latitude', 'longitude', 'exif_data', 'is_archived', 'is_favorite', 'scanned_face', 'scanned_tag', 'scanned_clip'];
+    protected $allowedFields    = ['user_id', 'device_id', 'device_uuid', 'upload_source', 'filename', 'path', 'thumbnail_path', 'taken_at', 'width', 'height', 'size', 'file_hash', 'mime_type', 'latitude', 'longitude', 'exif_data', 'is_archived', 'is_favorite', 'scanned_face', 'scanned_tag', 'scanned_clip'];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;

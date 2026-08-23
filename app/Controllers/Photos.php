@@ -134,9 +134,14 @@ class Photos extends BaseController
         $imageInfo = $isVideo ? false : @getimagesize($fullPath);
         $metadata = $isVideo ? null : $this->getMergedMetadata($fullPath);
 
+        $deviceUuid = $this->request->getPost('device_uuid') ?: ($this->request->getHeaderLine('X-Device-UUID') ?: null);
+        $uploadSource = !empty($deviceUuid) ? 'android' : 'webapp';
+
         $data = [
             'user_id'        => auth()->id(),
             'device_id'      => $this->request->getPost('device_id') ?? null,
+            'device_uuid'    => $deviceUuid,
+            'upload_source'  => $uploadSource,
             'filename'       => $newName,
             'path'           => 'uploads/' . $newName,
             'mime_type'      => $isVideo ? $mimeType : ($imageInfo['mime'] ?? $mimeType),
@@ -218,15 +223,15 @@ class Photos extends BaseController
         $shareModel = new \App\Models\PhotoShareModel();
 
         // 1. Photos I've shared via Public Links
-        $publicShares = $linkModel->select('photos.*, shared_links.access_token')
-            ->join('photos', 'photos.id = shared_links.photo_id')
+        $publicShares = $linkModel->select('photos.*, tbl_shared_links.access_token')
+            ->join('photos', 'photos.id = tbl_shared_links.photo_id')
             ->where('photos.user_id', auth()->id())
             ->findAll();
 
         // 2. Photos others shared WITH me
-        $sharedWithMe = $shareModel->select('photos.*, photo_shares.permission')
-            ->join('photos', 'photos.id = photo_shares.photo_id')
-            ->where('photo_shares.shared_with', auth()->id())
+        $sharedWithMe = $shareModel->select('photos.*, tbl_photo_shares.permission')
+            ->join('photos', 'photos.id = tbl_photo_shares.photo_id')
+            ->where('tbl_photo_shares.shared_with', auth()->id())
             ->findAll();
 
         $data = [
@@ -478,7 +483,7 @@ class Photos extends BaseController
             ->getResultArray();
 
         // 13. Sharing Stats
-        $publicShares = $linkModel->join('photos', 'photos.id = shared_links.photo_id')
+        $publicShares = $linkModel->join('photos', 'photos.id = tbl_shared_links.photo_id')
                                    ->where('photos.user_id', $userId)->countAllResults();
         $internalShares = $shareModel->where('shared_by', $userId)->countAllResults();
 
@@ -863,6 +868,52 @@ class Photos extends BaseController
         $photoModel->builder()->where('id', $id)->update(['deleted_at' => null]);
         $this->clearSidebarCountsCache();
         return $this->response->setJSON(['status' => 'success']);
+    }
+
+    public function emptyTrash()
+    {
+        $userId = auth()->id();
+        $db     = \Config\Database::connect();
+        
+        // Find all soft-deleted photos for this user
+        $photos = $db->table('photos')
+            ->where('user_id', $userId)
+            ->where('deleted_at IS NOT NULL')
+            ->get()
+            ->getResultArray();
+
+        $purged = 0;
+        foreach ($photos as $photo) {
+            $id = (int) $photo['id'];
+
+            // Clean related tables
+            $db->table('album_photos')->where('photo_id', $id)->delete();
+            $db->table('photo_shares')->where('photo_id', $id)->delete();
+            $db->table('shared_links')->where('photo_id', $id)->delete();
+
+            // Delete physical files
+            foreach (['path', 'thumbnail_path'] as $field) {
+                if (! empty($photo[$field])) {
+                    $full = FCPATH . ltrim($photo[$field], '/');
+                    if (is_file($full)) {
+                        @unlink($full);
+                    }
+                }
+            }
+
+            // Hard delete row
+            $db->table('photos')->where('id', $id)->delete();
+            $purged++;
+        }
+
+        $this->clearSidebarCountsCache();
+        helper('audit');
+        log_security_action('USER_EMPTIED_TRASH', 'SUCCESS', ['user_id' => $userId, 'purged_count' => $purged]);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Successfully emptied trash. Permanently deleted {$purged} items."
+        ]);
     }
 
     public function migrate()

@@ -8,7 +8,6 @@ class CreatePhotoSharesTable extends Migration
 {
     public function up()
     {
-        // No FK constraints to avoid ordering issues with Shield's users table
         $this->forge->addField([
             'id' => [
                 'type'           => 'INT',
@@ -43,13 +42,14 @@ class CreatePhotoSharesTable extends Migration
         ]);
         
         $this->forge->addKey('id', true);
-        $this->forge->addKey('photo_id');
-        $this->forge->addKey('shared_with');
-        $this->forge->createTable('photo_shares');
+        $this->forge->addForeignKey('photo_id', 'tbl_photos', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('shared_by', 'users', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('shared_with', 'users', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->createTable('tbl_photo_shares');
     }
 
     public function down()
     {
-        $this->forge->dropTable('photo_shares', true);
+        $this->forge->dropTable('tbl_photo_shares', true);
     }
 }

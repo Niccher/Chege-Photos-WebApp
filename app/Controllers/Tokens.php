@@ -17,13 +17,31 @@ class Tokens extends BaseController
         $user = auth()->user();
         if ($user) {
             $rawAccessTokens = $user->accessTokens();
+            
+            // Fetch used tokens for this user to match device metadata
+            $authTokens = $model->where('user_id', $userId)->where('is_used', 1)->findAll();
+            $deviceMap = [];
+            foreach ($authTokens as $t) {
+                // Map by name (or fingerprint / device_id)
+                $key = $t['device_name'] . ' (token)';
+                $deviceMap[$key] = $t;
+            }
+
             foreach ($rawAccessTokens as $at) {
+                $mapped = $deviceMap[$at->name] ?? null;
                 $activeAccessTokens[] = [
-                    'id'           => $at->id,
-                    'name'         => $at->name,
-                    'scopes'       => $at->scopes,
-                    'last_used_at' => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i:s') : null,
-                    'created_at'   => $at->created_at ? $at->created_at->format('Y-m-d H:i:s') : null,
+                    'id'             => $at->id,
+                    'name'           => $at->name,
+                    'scopes'         => $at->scopes,
+                    'last_used_at'   => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i:s') : null,
+                    'created_at'     => $at->created_at ? $at->created_at->format('Y-m-d H:i:s') : null,
+                    'device_uuid'    => $mapped['device_uuid'] ?? null,
+                    'os_version'     => $mapped['os_version'] ?? null,
+                    'screen_metrics' => $mapped['screen_metrics'] ?? null,
+                    'locale'         => $mapped['locale'] ?? null,
+                    'timezone'       => $mapped['timezone'] ?? null,
+                    'kernel_version' => $mapped['kernel_version'] ?? null,
+                    'device_id'      => $mapped['device_id'] ?? null,
                 ];
             }
         }

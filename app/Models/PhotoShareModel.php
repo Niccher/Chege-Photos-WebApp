@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class PhotoShareModel extends Model
 {
-    protected $table            = 'photo_shares';
+    protected $table            = 'tbl_photo_shares';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';

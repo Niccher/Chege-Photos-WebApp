@@ -64,7 +64,7 @@ class MlSweep extends BaseCommand
             $duration = microtime(true) - $startTime;
             $outputMsg = "Successfully queued {$queued} of {$total} unprocessed photos for background analysis.";
 
-            $db->table('cron_logs')->insert([
+            $db->table('sys_cron_logs')->insert([
                 'job_name'         => 'ml:sweep',
                 'status'           => 'success',
                 'output'           => $outputMsg,
@@ -76,7 +76,7 @@ class MlSweep extends BaseCommand
             return EXIT_SUCCESS;
         } catch (\Exception $e) {
             $duration = microtime(true) - $startTime;
-            $db->table('cron_logs')->insert([
+            $db->table('sys_cron_logs')->insert([
                 'job_name'         => 'ml:sweep',
                 'status'           => 'failed',
                 'output'           => 'Sweep execution failed: ' . $e->getMessage(),

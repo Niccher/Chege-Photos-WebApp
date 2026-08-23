@@ -32,7 +32,7 @@ class MlCluster extends BaseCommand
             $outputMsg = isset($body['message']) ? $body['message'] : 'Face clustering triggered successfully.';
 
             $duration = microtime(true) - $startTime;
-            $db->table('cron_logs')->insert([
+            $db->table('sys_cron_logs')->insert([
                 'job_name'         => 'ml:cluster',
                 'status'           => 'success',
                 'output'           => $outputMsg,
@@ -44,7 +44,7 @@ class MlCluster extends BaseCommand
             return EXIT_SUCCESS;
         } catch (\Exception $e) {
             $duration = microtime(true) - $startTime;
-            $db->table('cron_logs')->insert([
+            $db->table('sys_cron_logs')->insert([
                 'job_name'         => 'ml:cluster',
                 'status'           => 'failed',
                 'output'           => 'Failed: ' . $e->getMessage(),

@@ -29,7 +29,14 @@ $routes->post('api/v1/faces/cluster',     '\App\Controllers\Faces::apiCluster', 
 $routes->post('api/v1/faces/reset',       '\App\Controllers\Faces::apiResetScans', ['filter' => 'chain']);
 $routes->post('api/v1/faces/force-scan',  '\App\Controllers\Faces::apiForceScanAll', ['filter' => 'chain']);
 $routes->get('api/v1/faces/scan-job/(:num)', '\App\Controllers\Faces::apiScanJobStatus/$1', ['filter' => 'chain']);
+$routes->post('api/v1/faces/update-metadata', '\App\Controllers\Faces::apiUpdateFaceMetadata', ['filter' => 'chain']);
 $routes->post('api/v1/faces/search',      '\App\Controllers\Faces::apiSearch', ['filter' => 'chain']);
+
+// Versioned Admin Storage Config API routes (web session auth)
+$routes->post('api/v1/admin/storage/save',        '\App\Controllers\Admin::saveStorageSettings', ['filter' => 'chain']);
+$routes->post('api/v1/admin/storage/wipe-system', '\App\Controllers\Admin::wipeSystem', ['filter' => 'chain']);
+$routes->post('api/v1/admin/storage/reset-data',  '\App\Controllers\Admin::resetDataKeepUsers', ['filter' => 'chain']);
+$routes->post('api/v1/admin/storage/empty-trash', '\App\Controllers\Admin::emptyTrashAll', ['filter' => 'chain']);
 
 // API Data Endpoints (token auth for Android app)
 $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($routes) {
@@ -78,7 +85,6 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('faces/persons/merge', 'Faces::apiMergePersons');
     $routes->post('faces/assign-face', 'Faces::apiAssignFaceToPerson');
     $routes->post('faces/bulk-assign', 'Faces::apiBulkAssign');
-    $routes->post('faces/update-metadata', 'Faces::apiUpdateFaceMetadata');
     $routes->post('photos/tags/add', 'Photos::addTag');
     $routes->post('photos/tags/remove', 'Photos::removeTag');
     $routes->post('upload', 'Photos::upload');
@@ -93,6 +99,7 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('photos/delete/(:num)',  'Photos::deletePhoto/$1');
     $routes->post('photos/restore/(:num)', 'Photos::restorePhoto/$1');
     $routes->post('photos/save-edit/(:num)', 'Photos::saveEdit/$1');
+    $routes->post('photos/empty-trash', 'Photos::emptyTrash');
 
     // Sharing API
     $routes->post('photos/share/(:num)',   'Photos::sharePhoto/$1');
@@ -111,6 +118,15 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('users/search',           'Photos::searchUsers');
 
     $routes->get('settings', 'Settings::index');
+    $routes->get('settings/profile', 'Settings::profile');
+    $routes->get('settings/security', 'Settings::security');
+    $routes->get('settings/preferences', 'Settings::preferences');
+    $routes->get('settings/storage', 'Settings::storage');
+    $routes->get('settings/ml', 'Settings::ml');
+    $routes->get('settings/export', 'Settings::export');
+    $routes->get('settings/access-tokens', 'Settings::accessTokens');
+    $routes->get('settings/danger', 'Settings::danger');
+
     $routes->post('settings/profile', 'Settings::updateProfile');
     $routes->post('settings/avatar', 'Settings::updateAvatar');
     $routes->post('settings/avatar/remove', 'Settings::removeAvatar');
@@ -140,12 +156,15 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->post('users/update-role', 'Admin::updateRole');
     $routes->post('users/purge', 'Admin::purgeUserData');
     $routes->post('users/delete', 'Admin::deleteUser');
+    $routes->post('users/toggle-status', 'Admin::toggleUserStatus');
     
     // SMTP Configurations
     $routes->get('smtp', 'Admin::smtp');
     $routes->post('smtp/save', 'Admin::saveSmtp');
     $routes->post('smtp/test', 'Admin::testEmail');
     $routes->post('smtp/verify-event', 'Admin::verifyEventEmail');
+    $routes->get('sent-mails', 'Admin::sentMails');
+    $routes->get('trigger-events', 'Admin::triggerEvents');
 
     // ML Configurations & Triggers
     $routes->get('ml', 'Admin::ml');
@@ -158,11 +177,16 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');
-    $routes->post('storage/save', 'Admin::saveStorageSettings');
+
+    // Audits and Devices
+    $routes->get('audits', 'Admin::audits');
+    $routes->get('devices', 'Admin::devices');
 
     // Cron Jobs History & Configs
     $routes->get('crons', 'Admin::crons');
     $routes->post('crons/save', 'Admin::saveCronSettings');
+    $routes->post('crons/run-job', 'Admin::runCronJob');
+    $routes->post('crons/run-all', 'Admin::runAllCronJobs');
 
     // Health Diagnostics Dashboard
     $routes->get('health', 'Admin::health');
