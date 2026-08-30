@@ -37,3 +37,6 @@ writable/logs/*
 writable/debugbar/*
 !writable/debugbar/index.html
 =*
+
+# Ignore local sqlite databases
+/writable/*.db
