@@ -6,8 +6,8 @@ use CodeIgniter\Config\BaseConfig;
 
 class Email extends BaseConfig
 {
-    public string $fromEmail  = 'chegeos@chegecache.co.ke';
-    public string $fromName   = 'Photos Team';
+    public string $fromEmail  = 'chegephotos@chegecache.co.ke';
+    public string $fromName   = 'Chege Photos System';
     public string $recipients = '';
 
     /**
@@ -33,7 +33,7 @@ class Email extends BaseConfig
     /**
      * SMTP Username
      */
-    public string $SMTPUser = 'chegeos@chegecache.co.ke'; // Your Truehost email address
+    public string $SMTPUser = 'chegephotos@chegecache.co.ke'; // Your Truehost email address
 
     /**
      * SMTP Password

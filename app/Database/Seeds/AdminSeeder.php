@@ -13,7 +13,7 @@ class AdminSeeder extends BaseUserSeeder
     protected string $emailEnv        = 'ADMIN_EMAIL';
     protected string $passwordEnv     = 'ADMIN_PASSWORD';
     protected string $usernameEnv     = 'ADMIN_USERNAME';
-    protected string $emailDefault    = 'admin@eavesdroid.com';
+    protected string $emailDefault    = 'admin@chegecache.co.ke';
     protected string $passwordDefault = 'Admin@2024!';
     protected string $usernameDefault = 'admin';
 }

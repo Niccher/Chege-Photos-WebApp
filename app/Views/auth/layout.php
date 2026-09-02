@@ -3,8 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $this->renderSection('title') ?: 'Photos — Sign in' ?></title>
-    <base href="<?= base_url() ?>">
+    <title><?= $this->renderSection('title') ?: 'Chege Photos — Sign in' ?></title>
+    <meta name="description" content="Sign in or register for Chege Photos self-hosted photo management.">
+    <link rel="canonical" href="<?= current_url() ?>">
+    <meta name="theme-color" content="#4f46e5">
+    <meta property="og:site_name" content="Chege Photos">
+    <meta property="og:url" content="<?= current_url() ?>">
+    <meta property="og:title" content="<?= $this->renderSection('title') ?: 'Chege Photos — Sign in' ?>">
+    <meta property="og:description" content="Sign in or register for Chege Photos self-hosted photo management.">
+    <meta property="og:image" content="<?= base_url('app_icon.png') ?>">
     <!-- CRITICAL: apply saved theme before paint to prevent flash -->
     <script>
         (function() {
@@ -16,9 +23,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
-    <link rel="stylesheet" href="<?= base_url('css/photos.css') ?>">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= base_url('favicon-32x32.png') ?>">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?= base_url('favicon-16x16.png') ?>">
     <link rel="icon" type="image/png" href="<?= base_url('app_icon.png') ?>">
-    <link rel="apple-touch-icon" href="<?= base_url('app_icon.png') ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= base_url('apple-touch-icon.png') ?>">
     <style>
         * { font-family: 'Inter', sans-serif; }
         body {

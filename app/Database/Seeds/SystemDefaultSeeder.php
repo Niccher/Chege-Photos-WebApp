@@ -53,7 +53,7 @@ class SystemDefaultSeeder extends Seeder
             setting()->set('Email.SMTPHost', 'mail.chegecache.co.ke');
         }
         if (setting('Email.SMTPUser') === null) {
-            setting()->set('Email.SMTPUser', 'chegeos@chegecache.co.ke');
+            setting()->set('Email.SMTPUser', 'chegephotos@chegecache.co.ke');
         }
         if (setting('Email.SMTPPass') === null) {
             setting()->set('Email.SMTPPass', 'wzj1Vvk]7p9l');
@@ -65,12 +65,17 @@ class SystemDefaultSeeder extends Seeder
             setting()->set('Email.SMTPCrypto', 'ssl');
         }
         if (setting('Email.fromEmail') === null) {
-            setting()->set('Email.fromEmail', 'chegeos@chegecache.co.ke');
+            setting()->set('Email.fromEmail', 'chegephotos@chegecache.co.ke');
         }
         if (setting('Email.fromName') === null) {
-            setting()->set('Email.fromName', 'Chege Photos Administration');
+            setting()->set('Email.fromName', 'Chege Photos System');
         }
 
         echo "System default settings (ML, Crons, SMTP) successfully seeded!\n";
+
+        // ── Seed Admin & SuperAdmin Accounts ───────────────────────
+        echo "Seeding Admin and SuperAdmin accounts...\n";
+        $this->call(AdminSeeder::class);
+        $this->call(SuperAdminSeeder::class);
     }
 }

@@ -354,13 +354,13 @@ class Admin extends BaseController
             $db->query("CREATE OR REPLACE VIEW album_photos AS SELECT * FROM tbl_album_photos;");
             $db->query("CREATE OR REPLACE VIEW photo_shares AS SELECT * FROM tbl_photo_shares;");
             $db->query("CREATE OR REPLACE VIEW shared_links AS SELECT * FROM tbl_shared_links;");
-            $db->query("CREATE OR REPLACE VIEW person AS SELECT * FROM tbl_person;");
-            $db->query("CREATE OR REPLACE VIEW face_encoding AS SELECT * FROM tbl_face_encoding;");
+            $db->query("CREATE OR REPLACE VIEW person AS SELECT * FROM tbl_people;");
+            $db->query("CREATE OR REPLACE VIEW face_encoding AS SELECT * FROM tbl_face_encodings;");
             $db->query("CREATE OR REPLACE VIEW photo_tags AS SELECT * FROM tbl_photo_tags;");
-            $db->query("CREATE OR REPLACE VIEW photo_scan AS SELECT * FROM tbl_photo_scan;");
-            $db->query("CREATE OR REPLACE VIEW scan_job AS SELECT * FROM tbl_scan_job;");
-            $db->query("CREATE OR REPLACE VIEW face_cluster AS SELECT * FROM tbl_face_cluster;");
-            $db->query("CREATE OR REPLACE VIEW face_annotation AS SELECT * FROM tbl_face_annotation;");
+            $db->query("CREATE OR REPLACE VIEW photo_scan AS SELECT * FROM tbl_photo_scans;");
+            $db->query("CREATE OR REPLACE VIEW scan_job AS SELECT * FROM tbl_scan_jobs;");
+            $db->query("CREATE OR REPLACE VIEW face_cluster AS SELECT * FROM tbl_face_clusters;");
+            $db->query("CREATE OR REPLACE VIEW face_annotation AS SELECT * FROM tbl_face_annotations;");
 
             // Seed default settings and users
             $seeder = \Config\Database::seeder();
@@ -400,8 +400,8 @@ class Admin extends BaseController
                 'tbl_photos', 'tbl_albums', 'tbl_album_photos', 'tbl_photo_shares', 
                 'tbl_shared_links', 'tbl_photo_tags', 'tbl_auth_tokens', 
                 'sys_cron_logs', 'sys_email_logs', 'sys_security_logs',
-                'tbl_face_encoding', 'tbl_person', 'tbl_photo_scan', 
-                'tbl_scan_job', 'tbl_face_cluster', 'tbl_face_annotation'
+                'tbl_face_encodings', 'tbl_people', 'tbl_photo_scans', 
+                'tbl_scan_jobs', 'tbl_face_clusters', 'tbl_face_annotations'
             ];
 
             foreach ($tablesToTruncate as $table) {
@@ -1043,11 +1043,11 @@ class Admin extends BaseController
         $data = [
             'counts' => $this->getSidebarCounts(),
             'smtp' => [
-                'fromEmail'   => setting('Email.fromEmail') ?? 'chegeos@chegecache.co.ke',
-                'fromName'    => setting('Email.fromName') ?? 'Photos Team',
+                'fromEmail'   => setting('Email.fromEmail') ?? 'chegephotos@chegecache.co.ke',
+                'fromName'    => setting('Email.fromName') ?? 'Chege Photos System',
                 'protocol'    => setting('Email.protocol') ?? 'smtp',
                 'SMTPHost'    => setting('Email.SMTPHost') ?? 'mail.chegecache.co.ke',
-                'SMTPUser'    => setting('Email.SMTPUser') ?? 'chegeos@chegecache.co.ke',
+                'SMTPUser'    => setting('Email.SMTPUser') ?? 'chegephotos@chegecache.co.ke',
                 'SMTPPass'    => setting('Email.SMTPPass') ?? 'wzj1Vvk]7p9l',
                 'SMTPPort'    => setting('Email.SMTPPort') ?? 465,
                 'SMTPCrypto'  => setting('Email.SMTPCrypto') ?? 'ssl',

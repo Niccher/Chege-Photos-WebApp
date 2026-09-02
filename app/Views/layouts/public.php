@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $this->renderSection('title') ?> — Chege Photos</title>
     <meta name="description" content="<?= $this->renderSection('description') ?>">
-    <base href="<?= base_url() ?>">
+    <link rel="canonical" href="<?= current_url() ?>">
+    <meta name="theme-color" content="#4f46e5">
+    <meta property="og:site_name" content="Chege Photos">
+    <meta property="og:url" content="<?= current_url() ?>">
+    <meta property="og:title" content="<?= $this->renderSection('title') ?> — Chege Photos">
+    <meta property="og:description" content="<?= $this->renderSection('description') ?: 'Self-hosted photo management platform with ML-powered face recognition.' ?>">
+    <meta property="og:image" content="<?= base_url('app_icon.png') ?>">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="<?= $this->renderSection('title') ?> — Chege Photos">
+    <meta name="twitter:description" content="<?= $this->renderSection('description') ?: 'Self-hosted photo management platform with ML-powered face recognition.' ?>">
+    <meta name="twitter:image" content="<?= base_url('app_icon.png') ?>">
     <script>
         (function() {
             var t = localStorage.getItem('theme');
@@ -15,9 +26,10 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= base_url('favicon-32x32.png') ?>">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?= base_url('favicon-16x16.png') ?>">
     <link rel="icon" type="image/png" href="<?= base_url('app_icon.png') ?>">
-    <link rel="apple-touch-icon" href="<?= base_url('app_icon.png') ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= base_url('apple-touch-icon.png') ?>">
     <?= $this->renderSection('head') ?>
     <style>
         * { font-family: 'Inter', sans-serif; }

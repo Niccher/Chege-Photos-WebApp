@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photos</title>
-    <base href="<?= base_url() ?>">
+    <title><?= $this->renderSection('title') ?: 'Chege Photos — Photo Management' ?></title>
+    <meta name="description" content="Manage, search, organize, and view your photo library with AI face recognition.">
+    <link rel="canonical" href="<?= current_url() ?>">
+    <meta name="theme-color" content="#4f46e5">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Google Fonts -->
@@ -20,8 +22,10 @@
     <!-- Custom Style -->
     <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
     <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="<?= base_url('favicon-32x32.png') ?>">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?= base_url('favicon-16x16.png') ?>">
     <link rel="icon" type="image/png" href="<?= base_url('app_icon.png') ?>">
-    <link rel="apple-touch-icon" href="<?= base_url('app_icon.png') ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= base_url('apple-touch-icon.png') ?>">
     <script>
         const BASE_URL = '<?= base_url() ?>';
     </script>

@@ -13,7 +13,7 @@ class SuperAdminSeeder extends BaseUserSeeder
     protected string $emailEnv        = 'SUPERADMIN_EMAIL';
     protected string $passwordEnv     = 'SUPERADMIN_PASSWORD';
     protected string $usernameEnv     = 'SUPERADMIN_USERNAME';
-    protected string $emailDefault    = 'superadmin@eavesdroid.com';
+    protected string $emailDefault    = 'superadmin@chegecache.co.ke';
     protected string $passwordDefault = 'SuperAdmin@2024!';
     protected string $usernameDefault = 'superadmin';
 }
