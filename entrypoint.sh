@@ -31,7 +31,7 @@ echo "MySQL is ready!"
 echo "Running database migrations..."
 echo "DEBUG - MYSQLHOST is: '${MYSQLHOST}'"
 cd /var/www/html
-CI_ENVIRONMENT=development php spark migrate || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
+CI_ENVIRONMENT=development php spark migrate --all || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
 CI_ENVIRONMENT=development php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
 
 # Fix permissions again after CLI commands (which run as root) might have created new files
