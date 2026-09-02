@@ -16,9 +16,16 @@ function showToast(message, type = 'dark') {
 }
 
 $(document).ready(function () {
-    // --- Immediate Theme Initialization ---
+    // --- Immediate Theme Initialization & Event Delegation ---
     const savedTheme = localStorage.getItem('theme') || 'auto';
     setAppTheme(savedTheme);
+
+    $(document).on('click', '.theme-opt', function(e) {
+        e.preventDefault();
+        const newTheme = $(this).data('theme');
+        setAppTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+    });
 
     const $loading = $('#loadingOverlay');
 
@@ -1139,20 +1146,6 @@ $(document).ready(function () {
         });
     }
 
-    // --- Theme Selector Logic ---
-    const $themeOpts = $('.theme-opt');
-    
-    // Check for saved theme or default to auto
-    const savedTheme = localStorage.getItem('theme') || 'auto';
-    setAppTheme(savedTheme);
-
-    $themeOpts.on('click', function(e) {
-        e.preventDefault();
-        const newTheme = $(this).data('theme');
-        setAppTheme(newTheme);
-        localStorage.setItem('theme', newTheme);
-    });
-
     function setAppTheme(theme) {
         if (theme === 'auto') {
             document.documentElement.removeAttribute('data-theme');
@@ -1167,7 +1160,7 @@ $(document).ready(function () {
         }
         
         // Update active state in dropdown
-        $themeOpts.removeClass('active');
+        $('.theme-opt').removeClass('active');
         $(`.theme-opt[data-theme="${theme}"]`).addClass('active');
         
         // Update main palette icon color if needed
