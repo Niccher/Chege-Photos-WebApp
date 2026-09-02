@@ -4,7 +4,7 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class CreatePersonTable extends Migration
+class CreateFaceClustersTable extends Migration
 {
     public function up(): void
     {
@@ -15,18 +15,22 @@ class CreatePersonTable extends Migration
                 'unsigned'       => true,
                 'auto_increment' => true,
             ],
-            'name' => [
-                'type'       => 'VARCHAR',
-                'constraint' => 255,
-                'null'       => true,
-            ],
-            'thumbnail_face_id' => [
+            'person_id' => [
                 'type'       => 'INT',
                 'constraint' => 11,
                 'unsigned'   => true,
-                'null'       => true,
             ],
-            'cluster_label' => [
+            'centroid_point_id' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 36,
+                'null'       => true,
+                'unique'     => true,
+            ],
+            'merged_from' => [
+                'type' => 'TEXT',
+                'null' => true,
+            ],
+            'split_from' => [
                 'type'       => 'INT',
                 'constraint' => 11,
                 'null'       => true,
@@ -35,17 +39,14 @@ class CreatePersonTable extends Migration
                 'type' => 'DATETIME',
                 'null' => true,
             ],
-            'updated_at' => [
-                'type' => 'DATETIME',
-                'null' => true,
-            ],
         ]);
         $this->forge->addKey('id', true);
-        $this->forge->createTable('tbl_person', true);
+        $this->forge->addForeignKey('person_id', 'tbl_people', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->createTable('tbl_face_clusters', true);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable('tbl_person', true);
+        $this->forge->dropTable('tbl_face_clusters', true);
     }
 }

@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class FaceEncodingModel extends Model
 {
-    protected $table            = 'tbl_face_encoding';
+    protected $table            = 'tbl_face_encodings';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';

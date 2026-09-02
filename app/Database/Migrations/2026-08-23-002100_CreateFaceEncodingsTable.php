@@ -4,7 +4,7 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class CreateFaceEncodingTable extends Migration
+class CreateFaceEncodingsTable extends Migration
 {
     public function up(): void
     {
@@ -106,6 +106,11 @@ class CreateFaceEncodingTable extends Migration
                 'constraint' => 10,
                 'null'       => true,
             ],
+            'emotion' => [
+                'type'       => 'VARCHAR',
+                'constraint' => 50,
+                'null'       => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => true,
@@ -113,12 +118,12 @@ class CreateFaceEncodingTable extends Migration
         ]);
         $this->forge->addKey('id', true);
         $this->forge->addForeignKey('photo_id', 'tbl_photos', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->addForeignKey('person_id', 'tbl_person', 'id', 'SET NULL', 'CASCADE');
-        $this->forge->createTable('tbl_face_encoding', true);
+        $this->forge->addForeignKey('person_id', 'tbl_people', 'id', 'SET NULL', 'CASCADE');
+        $this->forge->createTable('tbl_face_encodings', true);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable('tbl_face_encoding', true);
+        $this->forge->dropTable('tbl_face_encodings', true);
     }
 }

@@ -7,6 +7,16 @@
     <meta name="description" content="Manage, search, organize, and view your photo library with AI face recognition.">
     <link rel="canonical" href="<?= current_url() ?>">
     <meta name="theme-color" content="#4f46e5">
+    <!-- CRITICAL: apply saved theme before paint to prevent white flash -->
+    <script>
+        (function() {
+            var t = localStorage.getItem('theme');
+            if (t && t !== 'auto') {
+                document.documentElement.setAttribute('data-theme', t);
+                if (t === 'dark' || t === 'grey') document.documentElement.setAttribute('data-bs-theme', 'dark');
+            }
+        })();
+    </script>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Google Fonts -->

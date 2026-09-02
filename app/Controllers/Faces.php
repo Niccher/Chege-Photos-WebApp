@@ -51,8 +51,8 @@ class Faces extends BaseController
 
         // Only unassigned faces that belong to the current user's photos
         $db = \Config\Database::connect();
-        $unassignedCount = (int) $db->table('face_encoding fe')
-            ->join('photos p', 'p.id = fe.photo_id')
+        $unassignedCount = (int) $db->table('tbl_face_encodings fe')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
             ->countAllResults();
@@ -85,9 +85,9 @@ class Faces extends BaseController
         unset($person);
 
         // Attach thumbnail data for unassigned faces scoped to user
-        $unassignedRows = $db->table('face_encoding fe')
+        $unassignedRows = $db->table('tbl_face_encodings fe')
             ->select('fe.*')
-            ->join('photos p', 'p.id = fe.photo_id')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
             ->orderBy('fe.id')
@@ -285,9 +285,9 @@ class Faces extends BaseController
         }
 
         $db = \Config\Database::connect();
-        $faces = $db->table('face_encoding fe')
+        $faces = $db->table('tbl_face_encodings fe')
             ->select('fe.*')
-            ->join('photos p', 'p.id = fe.photo_id')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
             ->orderBy('fe.id')

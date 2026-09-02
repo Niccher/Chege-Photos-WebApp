@@ -223,7 +223,7 @@ To enable face recognition, deploy the [ML Chege Photos](https://github.com/nicc
 | `is_favorite` | TINYINT(1) | Default 0 |
 | `deleted_at` | DATETIME (nullable) | Soft delete timestamp |
 
-### `tbl_face_encoding` — one row per detected face (shared with ML service)
+### `tbl_face_encodings` — one row per detected face (shared with ML service)
 
 See [ML Chege Photos README](https://github.com/niccher/Chege-Photos-ML#database-configuration) for schema.
 
@@ -241,17 +241,17 @@ See [ML Chege Photos README](https://github.com/niccher/Chege-Photos-ML#database
 
 | Table | Purpose |
 |---|---|
-| `tbl_person` | Auto-discovered persons via HDBSCAN clustering |
+| `tbl_people` | Auto-discovered persons via HDBSCAN clustering |
 | `tbl_albums` | Manual + smart album definitions |
 | `tbl_album_photos` | Many-to-many pivot (album ↔ photo) |
 | `tbl_photo_shares` | Photo sharing between users |
 | `tbl_shared_links` | Token-authenticated public share links |
 | `tbl_auth_tokens` | 8-char tokens for Android app authentication (with configurable token `scopes`) |
 | `sys_security_logs` | Logs system security audits and admin/auth events |
-| `tbl_photo_scan` | ML scan status per photo |
-| `tbl_scan_job` | Batch scan job progress |
-| `tbl_face_cluster` | Cluster centroid references and lineage |
-| `tbl_face_annotation` | Face classification manual corrections & lineage |
+| `tbl_photo_scans` | ML scan status per photo |
+| `tbl_scan_jobs` | Batch scan job progress |
+| `tbl_face_clusters` | Cluster centroid references and lineage |
+| `tbl_face_annotations` | Face classification manual corrections & lineage |
 | `tbl_photo_tags` | Object detection tags associated with photos |
 
 > **Note:** All tables prefixed with `tbl_` are now created and managed directly via the web app's database migrations. Local model structures in the ML service map to these shared schemas. Log tables are prefixed with `sys_`.

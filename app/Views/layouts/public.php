@@ -20,7 +20,10 @@
     <script>
         (function() {
             var t = localStorage.getItem('theme');
-            if (t && t !== 'auto') document.documentElement.setAttribute('data-theme', t);
+            if (t && t !== 'auto') {
+                document.documentElement.setAttribute('data-theme', t);
+                if (t === 'dark' || t === 'grey') document.documentElement.setAttribute('data-bs-theme', 'dark');
+            }
         })();
     </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">

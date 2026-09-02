@@ -6,42 +6,50 @@ use CodeIgniter\Database\Migration;
 
 class CreateCronLogsTable extends Migration
 {
-    public function up()
+    public function up(): void
     {
         $this->forge->addField([
             'id' => [
                 'type'           => 'INT',
+                'constraint'     => 11,
                 'unsigned'       => true,
                 'auto_increment' => true,
             ],
-            'job_name' => [
+            'command' => [
                 'type'       => 'VARCHAR',
                 'constraint' => 255,
                 'null'       => false,
             ],
             'status' => [
                 'type'       => 'VARCHAR',
-                'constraint' => 31,
+                'constraint' => 50,
                 'null'       => false,
             ],
             'output' => [
                 'type' => 'TEXT',
                 'null' => true,
             ],
-            'duration_seconds' => [
-                'type'       => 'FLOAT',
-                'default'    => 0,
+            'error_message' => [
+                'type' => 'TEXT',
+                'null' => true,
             ],
-            'run_at' => [
+            'execution_time_ms' => [
+                'type'       => 'INT',
+                'constraint' => 11,
+                'null'       => true,
+            ],
+            'created_at' => [
                 'type' => 'DATETIME',
                 'null' => false,
             ],
         ]);
         $this->forge->addKey('id', true);
+        $this->forge->addKey('command');
+        $this->forge->addKey('created_at');
         $this->forge->createTable('sys_cron_logs', true);
     }
 
-    public function down()
+    public function down(): void
     {
         $this->forge->dropTable('sys_cron_logs', true);
     }

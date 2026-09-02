@@ -6,7 +6,7 @@ use CodeIgniter\Model;
 
 class PersonModel extends Model
 {
-    protected $table            = 'tbl_person';
+    protected $table            = 'tbl_people';
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
@@ -21,9 +21,9 @@ class PersonModel extends Model
     public function getPersonsWithFaceCount(): array
     {
         $db = \Config\Database::connect();
-        return $db->table('person p')
+        return $db->table('tbl_people p')
             ->select('p.*, COUNT(fe.id) AS face_count')
-            ->join('face_encoding fe', 'fe.person_id = p.id', 'left')
+            ->join('tbl_face_encodings fe', 'fe.person_id = p.id', 'left')
             ->groupBy('p.id')
             ->orderBy('p.id')
             ->get()
@@ -33,10 +33,10 @@ class PersonModel extends Model
     public function getPersonsWithFaceCountForUser(int $userId): array
     {
         $db = \Config\Database::connect();
-        return $db->table('person p')
+        return $db->table('tbl_people p')
             ->select('p.*, COUNT(fe.id) AS face_count')
-            ->join('face_encoding fe', 'fe.person_id = p.id', 'left')
-            ->join('photos ph', 'ph.id = fe.photo_id', 'left')
+            ->join('tbl_face_encodings fe', 'fe.person_id = p.id', 'left')
+            ->join('tbl_photos ph', 'ph.id = fe.photo_id', 'left')
             ->where('ph.user_id', $userId)
             ->groupBy('p.id')
             ->having('face_count >', 0)

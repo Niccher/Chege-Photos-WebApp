@@ -4,7 +4,7 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class CreateScanJobTable extends Migration
+class CreateScanJobsTable extends Migration
 {
     public function up(): void
     {
@@ -45,11 +45,11 @@ class CreateScanJobTable extends Migration
             ],
         ]);
         $this->forge->addKey('id', true);
-        $this->forge->createTable('tbl_scan_job', true);
+        $this->forge->createTable('tbl_scan_jobs', true);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable('tbl_scan_job', true);
+        $this->forge->dropTable('tbl_scan_jobs', true);
     }
 }

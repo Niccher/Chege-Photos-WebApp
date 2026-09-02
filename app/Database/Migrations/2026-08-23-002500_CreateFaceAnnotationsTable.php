@@ -4,7 +4,7 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class CreateFaceAnnotationTable extends Migration
+class CreateFaceAnnotationsTable extends Migration
 {
     public function up(): void
     {
@@ -35,13 +35,13 @@ class CreateFaceAnnotationTable extends Migration
             ],
         ]);
         $this->forge->addKey('id', true);
-        $this->forge->addForeignKey('face_encoding_id', 'tbl_face_encoding', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->addForeignKey('person_id', 'tbl_person', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('tbl_face_annotation', true);
+        $this->forge->addForeignKey('face_encoding_id', 'tbl_face_encodings', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('person_id', 'tbl_people', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->createTable('tbl_face_annotations', true);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable('tbl_face_annotation', true);
+        $this->forge->dropTable('tbl_face_annotations', true);
     }
 }

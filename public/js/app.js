@@ -16,6 +16,10 @@ function showToast(message, type = 'dark') {
 }
 
 $(document).ready(function () {
+    // --- Immediate Theme Initialization ---
+    const savedTheme = localStorage.getItem('theme') || 'auto';
+    setAppTheme(savedTheme);
+
     const $loading = $('#loadingOverlay');
 
     // Sidebar Toggle
@@ -24,7 +28,7 @@ $(document).ready(function () {
     });
 
     // Lightbox Logic
-    const $lightboxModal = new bootstrap.Modal('#lightboxModal');
+    const $lightboxModal = document.getElementById('lightboxModal') ? new bootstrap.Modal('#lightboxModal') : null;
     const $lightboxImageContainer = $('#lightboxImageContainer');
     let currentPhotoId = null;
     let isSelectMode = false;
@@ -530,10 +534,10 @@ $(document).ready(function () {
     });
 
     // Albums Logic
-    const $addToAlbumModal = new bootstrap.Modal('#addToAlbumModal');
+    const $addToAlbumModal = document.getElementById('addToAlbumModal') ? new bootstrap.Modal('#addToAlbumModal') : null;
 
     $('#btnAddToAlbum').on('click', function () {
-        if (!currentPhotoId) return;
+        if (!currentPhotoId || !$addToAlbumModal) return;
         $addToAlbumModal.show();
 
         const $container = $('#albumListContainer');
@@ -603,14 +607,14 @@ $(document).ready(function () {
     // --- Photo Editor Logic ---
     let editorCanvas = null;
     let originalImage = null;
-    const $editorModal = new bootstrap.Modal('#editorModal');
+    const $editorModal = document.getElementById('editorModal') ? new bootstrap.Modal('#editorModal') : null;
 
     $('#btnEditPhoto').on('click', function () {
-        if (!currentPhotoId) return;
+        if (!currentPhotoId || !$editorModal) return;
         const $item = $(`[data-id="${currentPhotoId}"]`);
         const fullUrl = $item.data('full');
         
-        $lightboxModal.hide();
+        if ($lightboxModal) $lightboxModal.hide();
         $editorModal.show();
         
         initEditor(fullUrl);
@@ -1152,8 +1156,14 @@ $(document).ready(function () {
     function setAppTheme(theme) {
         if (theme === 'auto') {
             document.documentElement.removeAttribute('data-theme');
+            document.documentElement.removeAttribute('data-bs-theme');
         } else {
             document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'dark' || theme === 'grey') {
+                document.documentElement.setAttribute('data-bs-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-bs-theme', 'light');
+            }
         }
         
         // Update active state in dropdown

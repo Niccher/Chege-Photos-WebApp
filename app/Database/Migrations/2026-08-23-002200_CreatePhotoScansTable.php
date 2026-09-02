@@ -4,7 +4,7 @@ namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
-class CreatePhotoScanTable extends Migration
+class CreatePhotoScansTable extends Migration
 {
     public function up(): void
     {
@@ -49,11 +49,11 @@ class CreatePhotoScanTable extends Migration
         ]);
         $this->forge->addKey('id', true);
         $this->forge->addForeignKey('photo_id', 'tbl_photos', 'id', 'CASCADE', 'CASCADE');
-        $this->forge->createTable('tbl_photo_scan', true);
+        $this->forge->createTable('tbl_photo_scans', true);
     }
 
     public function down(): void
     {
-        $this->forge->dropTable('tbl_photo_scan', true);
+        $this->forge->dropTable('tbl_photo_scans', true);
     }
 }
