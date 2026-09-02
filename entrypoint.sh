@@ -20,8 +20,8 @@ echo "MySQL is ready!"
 # Run migrations (safe to run multiple times — only applies pending migrations)
 echo "Running database migrations..."
 cd /var/www/html
-php spark migrate || exit 1
-php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
+CI_ENVIRONMENT=development php spark migrate -n || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
+CI_ENVIRONMENT=development php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
 
 # Setup container cron jobs
 echo "Configuring container cron schedules..."
