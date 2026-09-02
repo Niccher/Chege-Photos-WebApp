@@ -14,9 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) intl mysqli pdo_mysql zip gd exif
 
-# Enable Apache modules and ensure only mpm_prefork is active
-RUN rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_worker.load \
-    && a2enmod mpm_prefork rewrite headers
+# Enable Apache rewrite module
+RUN a2enmod rewrite headers
 
 # PHP upload & memory limits (PHP_INI_PERDIR — must be set in an ini file, not at runtime)
 RUN { \
