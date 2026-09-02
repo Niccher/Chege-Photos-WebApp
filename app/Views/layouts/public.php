@@ -17,18 +17,51 @@
     <meta name="twitter:title" content="<?= $this->renderSection('title') ?> — Chege Photos">
     <meta name="twitter:description" content="<?= $this->renderSection('description') ?: 'Self-hosted photo management platform with ML-powered face recognition.' ?>">
     <meta name="twitter:image" content="<?= base_url('app_icon.png') ?>">
+    <!-- Bulletproof Zero-Dependency Theme Engine -->
     <script>
-        (function() {
-            var t = localStorage.getItem('theme');
-            if (t && t !== 'auto') {
-                document.documentElement.setAttribute('data-theme', t);
-                if (t === 'dark' || t === 'grey') document.documentElement.setAttribute('data-bs-theme', 'dark');
+        window.setAppTheme = function(theme) {
+            var root = document.documentElement;
+            var t = theme || 'auto';
+            try {
+                localStorage.setItem('theme', t);
+            } catch(e) {}
+            
+            if (t === 'auto') {
+                root.removeAttribute('data-theme');
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                root.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+            } else {
+                root.setAttribute('data-theme', t);
+                if (t === 'dark' || t === 'grey') {
+                    root.setAttribute('data-bs-theme', 'dark');
+                } else {
+                    root.setAttribute('data-bs-theme', 'light');
+                }
             }
+            
+            var opts = document.querySelectorAll('.theme-opt');
+            for (var i = 0; i < opts.length; i++) {
+                if (opts[i].getAttribute('data-theme') === t) {
+                    opts[i].classList.add('active');
+                } else {
+                    opts[i].classList.remove('active');
+                }
+            }
+        };
+
+        (function() {
+            var saved = 'auto';
+            try {
+                saved = localStorage.getItem('theme') || 'auto';
+            } catch(e) {}
+            window.setAppTheme(saved);
         })();
     </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="<?= base_url('css/style.css?v=' . (file_exists(FCPATH . 'css/style.css') ? filemtime(FCPATH . 'css/style.css') : '1.0')) ?>">
+    <link rel="stylesheet" href="<?= base_url('css/photos.css?v=' . (file_exists(FCPATH . 'css/photos.css') ? filemtime(FCPATH . 'css/photos.css') : '1.0')) ?>">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= base_url('favicon-32x32.png') ?>">
     <link rel="icon" type="image/png" sizes="16x16" href="<?= base_url('favicon-16x16.png') ?>">
     <link rel="icon" type="image/png" href="<?= base_url('app_icon.png') ?>">
@@ -298,12 +331,12 @@
                 <i class="bi bi-palette"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end glass-effect shadow border-0 p-2" style="min-width: 150px;">
-                <li><a class="dropdown-item rounded-3 mb-1 theme-opt active" href="#" data-theme="auto"><i class="bi bi-display me-2"></i>Auto (OS)</a></li>
+                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('auto'); return false;" data-theme="auto"><i class="bi bi-display me-2"></i>Auto (OS)</a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="light"><i class="bi bi-sun me-2"></i>Light</a></li>
-                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="dark"><i class="bi bi-moon-stars me-2"></i>Dark</a></li>
-                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="solarized"><i class="bi bi-brightness-high me-2"></i>Solarized</a></li>
-                <li><a class="dropdown-item rounded-3 theme-opt" href="#" data-theme="grey"><i class="bi bi-circle-half me-2"></i>Grey</a></li>
+                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('light'); return false;" data-theme="light"><i class="bi bi-sun me-2"></i>Light</a></li>
+                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('dark'); return false;" data-theme="dark"><i class="bi bi-moon-stars me-2"></i>Dark</a></li>
+                <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('solarized'); return false;" data-theme="solarized"><i class="bi bi-brightness-high me-2"></i>Solarized</a></li>
+                <li><a class="dropdown-item rounded-3 theme-opt" href="javascript:void(0)" onclick="setAppTheme('grey'); return false;" data-theme="grey"><i class="bi bi-circle-half me-2"></i>Grey</a></li>
             </ul>
         </div>
         <a href="<?= url_to('login') ?>" class="btn-outline-pub btn-sm px-3 py-1">Sign In</a>
@@ -374,17 +407,9 @@
 <script>
 $(function() {
     const saved = localStorage.getItem('theme') || 'auto';
-    $('.theme-opt').removeClass('active');
-    $(`.theme-opt[data-theme="${saved}"]`).addClass('active');
-    $('.theme-opt').on('click', function(e) {
-        e.preventDefault();
-        const t = $(this).data('theme');
-        if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-        else document.documentElement.setAttribute('data-theme', t);
-        localStorage.setItem('theme', t);
-        $('.theme-opt').removeClass('active');
-        $(this).addClass('active');
-    });
+    if (typeof window.setAppTheme === 'function') {
+        window.setAppTheme(saved);
+    }
 });
 </script>
 <?= $this->renderSection('scripts') ?>

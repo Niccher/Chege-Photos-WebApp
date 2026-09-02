@@ -18,13 +18,16 @@ function showToast(message, type = 'dark') {
 $(document).ready(function () {
     // --- Immediate Theme Initialization & Event Delegation ---
     const savedTheme = localStorage.getItem('theme') || 'auto';
-    setAppTheme(savedTheme);
+    if (typeof window.setAppTheme === 'function') {
+        window.setAppTheme(savedTheme);
+    }
 
     $(document).on('click', '.theme-opt', function(e) {
         e.preventDefault();
         const newTheme = $(this).data('theme');
-        setAppTheme(newTheme);
-        localStorage.setItem('theme', newTheme);
+        if (typeof window.setAppTheme === 'function') {
+            window.setAppTheme(newTheme);
+        }
     });
 
     const $loading = $('#loadingOverlay');
@@ -1147,27 +1150,8 @@ $(document).ready(function () {
     }
 
     function setAppTheme(theme) {
-        if (theme === 'auto') {
-            document.documentElement.removeAttribute('data-theme');
-            document.documentElement.removeAttribute('data-bs-theme');
-        } else {
-            document.documentElement.setAttribute('data-theme', theme);
-            if (theme === 'dark' || theme === 'grey') {
-                document.documentElement.setAttribute('data-bs-theme', 'dark');
-            } else {
-                document.documentElement.setAttribute('data-bs-theme', 'light');
-            }
-        }
-        
-        // Update active state in dropdown
-        $('.theme-opt').removeClass('active');
-        $(`.theme-opt[data-theme="${theme}"]`).addClass('active');
-        
-        // Update main palette icon color if needed
-        if (theme === 'solarized') {
-            $('#btnThemeDropdown i').css('color', '#b58900');
-        } else {
-            $('#btnThemeDropdown i').css('color', '');
+        if (typeof window.setAppTheme === 'function') {
+            window.setAppTheme(theme);
         }
     }
 });

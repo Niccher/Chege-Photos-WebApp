@@ -102,34 +102,34 @@ if (isset($album) && ! empty($album['is_smart'])) {
 <?php if ($smartRulesEdit !== null): ?>
 <div class="modal fade" id="editSmartAlbumModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content bg-dark text-white border-0 shadow-lg">
-            <div class="modal-header border-secondary">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header" style="border-color: var(--border-color) !important;">
                 <h5 class="modal-title fw-bold">Edit smart album</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <form id="formEditSmartAlbum" data-album-id="<?= (int) $album['id'] ?>">
                     <div class="mb-3">
-                        <label class="form-label small text-uppercase fw-bold">Name</label>
-                        <input type="text" name="name" class="form-control bg-black border-secondary text-white" value="<?= esc($album['name']) ?>" required>
+                        <label class="form-label small text-muted text-uppercase fw-bold">Name</label>
+                        <input type="text" name="name" class="form-control" value="<?= esc($album['name']) ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small text-uppercase fw-bold">Description (optional)</label>
-                        <textarea name="description" class="form-control bg-black border-secondary text-white" rows="2"><?= esc($album['description'] ?? '') ?></textarea>
+                        <label class="form-label small text-muted text-uppercase fw-bold">Description (optional)</label>
+                        <textarea name="description" class="form-control" rows="2"><?= esc($album['description'] ?? '') ?></textarea>
                     </div>
-                    <p class="small text-white-50 mb-3">Photos must match <strong>all</strong> of the rules you enable below (dates, camera text, GPS, favorites, and type combine with AND).</p>
+                    <p class="small text-muted mb-3">Photos must match <strong>all</strong> of the rules you enable below (dates, camera text, GPS, favorites, and type combine with AND).</p>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small">Taken on or after</label>
-                            <input type="date" name="date_from" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['date_from'] ?? '') ?>">
+                            <input type="date" name="date_from" class="form-control" value="<?= esc($smartRulesEdit['date_from'] ?? '') ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small">Taken on or before</label>
-                            <input type="date" name="date_to" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['date_to'] ?? '') ?>">
+                            <input type="date" name="date_to" class="form-control" value="<?= esc($smartRulesEdit['date_to'] ?? '') ?>">
                         </div>
                         <div class="col-12">
                             <label class="form-label small">Camera (matches EXIF text, e.g. Canon or iPhone)</label>
-                            <input type="text" name="camera_contains" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['camera_contains'] ?? '') ?>" placeholder="Leave empty to ignore">
+                            <input type="text" name="camera_contains" class="form-control" value="<?= esc($smartRulesEdit['camera_contains'] ?? '') ?>" placeholder="Leave empty to ignore">
                         </div>
                         <div class="col-md-6">
                             <div class="form-check">
@@ -148,23 +148,23 @@ if (isset($album) && ! empty($album['is_smart'])) {
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">Min latitude</label>
-                            <input type="number" name="min_latitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['min_latitude'] ?? '') ?>" placeholder="-90 to 90">
+                            <input type="number" name="min_latitude" step="any" class="form-control" value="<?= esc($smartRulesEdit['min_latitude'] ?? '') ?>" placeholder="-90 to 90">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">Max latitude</label>
-                            <input type="number" name="max_latitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['max_latitude'] ?? '') ?>" placeholder="-90 to 90">
+                            <input type="number" name="max_latitude" step="any" class="form-control" value="<?= esc($smartRulesEdit['max_latitude'] ?? '') ?>" placeholder="-90 to 90">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">Min longitude</label>
-                            <input type="number" name="min_longitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['min_longitude'] ?? '') ?>" placeholder="-180 to 180">
+                            <input type="number" name="min_longitude" step="any" class="form-control" value="<?= esc($smartRulesEdit['min_longitude'] ?? '') ?>" placeholder="-180 to 180">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small">Max longitude</label>
-                            <input type="number" name="max_longitude" step="any" class="form-control bg-black border-secondary text-white" value="<?= esc($smartRulesEdit['max_longitude'] ?? '') ?>" placeholder="-180 to 180">
+                            <input type="number" name="max_longitude" step="any" class="form-control" value="<?= esc($smartRulesEdit['max_longitude'] ?? '') ?>" placeholder="-180 to 180">
                         </div>
                         <div class="col-12">
                             <label class="form-label small">Media type</label>
-                            <select name="mime_kind" class="form-select bg-black border-secondary text-white">
+                            <select name="mime_kind" class="form-select">
                                 <?php $mk = $smartRulesEdit['mime_kind'] ?? SmartAlbumRules::MIME_ANY; ?>
                                 <option value="<?= esc(SmartAlbumRules::MIME_ANY) ?>" <?= $mk === SmartAlbumRules::MIME_ANY ? 'selected' : '' ?>>Photos and videos</option>
                                 <option value="<?= esc(SmartAlbumRules::MIME_IMAGE) ?>" <?= $mk === SmartAlbumRules::MIME_IMAGE ? 'selected' : '' ?>>Photos only</option>

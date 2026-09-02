@@ -70,7 +70,7 @@
     <!-- Token list -->
     <div class="table-responsive mb-5">
         <table class="table table-hover align-middle mb-0" id="tokensTable">
-            <thead class="table-light">
+            <thead class="table-theme-header">
                 <tr>
                     <th>Pairing Token</th>
                     <th>Description</th>
@@ -90,7 +90,7 @@
     <h5 class="mt-4 mb-3"><i class="bi bi-phone me-2"></i>Active Authenticated Devices</h5>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="devicesTable">
-            <thead class="table-light">
+            <thead class="table-theme-header">
                 <tr>
                     <th>Device / Client</th>
                     <th>Scopes / Permissions</th>

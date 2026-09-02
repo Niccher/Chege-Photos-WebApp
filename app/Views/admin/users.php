@@ -14,7 +14,7 @@
             <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" style="color: var(--text-primary);">
-                        <thead class="table-light">
+                        <thead class="table-theme-header">
                             <tr style="border-bottom: 2px solid var(--border-color);">
                                 <th class="py-3 px-4">Username</th>
                                 <th class="py-3">Email</th>

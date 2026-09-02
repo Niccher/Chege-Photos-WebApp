@@ -7,13 +7,60 @@
     <meta name="description" content="Manage, search, organize, and view your photo library with AI face recognition.">
     <link rel="canonical" href="<?= current_url() ?>">
     <meta name="theme-color" content="#4f46e5">
-    <!-- CRITICAL: apply saved theme before paint to prevent white flash -->
+    <!-- Bulletproof Zero-Dependency Theme Engine -->
     <script>
+        window.setAppTheme = function(theme) {
+            var root = document.documentElement;
+            var t = theme || 'auto';
+            try {
+                localStorage.setItem('theme', t);
+            } catch(e) {}
+            
+            if (t === 'auto') {
+                root.removeAttribute('data-theme');
+                var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                root.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+            } else {
+                root.setAttribute('data-theme', t);
+                if (t === 'dark' || t === 'grey') {
+                    root.setAttribute('data-bs-theme', 'dark');
+                } else {
+                    root.setAttribute('data-bs-theme', 'light');
+                }
+            }
+            
+            // Sync active checkmarks / states in dropdown
+            var opts = document.querySelectorAll('.theme-opt');
+            for (var i = 0; i < opts.length; i++) {
+                if (opts[i].getAttribute('data-theme') === t) {
+                    opts[i].classList.add('active');
+                } else {
+                    opts[i].classList.remove('active');
+                }
+            }
+            
+            var icon = document.querySelector('#btnThemeDropdown i');
+            if (icon) {
+                icon.style.color = (t === 'solarized') ? '#cb4b16' : '';
+            }
+        };
+
+        // Immediately execute before paint to prevent any flicker
         (function() {
-            var t = localStorage.getItem('theme');
-            if (t && t !== 'auto') {
-                document.documentElement.setAttribute('data-theme', t);
-                if (t === 'dark' || t === 'grey') document.documentElement.setAttribute('data-bs-theme', 'dark');
+            var saved = 'auto';
+            try {
+                saved = localStorage.getItem('theme') || 'auto';
+            } catch(e) {}
+            window.setAppTheme(saved);
+            
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+                    try {
+                        if ((localStorage.getItem('theme') || 'auto') === 'auto') {
+                            window.setAppTheme('auto');
+                        }
+                    } catch(e) {}
+                });
             }
         })();
     </script>
@@ -30,7 +77,7 @@
     <!-- Dropzone CSS -->
     <link rel="stylesheet" href="https://unpkg.com/dropzone@5/dist/min/dropzone.min.css" type="text/css" />
     <!-- Custom Style -->
-    <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('css/style.css?v=' . (file_exists(FCPATH . 'css/style.css') ? filemtime(FCPATH . 'css/style.css') : '1.0')) ?>">
     <!-- Favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="<?= base_url('favicon-32x32.png') ?>">
     <link rel="icon" type="image/png" sizes="16x16" href="<?= base_url('favicon-16x16.png') ?>">
@@ -39,7 +86,7 @@
     <script>
         const BASE_URL = '<?= base_url() ?>';
     </script>
-    <link rel="stylesheet" href="<?= base_url('css/photos.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('css/photos.css?v=' . (file_exists(FCPATH . 'css/photos.css') ? filemtime(FCPATH . 'css/photos.css') : '1.0')) ?>">
 </head>
 <body>
 
@@ -78,12 +125,12 @@
                     <i class="bi bi-palette fs-5"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end glass-effect shadow border-0 p-2" style="min-width: 150px;">
-                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt active" href="#" data-theme="auto"><i class="bi bi-display me-2"></i>Auto (OS)</a></li>
+                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('auto'); return false;" data-theme="auto"><i class="bi bi-display me-2"></i>Auto (OS)</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="light"><i class="bi bi-sun me-2"></i>Light</a></li>
-                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="dark"><i class="bi bi-moon-stars me-2"></i>Dark</a></li>
-                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="#" data-theme="solarized"><i class="bi bi-brightness-high me-2"></i>Solarized</a></li>
-                    <li><a class="dropdown-item rounded-3 theme-opt" href="#" data-theme="grey"><i class="bi bi-circle-half me-2"></i>Grey</a></li>
+                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('light'); return false;" data-theme="light"><i class="bi bi-sun me-2"></i>Light</a></li>
+                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('dark'); return false;" data-theme="dark"><i class="bi bi-moon-stars me-2"></i>Dark</a></li>
+                    <li><a class="dropdown-item rounded-3 mb-1 theme-opt" href="javascript:void(0)" onclick="setAppTheme('solarized'); return false;" data-theme="solarized"><i class="bi bi-brightness-high me-2"></i>Solarized</a></li>
+                    <li><a class="dropdown-item rounded-3 theme-opt" href="javascript:void(0)" onclick="setAppTheme('grey'); return false;" data-theme="grey"><i class="bi bi-circle-half me-2"></i>Grey</a></li>
                 </ul>
             </div>
             <?php if ($isAdminRoute): ?>
@@ -674,10 +721,10 @@
 <!-- Add to Album Modal -->
 <div class="modal fade" id="addToAlbumModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content bg-dark text-white border-0 shadow-lg">
+        <div class="modal-content border-0 shadow-lg">
             <div class="modal-header border-0 pb-0">
                 <h6 class="modal-title fw-bold">Add to Album</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="albumListContainer" class="list-group list-group-flush bg-transparent">
@@ -700,7 +747,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <form action="<?= base_url('upload') ?>" class="dropzone border-primary border-dashed rounded-3" id="photoDropzone" style="background: #f8f9fa;">
+                <form action="<?= base_url('upload') ?>" class="dropzone border-primary border-dashed rounded-3" id="photoDropzone" style="background: var(--input-bg); border-color: var(--border-color); color: var(--text-primary);">
                     <div class="dz-message needsclick">
                         <i class="bi bi-cloud-arrow-up display-4 text-primary mb-3"></i><br>
                         <h4>Drop photos here or click to upload.</h4>
@@ -791,9 +838,9 @@
 <?php if ($isAdminRoute): ?>
 <div class="modal fade" id="mlJobsModal" tabindex="-1" style="z-index: 1060;">
     <div class="modal-dialog modal-dialog-centered modal-md" style="max-width: 450px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; background: #ffffff; color: #212529; border: 1px solid rgba(0,0,0,0.1);">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
             <div class="modal-header border-0 pb-0 px-4 pt-4">
-                <h6 class="modal-title fw-bold d-flex align-items-center gap-2 text-dark" style="font-size: 1.05rem;">
+                <h6 class="modal-title fw-bold d-flex align-items-center gap-2" style="font-size: 1.05rem; color: var(--text-primary);">
                     <i class="bi bi-cpu text-primary"></i>
                     <span>ML Pipeline Status</span>
                 </h6>
@@ -803,14 +850,14 @@
                 <!-- Faces progress -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small fw-semibold text-dark"><i class="bi bi-person-bounding-box text-primary me-2"></i>Face Recognition</span>
+                        <span class="small fw-semibold" style="color: var(--text-primary);"><i class="bi bi-person-bounding-box text-primary me-2"></i>Face Recognition</span>
                         <span class="badge bg-secondary" id="statusBadgeFaces" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
-                        <span id="navScannedFaces" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                        <span id="navScannedFaces" class="fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">- / -</span>
                     </div>
-                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                    <div class="progress" style="height: 6px; background: rgba(128,128,128,0.15);">
                         <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated" id="barNavScannedFaces" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
                     </div>
                 </div>
@@ -818,14 +865,14 @@
                 <!-- Tags progress -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small fw-semibold text-dark"><i class="bi bi-tags text-success me-2"></i>YOLOv8 Object Tags</span>
+                        <span class="small fw-semibold" style="color: var(--text-primary);"><i class="bi bi-tags text-success me-2"></i>YOLOv8 Object Tags</span>
                         <span class="badge bg-secondary" id="statusBadgeTags" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
-                        <span id="navScannedTags" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                        <span id="navScannedTags" class="fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">- / -</span>
                     </div>
-                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                    <div class="progress" style="height: 6px; background: rgba(128,128,128,0.15);">
                         <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" id="barNavScannedTags" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
                     </div>
                 </div>
@@ -833,31 +880,31 @@
                 <!-- CLIP progress -->
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="small fw-semibold text-dark"><i class="bi bi-lightning-charge text-info me-2"></i>CLIP Semantic Search</span>
+                        <span class="small fw-semibold" style="color: var(--text-primary);"><i class="bi bi-lightning-charge text-info me-2"></i>CLIP Semantic Search</span>
                         <span class="badge bg-secondary" id="statusBadgeClips" style="font-size: 0.65rem; padding: 0.25em 0.5em;">Idle</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="text-muted" style="font-size: 0.78rem;">Scanned Files</span>
-                        <span id="navScannedClips" class="fw-bold text-dark" style="font-size: 0.85rem;">- / -</span>
+                        <span id="navScannedClips" class="fw-bold" style="font-size: 0.85rem; color: var(--text-primary);">- / -</span>
                     </div>
-                    <div class="progress" style="height: 6px; background: rgba(0,0,0,0.08);">
+                    <div class="progress" style="height: 6px; background: rgba(128,128,128,0.15);">
                         <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" id="barNavScannedClips" role="progressbar" style="width: 0%; transition: width 0.4s ease;"></div>
                     </div>
                 </div>
 
                 <!-- Metrics / Speed Stats Card -->
-                <div class="p-3 rounded-3" style="background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.06);" id="mlJobStatsCard">
+                <div class="p-3 rounded-3" style="background: var(--input-bg); border: 1px solid var(--border-color);" id="mlJobStatsCard">
                     <div class="d-flex justify-content-between mb-1" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-activity me-2"></i>Status:</span>
-                        <span class="fw-semibold text-dark" id="mlJobsStatusText">Idle (Waiting)</span>
+                        <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsStatusText">Idle (Waiting)</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsStartRow" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-clock me-2"></i>Started At:</span>
-                        <span class="fw-semibold text-dark" id="mlJobsStartedAt">-</span>
+                        <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsStartedAt">-</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsSpeedRow" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-speedometer2 me-2"></i>Processing Speed:</span>
-                        <span class="fw-semibold text-dark" id="mlJobsSpeed">-</span>
+                        <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsSpeed">-</span>
                     </div>
                     <div class="d-flex justify-content-between d-none" id="mlJobsEtaRow" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-hourglass-split me-2"></i>Est. Time Left:</span>
@@ -895,7 +942,7 @@
     Dropzone.autoDiscover = false;
 </script>
 <!-- Custom JS -->
-<script src="<?= base_url('js/app.js') ?>"></script>
+<script src="<?= base_url('js/app.js?v=' . (file_exists(FCPATH . 'js/app.js') ? filemtime(FCPATH . 'js/app.js') : '1.0')) ?>"></script>
 <?php if ($isAdminRoute): ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -959,7 +1006,7 @@
 
                     // Track & calculate speed and ETA metrics
                     if (anyActive) {
-                        $('#mlJobsStatusText').text('Processing sequential pipeline...').removeClass('text-white-50').addClass('text-primary fw-bold');
+                        $('#mlJobsStatusText').text('Processing sequential pipeline...').removeClass('text-white-50 text-muted').addClass('text-primary fw-bold');
                         
                         var now = Date.now();
                         var startTime = sessionStorage.getItem('ml_jobs_start_time');
@@ -1005,7 +1052,7 @@
                         }
                     } else {
                         // Reset all to Idle
-                        $('#mlJobsStatusText').text('Idle (Waiting)').removeClass('text-primary fw-bold').addClass('text-white-50');
+                        $('#mlJobsStatusText').text('Idle (Waiting)').removeClass('text-primary fw-bold text-white-50').addClass('text-muted');
                         $('#mlJobsStartRow, #mlJobsSpeedRow, #mlJobsEtaRow').addClass('d-none');
                         sessionStorage.removeItem('ml_jobs_start_time');
                         sessionStorage.removeItem('ml_jobs_init_faces');
