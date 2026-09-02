@@ -193,13 +193,15 @@ class Database extends Config
     public function __construct()
     {
         parent::__construct();
-        $this->default['hostname'] = env('database.default.hostname', $this->default['hostname'] ?? 'localhost');
-        $this->default['username'] = env('database.default.username', $this->default['username'] ?? '');
-        $this->default['password'] = env('database.default.password', $this->default['password'] ?? '');
-        $this->default['database'] = env('database.default.database', $this->default['database'] ?? '');
-        $this->default['DBDriver'] = env('database.default.DBDriver', $this->default['DBDriver'] ?? 'MySQLi');
-        if (isset($this->default['port'])) {
-            $this->default['port'] = (int) env('database.default.port', $this->default['port']);
+        $this->default['hostname'] = env('database.default.hostname') ?: (env('MYSQLHOST') ?: ($this->default['hostname'] ?? 'localhost'));
+        $this->default['username'] = env('database.default.username') ?: (env('MYSQLUSER') ?: ($this->default['username'] ?? ''));
+        $this->default['password'] = env('database.default.password') ?: (env('MYSQLPASSWORD') ?: ($this->default['password'] ?? ''));
+        $this->default['database'] = env('database.default.database') ?: (env('MYSQLDATABASE') ?: ($this->default['database'] ?? ''));
+        $this->default['DBDriver'] = env('database.default.DBDriver') ?: ($this->default['DBDriver'] ?? 'MySQLi');
+        
+        $port = env('database.default.port') ?: env('MYSQLPORT');
+        if ($port) {
+            $this->default['port'] = (int) $port;
         }
         if (isset($this->default['socket'])) {
             $this->default['socket'] = env('database.default.socket', '');
