@@ -90,7 +90,7 @@
                     <li>The app auto-detects private IP ranges and switches HTTP/HTTPS accordingly</li>
                     <li>Log in with your credentials or scan a token QR code</li>
                 </ol>
-                <p style="font-size:0.85rem;color:var(--text-muted);">Default server URL: <code>https://photos.chegecache.co.ke/</code></p>
+                <p style="font-size:0.85rem;color:var(--text-muted);">Default server URL: <code><?= base_url() ?></code></p>
             </div>
 
             <div class="card-pub mt-3">

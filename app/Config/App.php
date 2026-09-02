@@ -204,6 +204,12 @@ class App extends BaseConfig
     {
         parent::__construct();
         $envBaseUrl = env('app.baseURL') ?: getenv('RAILWAY_PUBLIC_DOMAIN') ?: getenv('RAILWAY_STATIC_URL');
+        
+        if (empty($envBaseUrl) && !empty($_SERVER['HTTP_HOST'])) {
+            $scheme = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $envBaseUrl = $scheme . '://' . $_SERVER['HTTP_HOST'];
+        }
+
         if (!empty($envBaseUrl)) {
             if (!str_starts_with($envBaseUrl, 'http://') && !str_starts_with($envBaseUrl, 'https://')) {
                 $envBaseUrl = 'https://' . $envBaseUrl;
