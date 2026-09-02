@@ -2,9 +2,7 @@
 FROM php:8.3-apache
 
 # ── System dependencies ────────────────────────────────────────────────────────
-RUN --mount=type=cache,id=webapp-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=webapp-apt-lib,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev \
         libzip-dev \
         libpng-dev \
@@ -40,8 +38,7 @@ WORKDIR /var/www/html
 # ── Composer dependency layer ─────────────────────────────────────────────────
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,id=webapp-composer-cache,target=/root/.composer/cache \
-    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs \
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs \
     && rm /usr/bin/composer
 
 # ── Application code ──────────────────────────────────────────────────────────
