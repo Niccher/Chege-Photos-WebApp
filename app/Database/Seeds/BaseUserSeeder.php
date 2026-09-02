@@ -61,7 +61,6 @@ abstract class BaseUserSeeder extends Seeder
 
         $user = $users->createNewUser([
             'username' => $username,
-            'name'     => ucfirst($username),
             'email'    => $email,
             'password' => $password,
             'active'   => true,
