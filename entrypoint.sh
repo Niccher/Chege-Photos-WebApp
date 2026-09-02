@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# Initialize CodeIgniter writable directories (handles cases where a volume is mounted and empty)
+echo "Ensuring writable directories exist and have correct permissions..."
+mkdir -p /var/www/html/writable/cache \
+         /var/www/html/writable/logs \
+         /var/www/html/writable/session \
+         /var/www/html/writable/debugbar \
+         /var/www/html/writable/uploads
+chmod -R 777 /var/www/html/writable
+chown -R www-data:www-data /var/www/html/writable || true
+
 # Wait for MySQL to be fully ready (beyond just ping)
 echo "Waiting for MySQL to accept connections..."
 max_retries=30
@@ -22,6 +32,10 @@ echo "Running database migrations..."
 cd /var/www/html
 CI_ENVIRONMENT=development php spark migrate -n || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
 CI_ENVIRONMENT=development php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
+
+# Fix permissions again after CLI commands (which run as root) might have created new files
+chown -R www-data:www-data /var/www/html/writable || true
+chmod -R 777 /var/www/html/writable
 
 # Setup container cron jobs
 echo "Configuring container cron schedules..."
