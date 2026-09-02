@@ -29,8 +29,9 @@ echo "MySQL is ready!"
 
 # Run migrations (safe to run multiple times — only applies pending migrations)
 echo "Running database migrations..."
+echo "DEBUG - MYSQLHOST is: '${MYSQLHOST}'"
 cd /var/www/html
-CI_ENVIRONMENT=development php spark migrate -n || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
+CI_ENVIRONMENT=development php spark migrate || { echo "FATAL ERROR: Migrations failed. See above for details."; exit 1; }
 CI_ENVIRONMENT=development php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
 
 # Fix permissions again after CLI commands (which run as root) might have created new files
@@ -50,6 +51,13 @@ crontab /etc/cron.d/photos-cron
 # Start the cron service
 echo "Starting cron service..."
 service cron start || cron || echo "WARNING: Could not start cron daemon."
+
+# Force remove conflicting MPMs just in case they were pulled in by a package update
+echo "Cleaning up conflicting Apache MPMs..."
+rm -f /etc/apache2/mods-enabled/mpm_event.load \
+      /etc/apache2/mods-enabled/mpm_event.conf \
+      /etc/apache2/mods-enabled/mpm_worker.load \
+      /etc/apache2/mods-enabled/mpm_worker.conf
 
 echo "Migrations complete. Starting Apache..."
 exec apache2-foreground

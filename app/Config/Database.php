@@ -201,16 +201,16 @@ class Database extends Config
         $this->default['DBDriver'] = env('database.default.DBDriver', $this->default['DBDriver'] ?? 'MySQLi');
 
         // 2. Direct Railway / Cloud environment variable overrides
-        if ($host = getenv('MYSQLHOST') ?: getenv('DB_HOST')) {
+        if ($host = getenv('MYSQLHOST') ?: getenv('DB_HOST') ?: 'mysql') {
             $this->default['hostname'] = $host;
         }
-        if ($user = getenv('MYSQLUSER') ?: getenv('DB_USER')) {
+        if ($user = getenv('MYSQLUSER') ?: getenv('DB_USER') ?: 'root') {
             $this->default['username'] = $user;
         }
-        if ($pass = getenv('MYSQLPASSWORD') ?: getenv('DB_PASS')) {
+        if ($pass = getenv('MYSQLPASSWORD') ?: getenv('DB_PASS') ?: 'root_password') {
             $this->default['password'] = $pass;
         }
-        if ($db = getenv('MYSQLDATABASE') ?: getenv('DB_NAME')) {
+        if ($db = getenv('MYSQLDATABASE') ?: getenv('DB_NAME') ?: 'railway') {
             $this->default['database'] = $db;
         }
         if ($port = getenv('MYSQLPORT') ?: getenv('DB_PORT')) {
