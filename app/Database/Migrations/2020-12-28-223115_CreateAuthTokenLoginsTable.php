@@ -1,5 +1,5 @@
 <?php
-namespace CodeIgniter\Shield\Database\Migrations;
+namespace App\Database\Migrations;
 use CodeIgniter\Database\Migration;
 
 class CreateAuthTokenLoginsTable extends Migration {
