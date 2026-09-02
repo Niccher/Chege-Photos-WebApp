@@ -5,7 +5,7 @@ set -e
 echo "Waiting for MySQL to accept connections..."
 max_retries=30
 count=0
-while ! php -r "new PDO('mysql:host=mysql;port=3306', 'root', 'root_password');" 2>/dev/null; do
+while ! php -r '$h=getenv("database.default.hostname")?:(getenv("database_default_hostname")?:(getenv("DB_HOST")?:(getenv("MYSQLHOST")?:"mysql"))); $pt=getenv("database.default.port")?:(getenv("database_default_port")?:(getenv("DB_PORT")?:(getenv("MYSQLPORT")?:"3306"))); $u=getenv("database.default.username")?:(getenv("database_default_username")?:(getenv("DB_USER")?:(getenv("MYSQLUSER")?:"root"))); $p=getenv("database.default.password")?:(getenv("database_default_password")?:(getenv("DB_PASS")?:(getenv("MYSQLPASSWORD")?:"root_password"))); new PDO("mysql:host={$h};port={$pt}", $u, $p);' 2>/dev/null; do
     count=$((count + 1))
     if [ $count -ge $max_retries ]; then
         echo "ERROR: MySQL did not become ready in time. Starting Apache without migrations."

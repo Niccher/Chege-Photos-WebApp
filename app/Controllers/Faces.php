@@ -20,7 +20,8 @@ class Faces extends BaseController
                 'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
             ]
         ]);
-        $url = self::ML_BASE . $path;
+        $baseUrl = env('ML_URL') ?: self::ML_BASE;
+        $url = $baseUrl . $path;
 
         try {
             $response = $client->request($method, $url, $options);

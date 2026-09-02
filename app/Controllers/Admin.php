@@ -1530,7 +1530,8 @@ class Admin extends BaseController
                         ]
                     ]);
                     $start = microtime(true);
-                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    $mlUrl = env('ML_URL') ?: self::DEFAULT_ML_URL;
+                    $response = $client->get($mlUrl . '/api/v1/health');
                     $elapsed = round((microtime(true) - $start) * 1000, 2);
                     if ($response->getStatusCode() === 200) {
                         $body = json_decode($response->getBody(), true);
@@ -1554,7 +1555,8 @@ class Admin extends BaseController
                         'timeout'         => 3,
                     ]);
                     $start = microtime(true);
-                    $response = $client->get('http://ml-qdrant:6333/collections');
+                    $qdrantUrl = env('QDRANT_URL') ?: 'http://ml-qdrant:6333';
+                    $response = $client->get($qdrantUrl . '/collections');
                     $elapsed = round((microtime(true) - $start) * 1000, 2);
                     if ($response->getStatusCode() === 200) {
                         $body = json_decode($response->getBody(), true);

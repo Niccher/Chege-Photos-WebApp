@@ -410,8 +410,9 @@ class Settings extends BaseController
         // Clear ML face data for this user
         if (! empty($ids)) {
             try {
+                $mlUrl = env('ML_URL') ?: 'http://ml-chege-photos:8000';
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
-                $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
+                $client->post($mlUrl . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => [
                         'Content-Type' => 'application/json',
                         'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
@@ -495,8 +496,9 @@ class Settings extends BaseController
         // Clear ML face data for this user
         if (! empty($ids)) {
             try {
+                $mlUrl = env('ML_URL') ?: 'http://ml-chege-photos:8000';
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
-                $client->post('http://ml-chege-photos:8000/api/v1/faces/delete-by-photo-ids', [
+                $client->post($mlUrl . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => [
                         'Content-Type' => 'application/json',
                         'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
