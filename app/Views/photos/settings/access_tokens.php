@@ -265,13 +265,17 @@
 
                     $('#tokenCodeDisplay').text(token.token);
                     $('#tokenQrCode').empty();
+                    var qrPayload = JSON.stringify({
+                        url: window.location.origin,
+                        token: token.token
+                    });
                     new QRCode(document.getElementById('tokenQrCode'), {
-                        text: token.token,
+                        text: qrPayload,
                         width: 180,
                         height: 180,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
-                        correctLevel: QRCode.CorrectLevel.L
+                        correctLevel: QRCode.CorrectLevel.M
                     });
                     $('#tokenNewDisplay').removeClass('d-none');
                     loadTokens();

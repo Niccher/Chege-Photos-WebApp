@@ -22,9 +22,9 @@ class Tokens extends BaseController
             $authTokens = $model->where('user_id', $userId)->where('is_used', 1)->findAll();
             $deviceMap = [];
             foreach ($authTokens as $t) {
-                // Map by name (or fingerprint / device_id)
-                $key = $t['device_name'] . ' (token)';
-                $deviceMap[$key] = $t;
+                // Map by name (both token and direct password login variants)
+                $deviceMap[$t['device_name'] . ' (token)'] = $t;
+                $deviceMap[$t['device_name']] = $t;
             }
 
             foreach ($rawAccessTokens as $at) {
