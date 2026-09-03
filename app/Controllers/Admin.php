@@ -1352,19 +1352,136 @@ class Admin extends BaseController
         $db = \Config\Database::connect();
         $cronLogs = $db->table('sys_cron_logs')
             ->orderBy('run_at', 'DESC')
-            ->limit(50)
+            ->limit(100)
             ->get()
             ->getResultArray();
 
-        $data = [
-            'counts' => $this->getSidebarCounts(),
-            'cronLogs' => $cronLogs,
-            'settings' => [
-                'trashPurge' => setting('Cron.trashPurge') ?? '0 2 * * *',
-                'mlCluster'  => setting('Cron.mlCluster') ?? '0 * * * *',
-                'mlSweep'    => setting('Cron.mlSweep') ?? '*/5 * * * *',
-                'cleanTemp'  => setting('Cron.cleanTemp') ?? '30 1 * * *',
+        $now = time();
+        $tasksConfig = [
+            [
+                'key'         => 'mlSweep',
+                'command'     => 'ml:sweep',
+                'name'        => 'ML Pipeline Sweep & Auto-Recovery',
+                'description' => 'Scans library for newly uploaded or unprocessed media frames and dispatches them for face recognition, object categorization, and CLIP semantic vectorization.',
+                'default'     => '*/5 * * * *',
+                'icon'        => 'bi-cpu',
+                'color'       => 'warning',
+                'category'    => 'Machine Learning',
+                'presets'     => [
+                    '*/1 * * * *'  => 'Every minute',
+                    '*/5 * * * *'  => 'Every 5 minutes (Default)',
+                    '*/15 * * * *' => 'Every 15 minutes',
+                    '0 * * * *'    => 'Hourly',
+                ],
             ],
+            [
+                'key'         => 'mlCluster',
+                'command'     => 'ml:cluster',
+                'name'        => 'ML Face Clustering (HDBSCAN)',
+                'description' => 'Clusters newly extracted face embeddings with HDBSCAN to associate faces with existing people and discover new unknown people groups.',
+                'default'     => '0 * * * *',
+                'icon'        => 'bi-people',
+                'color'       => 'primary',
+                'category'    => 'Machine Learning',
+                'presets'     => [
+                    '*/10 * * * *' => 'Every 10 minutes',
+                    '*/30 * * * *' => 'Every 30 minutes',
+                    '0 * * * *'    => 'Hourly at :00 (Default)',
+                    '0 0 * * *'    => 'Daily at midnight',
+                ],
+            ],
+            [
+                'key'         => 'trashPurge',
+                'command'     => 'trash:purge',
+                'name'        => 'Trash Auto-Purge Lifecycle',
+                'description' => 'Enforces data retention policy by permanently wiping soft-deleted items and cleaning file attachments, shares, and thumbnails after 60 days.',
+                'default'     => '0 2 * * *',
+                'icon'        => 'bi-trash',
+                'color'       => 'danger',
+                'category'    => 'Storage & Maintenance',
+                'presets'     => [
+                    '0 * * * *' => 'Hourly',
+                    '0 2 * * *' => 'Daily at 2:00 AM UTC (Default)',
+                    '0 2 * * 0' => 'Weekly on Sundays at 2:00 AM',
+                ],
+            ],
+            [
+                'key'         => 'cleanTemp',
+                'command'     => 'storage:clean-temp',
+                'name'        => 'Stale Temp Uploads & Artifacts',
+                'description' => 'Prunes abandoned chunk upload directories, temporary export ZIPs, and incomplete upload chunks older than 24 hours.',
+                'default'     => '30 1 * * *',
+                'icon'        => 'bi-hdd-network',
+                'color'       => 'info',
+                'category'    => 'Storage & Maintenance',
+                'presets'     => [
+                    '0 * * * *'  => 'Hourly',
+                    '30 1 * * *' => 'Daily at 1:30 AM UTC (Default)',
+                    '0 0 1 * *'  => 'Monthly on the 1st',
+                ],
+            ],
+        ];
+
+        // Process each task with live stats, next run time, and last execution log
+        $processedTasks = [];
+        $settings = [];
+
+        foreach ($tasksConfig as $t) {
+            $expr = setting("Cron.{$t['key']}") ?: $t['default'];
+            $settings[$t['key']] = $expr;
+
+            $nextRunTs = $this->getNextCronRun($expr, $now);
+            $humanSched = $this->describeCron($expr);
+
+            // Fetch last execution log for this specific command
+            $lastLog = $db->table('sys_cron_logs')
+                ->where('job_name', $t['command'])
+                ->orderBy('run_at', 'DESC')
+                ->limit(1)
+                ->get()
+                ->getRowArray();
+
+            $lastRunAt = $lastLog['run_at'] ?? null;
+            $lastStatus = $lastLog['status'] ?? 'pending';
+            $lastOutput = $lastLog['output'] ?? 'No execution recorded yet.';
+            $lastDuration = isset($lastLog['duration_seconds']) ? number_format($lastLog['duration_seconds'], 2) . 's' : '-';
+
+            $processedTasks[] = array_merge($t, [
+                'expression'     => $expr,
+                'human_schedule' => $humanSched,
+                'next_run_at'    => $nextRunTs ? date('Y-m-d H:i:s', $nextRunTs) : 'Indeterminate',
+                'next_run_diff'  => $nextRunTs ? $this->getRelativeTimeDiff($nextRunTs - $now) : '-',
+                'last_run_at'    => $lastRunAt,
+                'last_run_diff'  => $lastRunAt ? $this->getRelativeTimeAgo(strtotime($lastRunAt)) : 'Never ran',
+                'last_status'    => $lastStatus,
+                'last_output'    => $lastOutput,
+                'last_duration'  => $lastDuration,
+            ]);
+        }
+
+        // Check container cron daemon status
+        $daemonActive = false;
+        if (function_exists('shell_exec')) {
+            $check = @shell_exec('pgrep cron 2>/dev/null');
+            if (!empty($check)) {
+                $daemonActive = true;
+            }
+        }
+        if (!$daemonActive && !empty($cronLogs)) {
+            $latestRun = strtotime($cronLogs[0]['run_at']);
+            if (($now - $latestRun) < 900) {
+                $daemonActive = true;
+            }
+        }
+
+        $data = [
+            'counts'         => $this->getSidebarCounts(),
+            'tasks'          => $processedTasks,
+            'cronLogs'       => $cronLogs,
+            'settings'       => $settings,
+            'daemonActive'   => $daemonActive,
+            'serverTime'     => date('Y-m-d H:i:s'),
+            'serverTimezone' => date_default_timezone_get(),
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
         ];
@@ -1698,5 +1815,97 @@ class Admin extends BaseController
                     'message' => 'Unknown service request.'
                 ])->setStatusCode(400);
         }
+    }
+
+    private function getNextCronRun(string $expression, int $fromTime = null): ?int
+    {
+        $from = $fromTime ?: time();
+        $cron = explode(' ', trim($expression));
+        if (count($cron) < 5) {
+            return null;
+        }
+
+        for ($i = 1; $i <= 10080; $i++) {
+            $candidate = $from + ($i * 60);
+            $candidate -= ($candidate % 60);
+
+            $m   = (int) date('i', $candidate);
+            $h   = (int) date('H', $candidate);
+            $dom = (int) date('j', $candidate);
+            $mon = (int) date('n', $candidate);
+            $dow = (int) date('w', $candidate);
+
+            if ($this->matchCronField($cron[0], $m)
+                && $this->matchCronField($cron[1], $h)
+                && $this->matchCronField($cron[2], $dom)
+                && $this->matchCronField($cron[3], $mon)
+                && $this->matchCronField($cron[4], $dow)) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
+    private function matchCronField(string $field, int $value): bool
+    {
+        if ($field === '*') return true;
+        if (strpos($field, ',') !== false) {
+            foreach (explode(',', $field) as $p) {
+                if ($this->matchCronField($p, $value)) return true;
+            }
+            return false;
+        }
+        if (strpos($field, '/') !== false) {
+            [$range, $step] = explode('/', $field);
+            $step = (int) $step;
+            if ($step <= 0) return false;
+            if ($range === '*') return ($value % $step) === 0;
+            [$start, $end] = explode('-', $range);
+            return ($value >= (int)$start && $value <= (int)$end && (($value - (int)$start) % $step) === 0);
+        }
+        if (strpos($field, '-') !== false) {
+            [$start, $end] = explode('-', $field);
+            return ($value >= (int)$start && $value <= (int)$end);
+        }
+        return ((int)$field === $value);
+    }
+
+    private function describeCron(string $expr): string
+    {
+        $expr = trim($expr);
+        $map = [
+            '* * * * *'    => 'Every minute',
+            '*/1 * * * *'  => 'Every minute',
+            '*/5 * * * *'  => 'Every 5 minutes',
+            '*/10 * * * *' => 'Every 10 minutes',
+            '*/15 * * * *' => 'Every 15 minutes',
+            '*/30 * * * *' => 'Every 30 minutes',
+            '0 * * * *'    => 'Hourly (at :00)',
+            '0 2 * * *'    => 'Daily at 02:00 AM UTC',
+            '30 1 * * *'   => 'Daily at 01:30 AM UTC',
+            '0 0 * * *'    => 'Daily at midnight (00:00 UTC)',
+            '0 2 * * 0'    => 'Weekly on Sunday at 02:00 AM UTC',
+            '0 0 1 * *'    => 'Monthly on the 1st at midnight UTC',
+        ];
+        return $map[$expr] ?? "Runs on schedule ({$expr})";
+    }
+
+    private function getRelativeTimeDiff(int $sec): string
+    {
+        if ($sec <= 0) return 'due now';
+        if ($sec < 60) return 'in < 1 min';
+        if ($sec < 3600) return 'in ' . round($sec / 60) . ' mins';
+        if ($sec < 86400) return 'in ' . round($sec / 3600, 1) . ' hrs';
+        return 'in ' . round($sec / 86400, 1) . ' days';
+    }
+
+    private function getRelativeTimeAgo(int $ts): string
+    {
+        $diff = time() - $ts;
+        if ($diff < 5) return 'just now';
+        if ($diff < 60) return $diff . 's ago';
+        if ($diff < 3600) return round($diff / 60) . 'm ago';
+        if ($diff < 86400) return round($diff / 3600) . 'h ago';
+        return date('M j, H:i', $ts);
     }
 }

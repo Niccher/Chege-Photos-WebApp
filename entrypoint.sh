@@ -40,13 +40,17 @@ chmod -R 777 /var/www/html/writable
 
 # Setup container cron jobs
 echo "Configuring container cron schedules..."
+printenv | grep -E '^(MYSQL|DB_|CI_|PORT|APACHE|ML_|QDRANT_|RAILWAY)' > /etc/environment || true
+
 cat << 'EOF' > /etc/cron.d/photos-cron
-# Run master task scheduler every minute
-* * * * * php /var/www/html/spark cron:run >> /var/log/cron-run.log 2>&1
+# Run master task scheduler every minute with environment loaded
+* * * * * . /etc/environment; /usr/local/bin/php /var/www/html/spark cron:run >> /var/log/cron-run.log 2>&1
 EOF
 
 chmod 0644 /etc/cron.d/photos-cron
 crontab /etc/cron.d/photos-cron
+touch /var/log/cron-run.log
+chmod 0666 /var/log/cron-run.log
 
 # Start the cron service
 echo "Starting cron service..."

@@ -2,25 +2,77 @@
 
 <?= $this->section('content') ?>
 <div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12 mb-3">
-            <h2 class="h4 mb-0" style="color: var(--text-primary);">System Tasks &amp; Cron Jobs</h2>
-            <p class="text-muted small mb-0">Configure dynamic schedules, manage background processes, and inspect task execution history logs.</p>
+    <!-- Page Header -->
+    <div class="row align-items-center mb-4">
+        <div class="col-md-7">
+            <h2 class="h4 mb-1" style="color: var(--text-primary);">Automated Background Tasks &amp; Crons</h2>
+            <p class="text-muted small mb-0">Monitor scheduled daemon routines, inspect last execution outputs, and adjust automated task intervals.</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex gap-2 justify-content-md-end">
+            <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="location.reload();">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh Status
+            </button>
+            <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" id="btnRunAllCrons">
+                <i class="bi bi-play-circle-fill me-1"></i> Run Due Tasks Now
+            </button>
         </div>
     </div>
 
-    <!-- Navigation Pills -->
+    <!-- Daemon & Server Runtime Banner -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-card p-3 p-md-4" style="background: var(--card-bg); color: var(--text-primary);">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-4 d-flex align-items-center gap-3">
+                        <div class="p-3 rounded-circle <?= $daemonActive ? 'bg-success bg-opacity-10 text-success' : 'bg-primary bg-opacity-10 text-primary' ?>">
+                            <i class="bi <?= $daemonActive ? 'bi-broadcast-pin fs-3' : 'bi-clock-history fs-3' ?>"></i>
+                        </div>
+                        <div>
+                            <div class="d-flex align-items-center gap-2">
+                                <h6 class="fw-bold mb-0">Cron Service Status</h6>
+                                <?php if ($daemonActive): ?>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-0.5 small">
+                                        <i class="bi bi-circle-fill me-1 small" style="font-size: 8px;"></i> ACTIVE &amp; RUNNING
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2 py-0.5 small">
+                                        <i class="bi bi-circle-fill me-1 small" style="font-size: 8px;"></i> READY / ON-DEMAND
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <p class="text-muted small mb-0">Container scheduler evaluates every minute (<code>* * * * *</code>)</p>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 border-start border-light ps-md-4">
+                        <span class="text-muted small d-block">Server Time</span>
+                        <span class="fw-bold font-monospace small"><i class="bi bi-clock me-1 text-primary"></i><?= esc($serverTime) ?></span>
+                        <span class="badge bg-light text-muted rounded-pill px-2 py-0 ms-1 small"><?= esc($serverTimezone) ?></span>
+                    </div>
+                    <div class="col-6 col-md-4 border-start border-light ps-md-4">
+                        <span class="text-muted small d-block">Configured Background Jobs</span>
+                        <span class="fw-bold text-success"><i class="bi bi-check2-circle me-1"></i><?= count($tasks) ?> Tasks Seeded &amp; Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
     <div class="row mb-4">
         <div class="col-12">
             <ul class="nav nav-pills gap-2 rounded-card p-1" style="background: rgba(0,0,0,0.03); max-width: max-content;">
                 <li class="nav-item">
-                    <button class="nav-link active rounded-pill px-4 small" data-bs-toggle="pill" data-bs-target="#tab-cron-schedules" type="button">
-                        <i class="bi bi-clock me-1"></i> Task Schedules
+                    <button class="nav-link active rounded-pill px-4 small d-flex align-items-center gap-2" data-bs-toggle="pill" data-bs-target="#tab-cron-schedules" type="button">
+                        <i class="bi bi-grid"></i>
+                        <span>Created Cron Tasks</span>
+                        <span class="badge bg-primary rounded-pill px-2 py-0.5" style="font-size: 11px;"><?= count($tasks) ?></span>
                     </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link rounded-pill px-4 small" data-bs-toggle="pill" data-bs-target="#tab-cron-history" type="button">
-                        <i class="bi bi-clock-history me-1"></i> Execution Logs
+                    <button class="nav-link rounded-pill px-4 small d-flex align-items-center gap-2" data-bs-toggle="pill" data-bs-target="#tab-cron-history" type="button">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Execution Logs</span>
+                        <span class="badge bg-secondary rounded-pill px-2 py-0.5" style="font-size: 11px;"><?= count($cronLogs) ?></span>
                     </button>
                 </li>
             </ul>
@@ -28,192 +80,188 @@
     </div>
 
     <div class="tab-content">
-        <!-- TAB 1: Task Schedules -->
+        <!-- TAB 1: Created Cron Tasks Grid -->
         <div class="tab-pane fade show active" id="tab-cron-schedules">
-            <div class="row g-4">
-                <div class="col-lg-8">
-                    <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
-                        <form id="formAdminCrons">
-                            <h5 class="mb-4 d-flex align-items-center gap-2">
-                                <i class="bi bi-sliders text-primary"></i>
-                                <span>Task Configurations</span>
-                            </h5>
+            <form id="formAdminCrons">
+                <div class="row g-4">
+                    <?php foreach ($tasks as $task): ?>
+                        <div class="col-lg-6">
+                            <div class="card border-0 shadow-sm rounded-card p-4 h-100 d-flex flex-column" style="background: var(--card-bg); color: var(--text-primary); border-top: 4px solid var(--bs-<?= $task['color'] ?>) !important;">
+                                <!-- Header -->
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="p-3 bg-<?= $task['color'] ?> bg-opacity-10 rounded text-<?= $task['color'] ?>">
+                                            <i class="bi <?= $task['icon'] ?> fs-4"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-1"><?= esc($task['name']) ?></h6>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <code class="text-primary bg-light px-2 py-0.5 rounded font-monospace small"><?= esc($task['command']) ?></code>
+                                                <span class="text-muted small">• <?= esc($task['category']) ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <?php if ($task['last_status'] === 'success'): ?>
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3 py-1 small">
+                                                <i class="bi bi-check-circle-fill me-1"></i> ACTIVE &amp; RUNNING
+                                            </span>
+                                        <?php elseif ($task['last_status'] === 'failed'): ?>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 small">
+                                                <i class="bi bi-exclamation-triangle-fill me-1"></i> FAILED LAST RUN
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3 py-1 small">
+                                                <i class="bi bi-clock-history me-1"></i> SCHEDULED
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
 
-                            <!-- Task 1: ML Face Clustering -->
-                            <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h6 class="small fw-bold mb-0">1. ML Face Clustering (`ml:cluster`)</h6>
-                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="ml:cluster">
-                                        <i class="bi bi-play-fill"></i> Run Now
+                                <!-- Description -->
+                                <p class="text-muted small mb-3"><?= esc($task['description']) ?></p>
+
+                                <!-- Timing & Schedule Info Box -->
+                                <div class="rounded p-3 mb-3 bg-light bg-opacity-50 border small">
+                                    <div class="row g-2">
+                                        <div class="col-sm-6">
+                                            <div class="text-muted small mb-1"><i class="bi bi-calendar-event me-1"></i>Execution Schedule:</div>
+                                            <div class="fw-bold text-dark mb-1"><?= esc($task['human_schedule']) ?></div>
+                                            <div><code class="bg-dark text-warning px-2 py-0.5 rounded font-monospace small"><?= esc($task['expression']) ?></code></div>
+                                        </div>
+                                        <div class="col-sm-6 border-start border-light ps-sm-3">
+                                            <div class="text-muted small mb-1"><i class="bi bi-stopwatch me-1"></i>Next Run:</div>
+                                            <div class="fw-bold text-primary mb-1"><?= esc($task['next_run_diff']) ?></div>
+                                            <div class="text-muted font-monospace small"><?= esc($task['next_run_at']) ?></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Last Execution Details -->
+                                <div class="mb-3 small">
+                                    <div class="d-flex justify-content-between align-items-center mb-1 text-muted">
+                                        <span><i class="bi bi-clock-history me-1"></i>Last execution: <strong><?= esc($task['last_run_diff']) ?></strong></span>
+                                        <span>Duration: <strong><?= esc($task['last_duration']) ?></strong></span>
+                                    </div>
+                                    <?php if ($task['last_run_at']): ?>
+                                        <div class="font-monospace text-muted bg-light p-2 rounded small text-truncate" title="<?= esc($task['last_output']) ?>">
+                                            <i class="bi bi-terminal me-1"></i><?= esc($task['last_output']) ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="text-muted font-italic small bg-light p-2 rounded">
+                                            Task is queued and waiting for its first scheduled trigger.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Expandable Edit Schedule Drawer -->
+                                <div class="collapse mb-3" id="collapse-edit-<?= esc($task['key']) ?>">
+                                    <div class="p-3 border rounded bg-white shadow-sm">
+                                        <h6 class="small fw-bold mb-2"><i class="bi bi-pencil-square me-1 text-primary"></i>Adjust Schedule Interval</h6>
+                                        <div class="row g-2">
+                                            <div class="col-md-7">
+                                                <label class="form-label small text-muted mb-1">Crontab Expression</label>
+                                                <input type="text" name="<?= esc($task['key']) ?>" class="form-control form-control-sm font-monospace bg-light border" value="<?= esc($task['expression']) ?>" required placeholder="e.g. */5 * * * *">
+                                            </div>
+                                            <div class="col-md-5">
+                                                <label class="form-label small text-muted mb-1">Preset Quick-select</label>
+                                                <select class="form-select form-select-sm bg-light border preset-select" data-target="<?= esc($task['key']) ?>">
+                                                    <option value="">-- Presets --</option>
+                                                    <?php foreach ($task['presets'] as $val => $label): ?>
+                                                        <option value="<?= esc($val) ?>" <?= $val === $task['expression'] ? 'selected' : '' ?>><?= esc($label) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Footer Buttons -->
+                                <div class="mt-auto pt-3 border-top d-flex justify-content-between align-items-center gap-2" style="border-color: var(--border-color) !important;">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="collapse" data-bs-target="#collapse-edit-<?= esc($task['key']) ?>">
+                                        <i class="bi bi-sliders me-1"></i> Edit Interval
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 btn-run-single" data-job="<?= esc($task['command']) ?>">
+                                        <i class="bi bi-play-fill me-1"></i> Run Now
                                     </button>
                                 </div>
-                                <p class="text-muted small mb-3">Re-groups unassigned face embeddings into unique identified People clusters.</p>
-                                <div class="row g-3">
-                                    <div class="col-md-7">
-                                        <label class="form-label small fw-bold mb-1">Cron Expression</label>
-                                        <input type="text" name="mlCluster" class="form-control bg-light border-0 py-2 font-monospace" value="<?= esc($settings['mlCluster']) ?>" required placeholder="e.g. 0 * * * *">
-                                    </div>
-                                    <div class="col-md-5">
-                                        <label class="form-label small fw-bold mb-1">Preset Quick-select</label>
-                                        <select class="form-select bg-light border-0 py-2 preset-select" data-target="mlCluster">
-                                            <option value="">-- Select Preset --</option>
-                                            <option value="*/10 * * * *">Every 10 minutes</option>
-                                            <option value="0 * * * *">Hourly (Default)</option>
-                                            <option value="0 0 * * *">Daily at midnight</option>
-                                        </select>
-                                    </div>
-                                </div>
                             </div>
-
-                            <!-- Task 2: ML Auto-Recovery Sweep -->
-                            <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h6 class="small fw-bold mb-0">2. ML Pipeline Sweep (`ml:sweep`)</h6>
-                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="ml:sweep">
-                                        <i class="bi bi-play-fill"></i> Run Now
-                                    </button>
-                                </div>
-                                <p class="text-muted small mb-3">Sweeps the library database and automatically queues any unprocessed image frames for analysis.</p>
-                                <div class="row g-3">
-                                    <div class="col-md-7">
-                                        <label class="form-label small fw-bold mb-1">Cron Expression</label>
-                                        <input type="text" name="mlSweep" class="form-control bg-light border-0 py-2 font-monospace" value="<?= esc($settings['mlSweep']) ?>" required placeholder="e.g. */5 * * * *">
-                                    </div>
-                                    <div class="col-md-5">
-                                        <label class="form-label small fw-bold mb-1">Preset Quick-select</label>
-                                        <select class="form-select bg-light border-0 py-2 preset-select" data-target="mlSweep">
-                                            <option value="">-- Select Preset --</option>
-                                            <option value="*/1 * * * *">Every minute</option>
-                                            <option value="*/5 * * * *">Every 5 minutes (Default)</option>
-                                            <option value="*/15 * * * *">Every 15 minutes</option>
-                                            <option value="0 * * * *">Hourly</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Task 3: Trash Auto-Purge -->
-                            <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h6 class="small fw-bold mb-0">3. Trash Auto-Purge (`trash:purge`)</h6>
-                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="trash:purge">
-                                        <i class="bi bi-play-fill"></i> Run Now
-                                    </button>
-                                </div>
-                                <p class="text-muted small mb-3">Cleans soft-deleted user photos exceeding the retention storage policy threshold.</p>
-                                <div class="row g-3">
-                                    <div class="col-md-7">
-                                        <label class="form-label small fw-bold mb-1">Cron Expression</label>
-                                        <input type="text" name="trashPurge" class="form-control bg-light border-0 py-2 font-monospace" value="<?= esc($settings['trashPurge']) ?>" required placeholder="e.g. 0 2 * * *">
-                                    </div>
-                                    <div class="col-md-5">
-                                        <label class="form-label small fw-bold mb-1">Preset Quick-select</label>
-                                        <select class="form-select bg-light border-0 py-2 preset-select" data-target="trashPurge">
-                                            <option value="">-- Select Preset --</option>
-                                            <option value="0 * * * *">Hourly</option>
-                                            <option value="0 2 * * *">Daily at 2 AM (Default)</option>
-                                            <option value="0 2 * * 0">Weekly on Sundays</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Task 4: Temp Uploads Cleanup -->
-                            <div class="p-3 border rounded mb-4" style="border-color: var(--border-color) !important; background: rgba(0, 0, 0, 0.01);">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h6 class="small fw-bold mb-0">4. Stale Temp Uploads (`storage:clean-temp`)</h6>
-                                    <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-3 py-0.5 btn-run-single" data-job="storage:clean-temp">
-                                        <i class="bi bi-play-fill"></i> Run Now
-                                    </button>
-                                </div>
-                                <p class="text-muted small mb-3">Clears stale exports and incomplete temporary chunk directories older than 24 hours.</p>
-                                <div class="row g-3">
-                                    <div class="col-md-7">
-                                        <label class="form-label small fw-bold mb-1">Cron Expression</label>
-                                        <input type="text" name="cleanTemp" class="form-control bg-light border-0 py-2 font-monospace" value="<?= esc($settings['cleanTemp']) ?>" required placeholder="e.g. 30 1 * * *">
-                                    </div>
-                                    <div class="col-md-5">
-                                        <label class="form-label small fw-bold mb-1">Preset Quick-select</label>
-                                        <select class="form-select bg-light border-0 py-2 preset-select" data-target="cleanTemp">
-                                            <option value="">-- Select Preset --</option>
-                                            <option value="0 * * * *">Hourly</option>
-                                            <option value="30 1 * * *">Daily at 1:30 AM (Default)</option>
-                                            <option value="0 0 1 * *">Monthly on the 1st</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Form submit -->
-                            <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
-                                <button type="submit" class="btn btn-primary px-4 rounded-pill">
-                                    <i class="bi bi-check-lg me-1"></i> Save Task Schedules
-                                </button>
-                                <button type="button" class="btn btn-outline-warning px-4 rounded-pill" id="btnRunAllCrons">
-                                    <i class="bi bi-play-circle me-1"></i> Run Due Tasks Now
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
 
-                <div class="col-lg-4">
-                    <div class="card border-0 shadow-sm rounded-card p-4 bg-light bg-opacity-25" style="color: var(--text-primary);">
-                        <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-1 text-primary"></i>Task Scheduler</h6>
-                        <p class="text-muted small mb-2" style="line-height: 1.6;">
-                            *   The platform runs a master cron job runner inside the container that triggers every minute.
-                        </p>
-                        <p class="text-muted small mb-2" style="line-height: 1.6;">
-                            *   Schedules configured here are evaluated dynamically by this runner. If the current server time matches the cron expression, the task executes immediately.
-                        </p>
-                        <p class="text-muted small" style="line-height: 1.6;">
-                            *   Expressions use standard 5-field crontab structures: <code>[minute] [hour] [day-of-month] [month] [day-of-week]</code>.
-                        </p>
+                <!-- Global Save Bar -->
+                <div class="card border-0 shadow-sm rounded-card p-3 mt-4" style="background: var(--card-bg);">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                        <div>
+                            <h6 class="fw-bold mb-0">Apply Schedule Updates</h6>
+                            <span class="text-muted small">Updated cron expressions are written to system settings and evaluated immediately on the next scheduler minute.</span>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4 rounded-pill shadow-sm">
+                            <i class="bi bi-check-lg me-1"></i> Save Task Schedules
+                        </button>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
 
-        <!-- TAB 2: Execution Logs -->
+        <!-- TAB 2: Execution Logs History -->
         <div class="tab-pane fade" id="tab-cron-history">
             <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
-                <h5 class="mb-4 d-flex align-items-center gap-2">
-                    <i class="bi bi-clock-history text-info"></i>
-                    <span>Cron Run History</span>
-                </h5>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history text-info"></i>
+                        <span>Cron Execution History Logs</span>
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="location.reload();">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh Logs
+                    </button>
+                </div>
 
                 <div class="table-responsive">
-                    <table class="table align-middle" style="color: var(--text-primary);">
+                    <table class="table align-middle table-hover small" style="color: var(--text-primary);">
                         <thead>
                             <tr class="text-muted small" style="border-color: var(--border-color) !important;">
                                 <th>Job Target</th>
                                 <th>Status</th>
-                                <th>Result / Output</th>
+                                <th>Output Summary</th>
                                 <th>Duration</th>
-                                <th>Run At</th>
+                                <th>Executed At</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($cronLogs)): ?>
                                 <tr style="border-color: var(--border-color) !important;">
-                                    <td colspan="5" class="text-center py-4 text-muted small">No background executions recorded yet.</td>
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="bi bi-journal-text fs-2 d-block mb-2"></i>
+                                        No background executions recorded in <code>sys_cron_logs</code> yet.
+                                    </td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($cronLogs as $log): ?>
                                     <tr style="border-color: var(--border-color) !important;">
-                                        <td class="fw-bold small"><code><?= esc($log['job_name']) ?></code></td>
+                                        <td class="fw-bold">
+                                            <code class="text-primary font-monospace"><?= esc($log['job_name']) ?></code>
+                                        </td>
                                         <td>
                                             <?php if ($log['status'] === 'success'): ?>
-                                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1 small">Success</span>
+                                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">
+                                                    <i class="bi bi-check-circle me-1"></i> Success
+                                                </span>
                                             <?php else: ?>
-                                                <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1 small">Failed</span>
+                                                <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1">
+                                                    <i class="bi bi-exclamation-triangle me-1"></i> Failed
+                                                </span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="text-muted small text-break"><?= esc(mb_strimwidth($log['output'], 0, 80, '...')) ?></td>
-                                        <td class="small"><?= number_format($log['duration_seconds'], 3) ?>s</td>
-                                        <td class="small text-muted"><?= esc($log['run_at']) ?></td>
+                                        <td class="text-muted font-monospace text-break" style="max-width: 350px;">
+                                            <?= esc(mb_strimwidth($log['output'], 0, 85, '...')) ?>
+                                        </td>
+                                        <td><?= number_format($log['duration_seconds'], 3) ?>s</td>
+                                        <td class="text-muted"><?= esc($log['run_at']) ?></td>
                                         <td class="text-end">
-                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 small btn-view-cron-log"
+                                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 btn-view-cron-log"
                                                 data-job="<?= esc($log['job_name']) ?>"
                                                 data-status="<?= esc($log['status']) ?>"
                                                 data-output="<?= esc($log['output']) ?>"
@@ -306,6 +354,7 @@
                 btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save Task Schedules');
                 if (res.status === 'success') {
                     showToast(res.message, 'success');
+                    setTimeout(function() { location.reload(); }, 1200);
                 } else {
                     showToast(res.message, 'danger');
                 }
@@ -322,13 +371,13 @@
             var job = btn.data('job');
             var originalHtml = btn.html();
 
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Running...');
 
             $.post(BASE_URL + 'admin/crons/run-job', { job: job }, function(res) {
                 btn.prop('disabled', false).html(originalHtml);
                 if (res.status === 'success') {
                     showToast(res.message, 'success');
-                    setTimeout(function() { location.reload(); }, 1500);
+                    setTimeout(function() { location.reload(); }, 1200);
                 } else {
                     showToast(res.message, 'danger');
                 }
@@ -350,7 +399,7 @@
                 btn.prop('disabled', false).html(originalHtml);
                 if (res.status === 'success') {
                     showToast(res.message, 'success');
-                    setTimeout(function() { location.reload(); }, 1500);
+                    setTimeout(function() { location.reload(); }, 1200);
                 } else {
                     showToast(res.message, 'danger');
                 }
