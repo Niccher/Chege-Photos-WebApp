@@ -140,11 +140,12 @@ class Photos extends BaseController
         $userId = auth()->id() ?: 1;
 
         // Enforce user storage quota
-        $quotaBytes = (int) (setting('App.storageLimit') ?: 1073741824); // 1GB default
-        if ($quotaBytes > 0) {
-            $userTotalBytes = (int) ($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
+        $quotaBytes = (float) (setting('App.storageLimit') ?? 1073741824);
+        $enforcement = setting('App.quotaEnforcement') ?? 'strict';
+        if ($quotaBytes > 0 && $enforcement === 'strict') {
+            $userTotalBytes = (float) ($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
             if ($userTotalBytes + $size > $quotaBytes) {
-                $quotaFormatted = round($quotaBytes / 1024 / 1024 / 1024, 1) . ' GB';
+                $quotaFormatted = ($quotaBytes >= 1073741824) ? round($quotaBytes / 1024 / 1024 / 1024, 1) . ' GB' : round($quotaBytes / 1024 / 1024, 1) . ' MB';
                 return $this->response->setJSON([
                     'status'  => 'error',
                     'message' => "Upload rejected: Storage quota limit ({$quotaFormatted}) reached."

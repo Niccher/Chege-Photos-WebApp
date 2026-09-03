@@ -184,18 +184,25 @@
                         <i class="bi bi-pie-chart-fill text-warning"></i>
                         <span>Storage Quotas &amp; Retention Policies</span>
                     </h5>
-                    <p class="text-muted small mb-4">Set default user library quotas and automated trash cleanup schedules.</p>
+                    <p class="text-muted small mb-4">Set default user library quotas, automated trash cleanup schedules, and storage threshold warning behaviors.</p>
 
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Default User Storage Quota</label>
                             <select name="storageLimit" class="form-select bg-light border-0 py-2">
                                 <option value="536870912" <?= (int)$settings['storageLimit'] === 536870912 ? 'selected' : '' ?>>500 MB</option>
-                                <option value="1073741824" <?= (int)$settings['storageLimit'] === 1073741824 ? 'selected' : '' ?>>1 GB (Default)</option>
+                                <option value="1073741824" <?= (int)$settings['storageLimit'] === 1073741824 ? 'selected' : '' ?>>1 GB</option>
                                 <option value="2147483648" <?= (int)$settings['storageLimit'] === 2147483648 ? 'selected' : '' ?>>2 GB</option>
                                 <option value="5368709120" <?= (int)$settings['storageLimit'] === 5368709120 ? 'selected' : '' ?>>5 GB</option>
                                 <option value="10737418240" <?= (int)$settings['storageLimit'] === 10737418240 ? 'selected' : '' ?>>10 GB</option>
                                 <option value="21474836480" <?= (int)$settings['storageLimit'] === 21474836480 ? 'selected' : '' ?>>20 GB</option>
+                                <option value="53687091200" <?= (int)$settings['storageLimit'] === 53687091200 ? 'selected' : '' ?>>50 GB (Power User)</option>
+                                <option value="107374182400" <?= (int)$settings['storageLimit'] === 107374182400 ? 'selected' : '' ?>>100 GB (Creator / Pro)</option>
+                                <option value="268435456000" <?= (int)$settings['storageLimit'] === 268435456000 ? 'selected' : '' ?>>250 GB</option>
+                                <option value="536870912000" <?= (int)$settings['storageLimit'] === 536870912000 ? 'selected' : '' ?>>500 GB</option>
+                                <option value="1099511627776" <?= (int)$settings['storageLimit'] === 1099511627776 ? 'selected' : '' ?>>1 TB / 1024 GB (Studio Tier)</option>
+                                <option value="2199023255552" <?= (int)$settings['storageLimit'] === 2199023255552 ? 'selected' : '' ?>>2 TB / 2048 GB (Enterprise Tier)</option>
+                                <option value="0" <?= (int)$settings['storageLimit'] === 0 ? 'selected' : '' ?>>Unlimited (No Quota Enforcement)</option>
                             </select>
                             <span class="text-muted small" style="font-size: 11px;">Storage space allocated to new users upon account creation.</span>
                         </div>
@@ -203,13 +210,38 @@
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Trash Auto-Prune Schedule</label>
                             <select name="trashRetentionDays" class="form-select bg-light border-0 py-2">
+                                <option value="7" <?= (int)$settings['trashRetentionDays'] === 7 ? 'selected' : '' ?>>7 Days (Aggressive cleanup)</option>
                                 <option value="14" <?= (int)$settings['trashRetentionDays'] === 14 ? 'selected' : '' ?>>14 Days</option>
                                 <option value="30" <?= (int)$settings['trashRetentionDays'] === 30 ? 'selected' : '' ?>>30 Days (Default)</option>
                                 <option value="60" <?= (int)$settings['trashRetentionDays'] === 60 ? 'selected' : '' ?>>60 Days</option>
                                 <option value="90" <?= (int)$settings['trashRetentionDays'] === 90 ? 'selected' : '' ?>>90 Days</option>
+                                <option value="180" <?= (int)$settings['trashRetentionDays'] === 180 ? 'selected' : '' ?>>180 Days (6 Months)</option>
+                                <option value="365" <?= (int)$settings['trashRetentionDays'] === 365 ? 'selected' : '' ?>>365 Days (1 Year)</option>
                                 <option value="0" <?= (int)$settings['trashRetentionDays'] === 0 ? 'selected' : '' ?>>Never (Retain until manual purge)</option>
                             </select>
                             <span class="text-muted small" style="font-size: 11px;">Soft-deleted photos in Trash older than this threshold are permanently purged.</span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Quota Warning Alert Level</label>
+                            <select name="quotaWarnThreshold" class="form-select bg-light border-0 py-2">
+                                <option value="75" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 75 ? 'selected' : '' ?>>75% of Quota Capacity</option>
+                                <option value="80" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 80 ? 'selected' : '' ?>>80% of Quota Capacity (Default)</option>
+                                <option value="85" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 85 ? 'selected' : '' ?>>85% of Quota Capacity</option>
+                                <option value="90" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 90 ? 'selected' : '' ?>>90% of Quota Capacity</option>
+                                <option value="95" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 95 ? 'selected' : '' ?>>95% of Quota Capacity</option>
+                                <option value="0" <?= (int)($settings['quotaWarnThreshold'] ?? 80) === 0 ? 'selected' : '' ?>>Disabled (No Warning Banners)</option>
+                            </select>
+                            <span class="text-muted small" style="font-size: 11px;">Triggers in-app storage banner and email alert when reached.</span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Quota Enforcement Policy</label>
+                            <select name="quotaEnforcement" class="form-select bg-light border-0 py-2">
+                                <option value="strict" <?= ($settings['quotaEnforcement'] ?? 'strict') === 'strict' ? 'selected' : '' ?>>Strict Block (Reject uploads with HTTP 403 when limit reached)</option>
+                                <option value="soft" <?= ($settings['quotaEnforcement'] ?? 'strict') === 'soft' ? 'selected' : '' ?>>Soft Warning (Allow upload but prompt user to clean space)</option>
+                            </select>
+                            <span class="text-muted small" style="font-size: 11px;">Controls server behavior in <code>Photos::upload()</code> when quota is full.</span>
                         </div>
                     </div>
                 </div>

@@ -116,6 +116,8 @@ class Admin extends BaseController
                 // Quotas & Retention
                 'storageLimit'             => setting('App.storageLimit') ?: (1024 * 1024 * 1024), // 1GB default
                 'trashRetentionDays'       => setting('App.trashRetentionDays') ?? 30,
+                'quotaWarnThreshold'       => setting('App.quotaWarnThreshold') ?? 80,
+                'quotaEnforcement'         => setting('App.quotaEnforcement') ?? 'strict',
 
                 // Governance & Maintenance
                 'maintenanceMode'          => setting('App.maintenanceMode') ?? false,
@@ -195,9 +197,13 @@ class Admin extends BaseController
         setting()->set('App.maxUploadSizeMb', $maxUploadSizeMb);
         setting()->set('App.maxBatchUploadCount', $maxBatchUploadCount);
         setting()->set('App.allowedExtensions', $allowedExtensions);
+        $quotaWarnThreshold = (int) ($this->request->getPost('quotaWarnThreshold') ?? 80);
+        $quotaEnforcement   = $this->request->getPost('quotaEnforcement') ?? 'strict';
 
         setting()->set('App.storageLimit', $storageLimit);
         setting()->set('App.trashRetentionDays', $trashRetentionDays);
+        setting()->set('App.quotaWarnThreshold', $quotaWarnThreshold);
+        setting()->set('App.quotaEnforcement', $quotaEnforcement);
 
         setting()->set('App.maintenanceMode', $maintenanceMode);
         setting()->set('App.maintenanceMessage', $maintenanceMessage);
