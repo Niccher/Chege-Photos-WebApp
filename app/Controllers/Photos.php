@@ -1313,7 +1313,7 @@ class Photos extends BaseController
                 'scan_tags'  => 1,
                 'scan_clip'  => 1,
             ]),
-            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT_MS => 100,
             CURLOPT_CONNECTTIMEOUT_MS => 100,
             CURLOPT_NOSIGNAL => 1,
