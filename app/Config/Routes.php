@@ -61,6 +61,7 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($rout
     $routes->post('photos/restore/(:num)', '\App\Controllers\Photos::restorePhoto/$1', ['filter' => 'tokens:photos:write']);
     $routes->post('photos/archive/(:num)', '\App\Controllers\Photos::archivePhoto/$1', ['filter' => 'tokens:photos:write']);
     $routes->post('photos/favorite/(:num)','\App\Controllers\Photos::toggleFavorite/$1', ['filter' => 'tokens:photos:write']);
+    $routes->post('photos/empty-trash',    '\App\Controllers\Photos::emptyTrash', ['filter' => 'tokens:photos:write']);
     $routes->post('albums/add-photo',      '\App\Controllers\Photos::addPhotoToAlbum', ['filter' => 'tokens:photos:write']);
 
     // Face API endpoints (Android — token auth)

@@ -932,6 +932,9 @@ class Photos extends BaseController
             $db->table('tbl_album_photos')->where('photo_id', $id)->delete();
             $db->table('tbl_photo_shares')->where('photo_id', $id)->delete();
             $db->table('tbl_shared_links')->where('photo_id', $id)->delete();
+            $db->table('tbl_face_encodings')->where('photo_id', $id)->delete();
+            $db->table('tbl_photo_tags')->where('photo_id', $id)->delete();
+            $db->table('tbl_photo_scans')->where('photo_id', $id)->delete();
 
             // Delete physical files
             foreach (['path', 'thumbnail_path'] as $field) {
@@ -944,7 +947,7 @@ class Photos extends BaseController
             }
 
             // Hard delete row
-            $db->table('photos')->where('id', $id)->delete();
+            $db->table('tbl_photos')->where('id', $id)->delete();
             $purged++;
         }
 
