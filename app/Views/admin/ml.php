@@ -41,34 +41,20 @@
                         <span class="text-muted small">Minimum confidence score to extract/register a face.</span>
                     </div>
 
-                    <!-- CLIP Model Name & Dimension Protection -->
+                    <!-- CLIP Model Pack Selector -->
                     <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="form-label small fw-bold mb-0">CLIP Semantic Search Model</label>
-                            <span class="badge bg-success text-white rounded-pill px-2.5 py-1 small">
-                                <i class="bi bi-shield-check me-1"></i> 512-dim Enforced
-                            </span>
-                        </div>
-                        <select id="selectClipModel" class="form-select bg-light border-0 py-2 mb-2">
-                            <option value="openai/clip-vit-base-patch32" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch32' ? 'selected' : '' ?>>
-                                openai/clip-vit-base-patch32 (Default • Fastest • 512-d • ~350MB RAM)
-                            </option>
-                            <option value="openai/clip-vit-base-patch16" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch16' ? 'selected' : '' ?>>
-                                openai/clip-vit-base-patch16 (Recommended Upgrade • High Precision • 512-d • ~500MB RAM)
-                            </option>
-                            <option value="laion/CLIP-ViT-B-32-laion2B-s34B-b79K" <?= $settings['clipModelName'] === 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K' ? 'selected' : '' ?>>
-                                laion/CLIP-ViT-B-32-laion2B-s34B-b79K (2B Images Dataset • 512-d • ~400MB RAM)
-                            </option>
-                            <option value="custom" <?= !in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K']) ? 'selected' : '' ?>>
-                                Custom HuggingFace Model (Advanced)
-                            </option>
+                        <label class="form-label small fw-bold d-block">CLIP Semantic Search Model</label>
+                        <select name="clipModelName" id="selectClipModel" class="form-select bg-light border-0 py-2">
+                            <option value="openai/clip-vit-base-patch32" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch32' ? 'selected' : '' ?>>openai/clip-vit-base-patch32 (Default • Fastest, 512-d, ~350MB RAM)</option>
+                            <option value="openai/clip-vit-base-patch16" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch16' ? 'selected' : '' ?>>openai/clip-vit-base-patch16 (Recommended Upgrade • High Precision, 512-d, ~500MB RAM)</option>
+                            <option value="laion/CLIP-ViT-B-32-laion2B-s34B-b79K" <?= $settings['clipModelName'] === 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K' ? 'selected' : '' ?>>laion/CLIP-ViT-B-32-laion2B-s34B-b79K (2B Images Dataset • 512-d, ~400MB RAM)</option>
+                            <option value="laion/CLIP-ViT-B-16-laion2B-s34B-b88K" <?= $settings['clipModelName'] === 'laion/CLIP-ViT-B-16-laion2B-s34B-b88K' ? 'selected' : '' ?>>laion/CLIP-ViT-B-16-laion2B-s34B-b88K (LAION Fine Details • 512-d, ~550MB RAM)</option>
+                            <option value="custom" <?= !in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K', 'laion/CLIP-ViT-B-16-laion2B-s34B-b88K']) ? 'selected' : '' ?>>Custom HuggingFace Model Repo...</option>
                         </select>
-                        <input type="text" class="form-control bg-light border-0 py-2 font-monospace small" name="clipModelName" id="inputClipModelName"
-                               value="<?= esc($settings['clipModelName']) ?>" style="<?= in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K']) ? 'display:none;' : '' ?>">
-                        <span class="text-muted small d-block">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Qdrant vector collection is locked to 512-d. Choosing a 768-d model (e.g. ViT-L-14) will cause dimension collision errors.
-                        </span>
+                        <div id="customClipContainer" class="mt-2" style="<?= !in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K', 'laion/CLIP-ViT-B-16-laion2B-s34B-b88K']) ? '' : 'display:none;' ?>">
+                            <input type="text" class="form-control bg-light border-0 py-2 font-monospace small" id="inputCustomClip" placeholder="e.g. openai/clip-vit-base-patch32" value="<?= esc($settings['clipModelName']) ?>">
+                        </div>
+                        <span class="text-muted small">Choosing a new CLIP model reloads weights dynamically on the FastAPI backend (512-dimensional models only).</span>
                     </div>
 
                     <!-- YOLOv8 Object Detection Threshold -->
@@ -565,7 +551,18 @@
 
             btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
 
-            $.post(BASE_URL + 'admin/ml/save', form.serialize(), function(res) {
+            var formData = form.serializeArray();
+            if ($('#selectClipModel').val() === 'custom') {
+                var customVal = $('#inputCustomClip').val().trim();
+                formData = formData.map(function(item) {
+                    if (item.name === 'clipModelName') {
+                        return { name: 'clipModelName', value: customVal };
+                    }
+                    return item;
+                });
+            }
+
+            $.post(BASE_URL + 'admin/ml/save', formData, function(res) {
                 btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save ML Parameters');
                 if (res.status === 'success') {
                     showToast(res.message, 'success');
@@ -583,9 +580,10 @@
         $('#selectClipModel').on('change', function() {
             var val = $(this).val();
             if (val === 'custom') {
-                $('#inputClipModelName').show().focus();
+                $('#customClipContainer').slideDown(150);
+                $('#inputCustomClip').focus();
             } else {
-                $('#inputClipModelName').val(val).hide();
+                $('#customClipContainer').slideUp(150);
             }
         });
 
