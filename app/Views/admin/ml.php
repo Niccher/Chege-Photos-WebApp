@@ -305,6 +305,57 @@
             </div>
         </div>
     </div>
+
+    <!-- On-Disk Model Inventory & Storage Inspector -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-1 d-flex align-items-center gap-2">
+                            <i class="bi bi-folder-check text-success"></i>
+                            <span>On-Disk Model Inventory &amp; Storage Inspector</span>
+                        </h5>
+                        <p class="text-muted small mb-0">Live filesystem scan of neural network model files inside the ML container. Download missing files or re-verify integrity anytime.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill small" id="badgeTotalDiskUsage">
+                            <i class="bi bi-hdd-fill text-primary me-1"></i> Disk Usage: <span id="textTotalDiskUsage">Scanning...</span>
+                        </span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1.5" id="btnRefreshInventory">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1.5 fw-bold" id="btnDownloadAllModels">
+                            <i class="bi bi-cloud-arrow-down-fill me-1"></i> Force Download All Missing
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tableModelInventory">
+                        <thead class="table-light small">
+                            <tr>
+                                <th style="width: 20%;">Model &amp; Category</th>
+                                <th style="width: 32%;">Role / Purpose</th>
+                                <th style="width: 25%;">Container File Path</th>
+                                <th style="width: 8%;">Disk Size</th>
+                                <th style="width: 8%;">Status</th>
+                                <th style="width: 7%;" class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyModelInventory" class="small">
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    Inspecting ML container filesystem...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Generic Action Confirmation Alert Modal -->
@@ -848,6 +899,135 @@
                     showToast('Failed to trigger scan: ' + err, 'danger');
                 });
             });
+        });
+
+        // ── Model Inventory & Downloader Functions ─────────────────
+        function renderModelInventory(data) {
+            if (!data || !data.inventory) {
+                $('#tbodyModelInventory').html('<tr><td colspan="6" class="text-center py-4 text-danger">Failed to load inventory. ML microservice offline or unreachable.</td></tr>');
+                return;
+            }
+
+            $('#textTotalDiskUsage').text(data.total_disk_usage || '0 B');
+
+            var html = '';
+            data.inventory.forEach(function(item) {
+                var badgeStatus = '';
+                if (item.status === 'loaded') {
+                    badgeStatus = '<span class="badge bg-success text-white rounded-pill px-2.5 py-1"><i class="bi bi-cpu-fill me-1"></i> Loaded in RAM</span>';
+                } else if (item.status === 'on_disk') {
+                    badgeStatus = '<span class="badge bg-primary text-white rounded-pill px-2.5 py-1"><i class="bi bi-hdd-fill me-1"></i> On Disk</span>';
+                } else {
+                    badgeStatus = '<span class="badge bg-danger text-white rounded-pill px-2.5 py-1"><i class="bi bi-exclamation-octagon-fill me-1"></i> Missing</span>';
+                }
+
+                var categoryBadge = '<span class="badge bg-light text-dark border rounded-pill px-2 py-0.5 me-1" style="font-size: 11px;">' + item.category + '</span>';
+
+                var actionBtn = '';
+                if (item.status === 'loaded') {
+                    actionBtn = '<button class="btn btn-outline-secondary btn-sm rounded-pill px-2.5 py-1 btn-download-group" data-group="' + item.download_group + '" title="Re-download/verify and reload into memory"><i class="bi bi-arrow-repeat me-1"></i> Reload</button>';
+                } else {
+                    actionBtn = '<button class="btn btn-success btn-sm rounded-pill px-2.5 py-1 btn-download-group fw-bold" data-group="' + item.download_group + '" title="Download missing model and load into memory"><i class="bi bi-cloud-arrow-down-fill me-1"></i> Download</button>';
+                }
+
+                html += '<tr>' +
+                    '<td>' +
+                        '<div class="fw-bold text-dark">' + item.name + '</div>' +
+                        '<div>' + categoryBadge + '</div>' +
+                    '</td>' +
+                    '<td><span class="text-muted">' + item.purpose + '</span></td>' +
+                    '<td><code class="font-monospace text-break" style="font-size: 11px;">' + item.path + '</code></td>' +
+                    '<td><span class="fw-bold">' + (item.exists ? item.size_formatted : '<span class="text-muted">0 B</span>') + '</span></td>' +
+                    '<td>' + badgeStatus + '</td>' +
+                    '<td class="text-end">' + actionBtn + '</td>' +
+                '</tr>';
+            });
+
+            $('#tbodyModelInventory').html(html);
+        }
+
+        function loadModelInventory() {
+            $.get(BASE_URL + 'admin/ml/models-inventory', function(res) {
+                if (res.status === 'success') {
+                    renderModelInventory(res);
+                } else {
+                    $('#tbodyModelInventory').html('<tr><td colspan="6" class="text-center py-4 text-danger">' + (res.message || 'Error fetching inventory') + '</td></tr>');
+                }
+            }).fail(function(xhr) {
+                $('#tbodyModelInventory').html('<tr><td colspan="6" class="text-center py-4 text-danger">Cannot connect to ML service (HTTP ' + xhr.status + '). Verify container is running.</td></tr>');
+            });
+        }
+
+        // Initial inventory load
+        loadModelInventory();
+
+        // Refresh inventory button
+        $('#btnRefreshInventory').on('click', function() {
+            var btn = $(this);
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Refreshing...');
+            $.get(BASE_URL + 'admin/ml/models-inventory', function(res) {
+                btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i> Refresh');
+                if (res.status === 'success') {
+                    renderModelInventory(res);
+                    showToast('Model inventory refreshed.', 'success');
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise me-1"></i> Refresh');
+                showToast('Failed to refresh inventory: HTTP ' + xhr.status, 'danger');
+            });
+        });
+
+        // Download single group
+        $(document).on('click', '.btn-download-group', function() {
+            var btn = $(this);
+            var group = btn.data('group');
+            var originalHtml = btn.html();
+
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Downloading...');
+            showToast('Downloading model files in background and loading into RAM...', 'info');
+
+            $.post(BASE_URL + 'admin/ml/models-download', { group: group }, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success' || res.status === 'partial_error') {
+                    renderModelInventory(res);
+                    showToast('Model files downloaded and loaded into memory successfully!', 'success');
+                } else {
+                    showToast(res.message || 'Download failed', 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP ' + xhr.status;
+                showToast('Download error: ' + err, 'danger');
+            });
+        });
+
+        // Force download all models
+        $('#btnDownloadAllModels').on('click', function() {
+            promptConfirmation(
+                "Download All Missing Models?",
+                "This will check all registered models (InsightFace pack, YOLOv8, and CLIP), download any missing weights from HuggingFace and GitHub releases, and load them into memory.",
+                function() {
+                    var btn = $('#btnDownloadAllModels');
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Downloading All...');
+                    showToast('Downloading all missing models in background. This may take 1-2 minutes...', 'info');
+
+                    $.post(BASE_URL + 'admin/ml/models-download', { group: 'all' }, function(res) {
+                        btn.prop('disabled', false).html('<i class="bi bi-cloud-arrow-down-fill me-1"></i> Force Download All Missing');
+                        if (res.status === 'success' || res.status === 'partial_error') {
+                            renderModelInventory(res);
+                            showToast('All models downloaded and loaded into memory successfully!', 'success');
+                        } else {
+                            showToast(res.message || 'Download failed', 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html('<i class="bi bi-cloud-arrow-down-fill me-1"></i> Force Download All Missing');
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP ' + xhr.status;
+                        showToast('Download error: ' + err, 'danger');
+                    });
+                }
+            );
         });
     });
 </script>

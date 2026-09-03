@@ -387,6 +387,70 @@ class Admin extends BaseController
         }
     }
 
+    public function modelsInventory()
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 30,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/models/inventory';
+            $response = $client->get($url);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                return $this->response->setJSON($data);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to fetch model inventory: HTTP ' . $response->getStatusCode()
+            ])->setStatusCode(502);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cannot connect to ML service: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function downloadModel()
+    {
+        $group = $this->request->getPost('group') ?? 'all';
+
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 10,
+                'timeout'         => 300,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/models/download?group=' . urlencode($group);
+            $response = $client->post($url);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                return $this->response->setJSON($data);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Model download failed: HTTP ' . $response->getStatusCode()
+            ])->setStatusCode(502);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cannot connect to ML service: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
     public function storage()
     {
         $userId     = auth()->id();

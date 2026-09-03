@@ -176,6 +176,8 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->post('ml/regenerate-key', 'Admin::regenerateApiKey');
     $routes->post('ml/autotune', 'Admin::autotuneMl');
     $routes->post('ml/simulate', 'Admin::simulateClustering');
+    $routes->get('ml/models-inventory', 'Admin::modelsInventory');
+    $routes->post('ml/models-download', 'Admin::downloadModel');
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');
