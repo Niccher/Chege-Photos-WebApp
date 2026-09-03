@@ -109,9 +109,9 @@ class Admin extends BaseController
                 'maxLoginAttempts'         => setting('Auth.maxLoginAttempts') ?? 5,
 
                 // Media & Upload Constraints
-                'maxUploadSizeMb'          => setting('App.maxUploadSizeMb') ?? 50,
+                'maxUploadSizeMb'          => setting('App.maxUploadSizeMb') ?? 500,
                 'maxBatchUploadCount'      => setting('App.maxBatchUploadCount') ?? 50,
-                'allowedExtensions'        => setting('App.allowedExtensions') ?? 'jpg,jpeg,png,webp,heic',
+                'allowedExtensions'        => setting('App.allowedExtensions') ?? 'jpg,jpeg,png,webp,heic,tiff,mp4,mov,m4v,webm,mkv,avi',
 
                 // Quotas & Retention
                 'storageLimit'             => setting('App.storageLimit') ?: (1024 * 1024 * 1024), // 1GB default
@@ -143,7 +143,7 @@ class Admin extends BaseController
             'storageLimit'        => 'required|numeric',
             'siteName'            => 'required|min_length[2]|max_length[100]',
             'supportEmail'        => 'required|valid_email',
-            'maxUploadSizeMb'     => 'required|numeric|greater_than_equal_to[1]|less_than_equal_to[500]',
+            'maxUploadSizeMb'     => 'required|numeric|greater_than_equal_to[1]|less_than_equal_to[10240]',
             'maxBatchUploadCount' => 'required|numeric|greater_than_equal_to[1]|less_than_equal_to[250]',
         ];
 

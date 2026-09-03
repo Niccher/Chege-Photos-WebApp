@@ -130,36 +130,50 @@
                         <i class="bi bi-cloud-upload-fill text-info"></i>
                         <span>Upload &amp; Media Constraints</span>
                     </h5>
-                    <p class="text-muted small mb-4">Control photo ingestion boundaries, maximum file sizes, and permitted image formats.</p>
+                    <p class="text-muted small mb-4">Control photo and video ingestion boundaries, maximum file sizes, and permitted media formats.</p>
 
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">Max Single Upload File Size</label>
-                            <select name="maxUploadSizeMb" class="form-select bg-light border-0 py-2">
-                                <option value="10" <?= (int)$settings['maxUploadSizeMb'] === 10 ? 'selected' : '' ?>>10 MB</option>
-                                <option value="25" <?= (int)$settings['maxUploadSizeMb'] === 25 ? 'selected' : '' ?>>25 MB</option>
-                                <option value="50" <?= (int)$settings['maxUploadSizeMb'] === 50 ? 'selected' : '' ?>>50 MB (Default - Recommended)</option>
+                            <select name="maxUploadSizeMb" id="selectMaxUploadSize" class="form-select bg-light border-0 py-2">
+                                <option value="25" <?= (int)$settings['maxUploadSizeMb'] === 25 ? 'selected' : '' ?>>25 MB (Photos only)</option>
+                                <option value="50" <?= (int)$settings['maxUploadSizeMb'] === 50 ? 'selected' : '' ?>>50 MB</option>
                                 <option value="100" <?= (int)$settings['maxUploadSizeMb'] === 100 ? 'selected' : '' ?>>100 MB (High-Res RAW / Pro)</option>
                                 <option value="250" <?= (int)$settings['maxUploadSizeMb'] === 250 ? 'selected' : '' ?>>250 MB</option>
+                                <option value="500" <?= (int)$settings['maxUploadSizeMb'] === 500 ? 'selected' : '' ?>>500 MB (Recommended for HD Video)</option>
+                                <option value="1024" <?= (int)$settings['maxUploadSizeMb'] === 1024 ? 'selected' : '' ?>>1 GB / 1024 MB (4K Mobile Video)</option>
+                                <option value="2048" <?= (int)$settings['maxUploadSizeMb'] === 2048 ? 'selected' : '' ?>>2 GB / 2048 MB (Long Video Clips)</option>
+                                <option value="4096" <?= (int)$settings['maxUploadSizeMb'] === 4096 ? 'selected' : '' ?>>4 GB / 4096 MB (Cinematic Footage)</option>
+                                <option value="5120" <?= (int)$settings['maxUploadSizeMb'] === 5120 ? 'selected' : '' ?>>5 GB / 5120 MB (Enterprise Maximum)</option>
                             </select>
-                            <span class="text-muted small" style="font-size: 11px;">Enforced both in backend <code>Photos::upload()</code> and frontend Dropzone.</span>
+                            <span class="text-muted small" style="font-size: 11px;">Enforced both in backend <code>Photos::upload()</code> and frontend Dropzone uploader.</span>
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold">Max Photos Per Batch Upload</label>
+                            <label class="form-label small fw-bold">Max Files Per Batch Upload</label>
                             <select name="maxBatchUploadCount" class="form-select bg-light border-0 py-2">
-                                <option value="20" <?= (int)$settings['maxBatchUploadCount'] === 20 ? 'selected' : '' ?>>20 Photos</option>
-                                <option value="50" <?= (int)$settings['maxBatchUploadCount'] === 50 ? 'selected' : '' ?>>50 Photos (Default)</option>
-                                <option value="100" <?= (int)$settings['maxBatchUploadCount'] === 100 ? 'selected' : '' ?>>100 Photos</option>
-                                <option value="200" <?= (int)$settings['maxBatchUploadCount'] === 200 ? 'selected' : '' ?>>200 Photos</option>
+                                <option value="20" <?= (int)$settings['maxBatchUploadCount'] === 20 ? 'selected' : '' ?>>20 Files</option>
+                                <option value="50" <?= (int)$settings['maxBatchUploadCount'] === 50 ? 'selected' : '' ?>>50 Files (Default)</option>
+                                <option value="100" <?= (int)$settings['maxBatchUploadCount'] === 100 ? 'selected' : '' ?>>100 Files</option>
+                                <option value="200" <?= (int)$settings['maxBatchUploadCount'] === 200 ? 'selected' : '' ?>>200 Files</option>
                             </select>
                             <span class="text-muted small" style="font-size: 11px;">Prevents browser memory exhaustion during multi-file drag-and-drops.</span>
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small fw-bold">Permitted File Extensions</label>
-                            <input type="text" name="allowedExtensions" class="form-control bg-light border-0 py-2 font-monospace small" value="<?= esc($settings['allowedExtensions']) ?>" required>
-                            <span class="text-muted small" style="font-size: 11px;">Comma-separated lowercase extensions (e.g. <code>jpg,jpeg,png,webp,heic</code>).</span>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold mb-0">Permitted File Extensions (Photos &amp; Videos)</label>
+                                <div class="d-flex gap-1">
+                                    <button type="button" class="btn btn-outline-primary rounded-pill px-2 py-0.5" id="btnPresetPhotosVideos" style="font-size: 11px;">
+                                        <i class="bi bi-camera-video me-1"></i> Photos &amp; Videos
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary rounded-pill px-2 py-0.5" id="btnPresetPhotosOnly" style="font-size: 11px;">
+                                        <i class="bi bi-image me-1"></i> Photos Only
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="text" name="allowedExtensions" id="inputAllowedExtensions" class="form-control bg-light border-0 py-2 font-monospace small" value="<?= esc($settings['allowedExtensions']) ?>" required>
+                            <span class="text-muted small" style="font-size: 11px;">Supported: <strong>Photos</strong> (<code>jpg,jpeg,png,webp,heic,tiff</code>) • <strong>Videos</strong> (<code>mp4,mov,m4v,webm,mkv,avi</code>).</span>
                         </div>
                     </div>
                 </div>
@@ -342,6 +356,21 @@
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Failed to save settings: ' + err, 'danger');
             });
+        });
+
+        // Quick extension presets
+        $('#btnPresetPhotosVideos').on('click', function() {
+            $('#inputAllowedExtensions').val('jpg,jpeg,png,webp,heic,tiff,mp4,mov,m4v,webm,mkv,avi');
+            var currentLimit = parseInt($('#selectMaxUploadSize').val()) || 50;
+            if (currentLimit < 500) {
+                $('#selectMaxUploadSize').val('1024'); // Suggest 1 GB for videos
+            }
+            showToast('Applied Photos & Videos preset (Max upload set to 1 GB).', 'info');
+        });
+
+        $('#btnPresetPhotosOnly').on('click', function() {
+            $('#inputAllowedExtensions').val('jpg,jpeg,png,webp,heic,tiff');
+            showToast('Applied Photos Only preset.', 'info');
         });
     });
 </script>

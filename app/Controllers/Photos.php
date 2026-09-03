@@ -9,7 +9,7 @@ use ZipArchive;
 
 class Photos extends BaseController
 {
-    private const MAX_UPLOAD_BYTES = 536_870_912; // 512 MB
+    private const MAX_UPLOAD_BYTES = 5_368_709_120; // 5 GB (5,368,709,120 bytes) fallback
     public function index()
     {
         $photoModel = new \App\Models\PhotoModel();
@@ -87,8 +87,8 @@ class Photos extends BaseController
 
     public function upload()
     {
-        ini_set('memory_limit', '512M');
-        ini_set('max_execution_time', '300');
+        ini_set('memory_limit', '1024M');
+        ini_set('max_execution_time', '900');
 
         $file = $this->request->getFile('file');
 

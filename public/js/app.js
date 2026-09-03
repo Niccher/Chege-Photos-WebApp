@@ -1131,10 +1131,10 @@ $(document).ready(function () {
     if ($('#photoDropzone').length) {
         let myDropzone = new Dropzone("#photoDropzone", {
             paramName: "file",
-            maxFilesize: 512, // MB
+            maxFilesize: (typeof window.APP_MAX_UPLOAD_MB !== 'undefined' ? window.APP_MAX_UPLOAD_MB : 500), // MB
             acceptedFiles: "image/*,video/*",
-            timeout: 60000,
-            dictDefaultMessage: "Drop photos here or click to upload",
+            timeout: 900000, // 15 minutes for large video uploads
+            dictDefaultMessage: "Drop photos or videos here or click to upload",
             init: function () {
                 this.on("queuecomplete", function (file) {
                     // Reload page when all uploads in the queue are complete

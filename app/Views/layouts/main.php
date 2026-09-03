@@ -940,6 +940,7 @@
 <script src="https://unpkg.com/dropzone@5/dist/min/dropzone.min.js"></script>
 <script>
     Dropzone.autoDiscover = false;
+    window.APP_MAX_UPLOAD_MB = <?= (int) (setting('App.maxUploadSizeMb') ?: 500) ?>;
 </script>
 <!-- Custom JS -->
 <script src="<?= base_url('js/app.js?v=' . (file_exists(FCPATH . 'js/app.js') ? filemtime(FCPATH . 'js/app.js') : '1.0')) ?>"></script>
