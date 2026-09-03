@@ -96,13 +96,26 @@ class Photos extends BaseController
             return $this->response->setJSON(['status' => 'error', 'message' => $file ? $file->getErrorString() : 'No file uploaded']);
         }
 
-        if ($file->getSize() > self::MAX_UPLOAD_BYTES) {
-            $maxMb = self::MAX_UPLOAD_BYTES / 1024 / 1024;
+        // Enforce maximum upload size from database setting
+        $configuredMaxMb = (int) (setting('App.maxUploadSizeMb') ?: 50);
+        $maxUploadBytes = $configuredMaxMb * 1024 * 1024;
+        if ($file->getSize() > $maxUploadBytes) {
             $actual = round($file->getSize() / 1024 / 1024, 1);
             return $this->response->setJSON([
-                'status' => 'error',
-                'message' => "File exceeds the {$maxMb} MB limit ({$actual} MB)."
-            ]);
+                'status'  => 'error',
+                'message' => "File exceeds the configured {$configuredMaxMb} MB limit ({$actual} MB)."
+            ])->setStatusCode(400);
+        }
+
+        // Enforce allowed extensions from database setting
+        $rawExts = setting('App.allowedExtensions') ?: 'jpg,jpeg,png,webp,heic';
+        $allowedExts = array_map('trim', explode(',', strtolower($rawExts)));
+        $fileExt = strtolower($file->getClientExtension());
+        if (!in_array($fileExt, $allowedExts)) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => "File extension .{$fileExt} is not permitted. Allowed: " . implode(', ', $allowedExts)
+            ])->setStatusCode(400);
         }
 
         // Get info BEFORE move, as move() deletes the temporary file
@@ -125,6 +138,19 @@ class Photos extends BaseController
         }
 
         $userId = auth()->id() ?: 1;
+
+        // Enforce user storage quota
+        $quotaBytes = (int) (setting('App.storageLimit') ?: 1073741824); // 1GB default
+        if ($quotaBytes > 0) {
+            $userTotalBytes = (int) ($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
+            if ($userTotalBytes + $size > $quotaBytes) {
+                $quotaFormatted = round($quotaBytes / 1024 / 1024 / 1024, 1) . ' GB';
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => "Upload rejected: Storage quota limit ({$quotaFormatted}) reached."
+                ])->setStatusCode(403);
+            }
+        }
         $yearMonth = date('Y/m');
         $newName = $file->getRandomName();
 

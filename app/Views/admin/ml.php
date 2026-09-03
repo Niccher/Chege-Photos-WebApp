@@ -28,7 +28,7 @@
                             <option value="buffalo_s" <?= $settings['faceModelPack'] === 'buffalo_s' ? 'selected' : '' ?>>buffalo_s (Small - Fast)</option>
                             <option value="buffalo_sc" <?= $settings['faceModelPack'] === 'buffalo_sc' ? 'selected' : '' ?>>buffalo_sc (Smallest - Optimized for CPU execution)</option>
                         </select>
-                        <span class="text-muted small">Choosing a new pack triggers a dynamic model weight reload on the FastAPI backend.</span>
+                        <span class="text-muted small">InsightFace Architecture: Switches facial analysis weights. Dynamically reloads ONNX runtime models into container RAM without rebooting.</span>
                     </div>
 
                     <!-- Face detection threshold confidence slider -->
@@ -38,7 +38,7 @@
                             <span class="badge bg-primary rounded-pill" id="detThreshValue"><?= esc($settings['faceDetThresh']) ?></span>
                         </div>
                         <input type="range" class="form-range" name="faceDetThresh" min="0.1" max="1.0" step="0.05" value="<?= esc($settings['faceDetThresh']) ?>" id="detThreshSlider">
-                        <span class="text-muted small">Minimum confidence score to extract/register a face.</span>
+                        <span class="text-muted small">Face Detection Confidence: Minimum certainty required to extract a face. Higher thresholds (0.50–0.60) eliminate false positives from ambient shadows, wall textures, and background noise.</span>
                     </div>
 
                     <!-- CLIP Model Pack Selector -->
@@ -54,7 +54,7 @@
                         <div id="customClipContainer" class="mt-2" style="<?= !in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K', 'laion/CLIP-ViT-B-16-laion2B-s34B-b88K']) ? '' : 'display:none;' ?>">
                             <input type="text" class="form-control bg-light border-0 py-2 font-monospace small" id="inputCustomClip" placeholder="e.g. openai/clip-vit-base-patch32" value="<?= esc($settings['clipModelName']) ?>">
                         </div>
-                        <span class="text-muted small">Choosing a new CLIP model reloads weights dynamically on the FastAPI backend (512-dimensional models only).</span>
+                        <span class="text-muted small">Semantic Vision Transformer: Powers natural-language search (e.g. 'sunset at the beach', 'kids playing soccer'). Selecting a model hot-reloads transformer weights dynamically into RAM. Requires 512-dimensional output to match Qdrant.</span>
                     </div>
 
                     <!-- YOLOv8 Object Detection Threshold -->
@@ -64,7 +64,7 @@
                             <span class="badge bg-primary rounded-pill" id="objThreshValue"><?= esc($settings['objectDetThresh']) ?></span>
                         </div>
                         <input type="range" class="form-range" name="objectDetThresh" min="0.1" max="1.0" step="0.05" value="<?= esc($settings['objectDetThresh']) ?>" id="objThreshSlider">
-                        <span class="text-muted small">Minimum confidence score required to auto-tag a photo with object/scene labels on upload.</span>
+                        <span class="text-muted small">Object &amp; Scene Tagging Confidence: Minimum certainty required to auto-assign searchable COCO labels (vehicles, animals, food, nature, electronics) during upload.</span>
                     </div>
 
                     <!-- HDBSCAN Section with Auto-Tuner & Advisory -->
@@ -74,7 +74,7 @@
                                 <h6 class="fw-bold mb-0 text-dark">
                                     <i class="bi bi-people-fill text-primary me-1"></i> HDBSCAN Face Clustering Hyperparameters
                                 </h6>
-                                <span class="text-muted small">Algorithmic clustering to discover people and group faces without supervision.</span>
+                                <span class="text-muted small">Algorithmic density-based clustering to automatically discover identities and group faces without supervision.</span>
                             </div>
                             <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold" id="btnAutotuneHdbscan">
                                 <i class="bi bi-lightning-charge-fill me-1 text-warning"></i> Auto-Tune from Data
@@ -85,14 +85,14 @@
                         <div class="mb-3">
                             <label class="form-label small fw-bold d-block">HDBSCAN Minimum Cluster Size</label>
                             <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinCluster" id="inputMinCluster" min="1" max="20" value="<?= esc($settings['hdbscanMinCluster']) ?>">
-                            <span class="text-muted small">Minimum facial occurrences to form a Person. (2 = allows small groups; 3 = filters out background strangers).</span>
+                            <span class="text-muted small">Minimum Person Occurrences: Number of photos a face must appear in before forming a distinct Person card. Setting this to 3 effectively filters out passing background strangers in crowd shots.</span>
                         </div>
 
                         <!-- Minimum samples -->
                         <div class="mb-2">
                             <label class="form-label small fw-bold d-block">HDBSCAN Minimum Samples</label>
                             <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinSamples" id="inputMinSamples" min="1" max="20" value="<?= esc($settings['hdbscanMinSamples']) ?>">
-                            <span class="text-muted small">Neighborhood density threshold. Controls how conservative grouping is.</span>
+                            <span class="text-muted small">Density Core Threshold: Governs how strictly faces are grouped. Setting this to 2 forces mutual density, preventing different family members from being mistakenly merged together.</span>
                             <div id="minSamplesWarning" class="alert alert-warning py-2 px-3 rounded small mt-2 mb-0" style="<?= (int)$settings['hdbscanMinSamples'] === 1 ? '' : 'display:none;' ?>">
                                 <i class="bi bi-exclamation-triangle-fill me-1"></i>
                                 <strong>Advisory:</strong> Min Samples = 1 treats single faces as dense cores. This frequently causes <em>cluster bleeding</em> (falsely merging different people who look slightly similar). <strong>Recommended: 2</strong>.
@@ -105,7 +105,7 @@
                         <div class="form-check form-switch p-0 d-flex justify-content-between align-items-center">
                             <div>
                                 <label class="form-label small fw-bold mb-0 d-block">Estimate Sensitive Attributes</label>
-                                <span class="text-muted small">Perform age and gender estimation during scans.</span>
+                                <span class="text-muted small">Demographic Biometrics: Estimates chronological age and gender classification during facial scans for demographic filters.</span>
                             </div>
                             <input class="form-check-input ms-0 fs-4" type="checkbox" name="includeSensitive" value="1" <?= (!isset($settings['includeSensitive']) || $settings['includeSensitive']) ? 'checked' : '' ?>>
                         </div>
@@ -138,7 +138,7 @@
                     <div class="p-3 border rounded d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
                         <div>
                             <h6 class="mb-1 small fw-bold">Trigger HDBSCAN Clustering</h6>
-                            <p class="text-muted small mb-1">Re-group and align all extracted face vectors.</p>
+                            <p class="text-muted small mb-1">Execute Identity Grouping: Clusters unlocked face vectors into identified Person cards. Preserves custom names and automatically links newly discovered photos.</p>
                             <span class="badge bg-primary text-white rounded-pill px-2 py-1 small me-1" id="badgeUnassignedFaces">Unassigned Faces: <?= esc($mlStats['unassigned']) ?></span>
                             <span class="badge bg-success text-white rounded-pill px-2 py-1 small" id="badgeTotalPersons">Persons (Clusters): <?= esc($mlStats['total_persons']) ?></span>
                         </div>
@@ -150,7 +150,7 @@
                     <div class="p-3 border rounded d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
                         <div>
                             <h6 class="mb-1 small fw-bold text-danger">Reset Face Encodings</h6>
-                            <p class="text-muted small mb-1">Wipe vector spaces and MySQL tables clean.</p>
+                            <p class="text-muted small mb-1">Purge Face Embeddings: Clears all Qdrant face vectors and resets Person clusters back to unassigned state. Use before full re-scans.</p>
                             <span class="badge bg-danger text-white rounded-pill px-2 py-1 small" id="badgeTotalEncodings">Total Encodings (Vectors): <?= esc($mlStats['total_encodings']) ?></span>
                         </div>
                         <button class="btn btn-danger btn-sm rounded-pill px-3" id="btnTriggerReset" data-bs-toggle="modal" data-bs-target="#resetMlModal">

@@ -90,12 +90,45 @@ class Admin extends BaseController
         $userId     = auth()->id();
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
 
+        $db = \Config\Database::connect();
+        $dbVersion = 'MySQL ' . $db->getVersion();
+
         $data = [
             'counts' => $this->getSidebarCounts(),
             'settings' => [
-                'storageLimit'      => setting('App.storageLimit') ?: (1024 * 1024 * 1024), // 1GB default
-                'allowRegistration' => setting('Auth.allowRegistration') ?? true,
-                'maintenanceMode'   => setting('App.maintenanceMode') ?? false,
+                // Platform Branding
+                'siteName'                 => setting('App.siteName') ?? 'Chege Photos',
+                'supportEmail'             => setting('App.supportEmail') ?? 'support@chegephotos.com',
+                'timezone'                 => setting('App.timezone') ?? 'Africa/Nairobi',
+                'dateFormat'               => setting('App.dateFormat') ?? 'Y-m-d',
+
+                // Security & Auth
+                'allowRegistration'        => setting('Auth.allowRegistration') ?? true,
+                'requireEmailVerification' => setting('Auth.requireEmailVerification') ?? false,
+                'sessionLifetime'          => setting('Auth.sessionLifetime') ?? 86400,
+                'maxLoginAttempts'         => setting('Auth.maxLoginAttempts') ?? 5,
+
+                // Media & Upload Constraints
+                'maxUploadSizeMb'          => setting('App.maxUploadSizeMb') ?? 50,
+                'maxBatchUploadCount'      => setting('App.maxBatchUploadCount') ?? 50,
+                'allowedExtensions'        => setting('App.allowedExtensions') ?? 'jpg,jpeg,png,webp,heic',
+
+                // Quotas & Retention
+                'storageLimit'             => setting('App.storageLimit') ?: (1024 * 1024 * 1024), // 1GB default
+                'trashRetentionDays'       => setting('App.trashRetentionDays') ?? 30,
+
+                // Governance & Maintenance
+                'maintenanceMode'          => setting('App.maintenanceMode') ?? false,
+                'maintenanceMessage'       => setting('App.maintenanceMessage') ?? 'Chege Photos is currently undergoing routine system maintenance. We will be back online shortly.',
+            ],
+            'serverSpecs' => [
+                'phpVersion'        => PHP_VERSION,
+                'ciVersion'         => \CodeIgniter\CodeIgniter::CI_VERSION,
+                'memoryLimit'       => ini_get('memory_limit'),
+                'uploadMaxFilesize' => ini_get('upload_max_filesize'),
+                'postMaxSize'       => ini_get('post_max_size'),
+                'maxExecutionTime'  => ini_get('max_execution_time') . 's',
+                'dbVersion'         => $dbVersion,
             ],
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
@@ -107,7 +140,11 @@ class Admin extends BaseController
     public function saveSettings()
     {
         $rules = [
-            'storageLimit' => 'required|numeric',
+            'storageLimit'        => 'required|numeric',
+            'siteName'            => 'required|min_length[2]|max_length[100]',
+            'supportEmail'        => 'required|valid_email',
+            'maxUploadSizeMb'     => 'required|numeric|greater_than_equal_to[1]|less_than_equal_to[500]',
+            'maxBatchUploadCount' => 'required|numeric|greater_than_equal_to[1]|less_than_equal_to[250]',
         ];
 
         if (! $this->validate($rules)) {
@@ -117,21 +154,61 @@ class Admin extends BaseController
             ])->setStatusCode(400);
         }
 
-        $storageLimit      = $this->request->getPost('storageLimit');
-        $allowRegistration = (bool) $this->request->getPost('allowRegistration');
-        $maintenanceMode   = (bool) $this->request->getPost('maintenanceMode');
+        // Platform Branding
+        $siteName     = $this->request->getPost('siteName');
+        $supportEmail = $this->request->getPost('supportEmail');
+        $timezone     = $this->request->getPost('timezone') ?? 'Africa/Nairobi';
+        $dateFormat   = $this->request->getPost('dateFormat') ?? 'Y-m-d';
+
+        // Security & Auth
+        $allowRegistration        = (bool) $this->request->getPost('allowRegistration');
+        $requireEmailVerification = (bool) $this->request->getPost('requireEmailVerification');
+        $sessionLifetime          = (int) ($this->request->getPost('sessionLifetime') ?? 86400);
+        $maxLoginAttempts         = (int) ($this->request->getPost('maxLoginAttempts') ?? 5);
+
+        // Upload Constraints
+        $maxUploadSizeMb     = (int) $this->request->getPost('maxUploadSizeMb');
+        $maxBatchUploadCount = (int) $this->request->getPost('maxBatchUploadCount');
+        $allowedExtensions   = strtolower(trim($this->request->getPost('allowedExtensions') ?? 'jpg,jpeg,png,webp,heic'));
+
+        // Quotas & Retention
+        $storageLimit       = (int) $this->request->getPost('storageLimit');
+        $trashRetentionDays = (int) ($this->request->getPost('trashRetentionDays') ?? 30);
+
+        // Governance
+        $maintenanceMode    = (bool) $this->request->getPost('maintenanceMode');
+        $maintenanceMessage = trim($this->request->getPost('maintenanceMessage') ?? '');
 
         $oldMaintenance = setting('App.maintenanceMode') ?? false;
 
-        setting()->set('App.storageLimit', (int) $storageLimit);
+        // Persist to MySQL settings table
+        setting()->set('App.siteName', $siteName);
+        setting()->set('App.supportEmail', $supportEmail);
+        setting()->set('App.timezone', $timezone);
+        setting()->set('App.dateFormat', $dateFormat);
+
         setting()->set('Auth.allowRegistration', $allowRegistration);
+        setting()->set('Auth.requireEmailVerification', $requireEmailVerification);
+        setting()->set('Auth.sessionLifetime', $sessionLifetime);
+        setting()->set('Auth.maxLoginAttempts', $maxLoginAttempts);
+
+        setting()->set('App.maxUploadSizeMb', $maxUploadSizeMb);
+        setting()->set('App.maxBatchUploadCount', $maxBatchUploadCount);
+        setting()->set('App.allowedExtensions', $allowedExtensions);
+
+        setting()->set('App.storageLimit', $storageLimit);
+        setting()->set('App.trashRetentionDays', $trashRetentionDays);
+
         setting()->set('App.maintenanceMode', $maintenanceMode);
+        setting()->set('App.maintenanceMessage', $maintenanceMessage);
 
         helper('audit');
         log_security_action('SYSTEM_SETTINGS_CHANGE', 'SUCCESS', [
+            'siteName'          => $siteName,
             'storageLimit'      => $storageLimit,
             'allowRegistration' => $allowRegistration,
-            'maintenanceMode'   => $maintenanceMode
+            'maintenanceMode'   => $maintenanceMode,
+            'maxUploadSizeMb'   => $maxUploadSizeMb,
         ]);
 
         if ($oldMaintenance !== $maintenanceMode) {
@@ -142,7 +219,7 @@ class Admin extends BaseController
 
         return $this->response->setJSON([
             'status'  => 'success',
-            'message' => 'System settings saved successfully.'
+            'message' => 'System settings updated and persisted successfully.'
         ]);
     }
 
