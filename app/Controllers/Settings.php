@@ -103,8 +103,8 @@ class Settings extends BaseController
         $photoModel = new \App\Models\PhotoModel();
         $db = \Config\Database::connect();
 
-        $detectedFaces = (int) $db->table('face_encoding fe')
-            ->join('photos p', 'p.id = fe.photo_id')
+        $detectedFaces = (int) $db->table('tbl_face_encodings fe')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->countAllResults();
 
@@ -117,9 +117,9 @@ class Settings extends BaseController
             ->where('scanned_face', 1)
             ->countAllResults();
 
-        $persons = (int) $db->table('person pr')
-            ->join('face_encoding fe', 'fe.person_id = pr.id')
-            ->join('photos p', 'p.id = fe.photo_id')
+        $persons = (int) $db->table('tbl_people pr')
+            ->join('tbl_face_encodings fe', 'fe.person_id = pr.id')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->distinct()
             ->select('pr.id')
@@ -379,20 +379,20 @@ class Settings extends BaseController
         $photoIds = $db->table('photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $ids      = array_column($photoIds, 'id');
         if (! empty($ids)) {
-            $db->table('shared_links')->whereIn('photo_id', $ids)->delete();
+            $db->table('tbl_shared_links')->whereIn('photo_id', $ids)->delete();
         }
 
         // Album photos + albums
-        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $albumIds = $db->table('tbl_albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $aIds     = array_column($albumIds, 'id');
         if (! empty($aIds)) {
-            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+            $db->table('tbl_album_photos')->whereIn('album_id', $aIds)->delete();
         }
-        $db->table('albums')->where('user_id', $userId)->delete();
+        $db->table('tbl_albums')->where('user_id', $userId)->delete();
 
         // Delete all photos (hard delete)
         $photoModel->where('user_id', $userId)->purgeDeleted();
-        $db->table('photos')->where('user_id', $userId)->delete();
+        $db->table('tbl_photos')->where('user_id', $userId)->delete();
 
         // Reset user profile fields
         $user = auth()->user();
@@ -452,26 +452,26 @@ class Settings extends BaseController
         }
 
         // Photo shares
-        $db->table('photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
+        $db->table('tbl_photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
 
         // Shared links
-        $photoIds = $db->table('photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $photoIds = $db->table('tbl_photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $ids      = array_column($photoIds, 'id');
         if (! empty($ids)) {
-            $db->table('shared_links')->whereIn('photo_id', $ids)->delete();
+            $db->table('tbl_shared_links')->whereIn('photo_id', $ids)->delete();
         }
 
         // Albums
-        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $albumIds = $db->table('tbl_albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $aIds     = array_column($albumIds, 'id');
         if (! empty($aIds)) {
-            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+            $db->table('tbl_album_photos')->whereIn('album_id', $aIds)->delete();
         }
-        $db->table('albums')->where('user_id', $userId)->delete();
+        $db->table('tbl_albums')->where('user_id', $userId)->delete();
 
         // Photos
         $photoModel->where('user_id', $userId)->purgeDeleted();
-        $db->table('photos')->where('user_id', $userId)->delete();
+        $db->table('tbl_photos')->where('user_id', $userId)->delete();
 
         // Delete avatar file
         $user = auth()->user();
@@ -698,22 +698,22 @@ class Settings extends BaseController
             ->where('scanned_tag', 1)
             ->countAllResults();
 
-        $scannedClips = $db->table('photos')
+        $scannedClips = $db->table('tbl_photos')
             ->where('user_id', $userId)
             ->where('deleted_at', null)
             ->where('scanned_clip', 1)
             ->countAllResults();
 
-        $peopleCount = $db->table('person pr')
-            ->join('face_encoding fe', 'fe.person_id = pr.id')
-            ->join('photos p', 'p.id = fe.photo_id')
+        $peopleCount = $db->table('tbl_people pr')
+            ->join('tbl_face_encodings fe', 'fe.person_id = pr.id')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->distinct()
             ->select('pr.id')
             ->countAllResults();
 
-        $tagsCount = $db->table('photo_tags pt')
-            ->join('photos p', 'p.id = pt.photo_id')
+        $tagsCount = $db->table('tbl_photo_tags pt')
+            ->join('tbl_photos p', 'p.id = pt.photo_id')
             ->where('p.user_id', $userId)
             ->countAllResults();
 

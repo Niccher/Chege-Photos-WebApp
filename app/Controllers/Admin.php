@@ -442,9 +442,9 @@ class Admin extends BaseController
                 $id = (int) $photo['id'];
 
                 // Clean related tables
-                $db->table('album_photos')->where('photo_id', $id)->delete();
-                $db->table('photo_shares')->where('photo_id', $id)->delete();
-                $db->table('shared_links')->where('photo_id', $id)->delete();
+                $db->table('tbl_album_photos')->where('photo_id', $id)->delete();
+                $db->table('tbl_photo_shares')->where('photo_id', $id)->delete();
+                $db->table('tbl_shared_links')->where('photo_id', $id)->delete();
 
                 // Delete physical files
                 foreach (['path', 'thumbnail_path'] as $field) {
@@ -900,16 +900,16 @@ class Admin extends BaseController
         }
 
         // Albums
-        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $albumIds = $db->table('tbl_albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $aIds     = array_column($albumIds, 'id');
         if (! empty($aIds)) {
-            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+            $db->table('tbl_album_photos')->whereIn('album_id', $aIds)->delete();
         }
-        $db->table('albums')->where('user_id', $userId)->delete();
+        $db->table('tbl_albums')->where('user_id', $userId)->delete();
 
         // Photos
         $photoModel->where('user_id', $userId)->purgeDeleted();
-        $db->table('photos')->where('user_id', $userId)->delete();
+        $db->table('tbl_photos')->where('user_id', $userId)->delete();
 
         // Reset user profile details
         $userModel = new UserModel();
@@ -975,26 +975,26 @@ class Admin extends BaseController
         }
 
         // Photo shares
-        $db->table('photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
+        $db->table('tbl_photo_shares')->where('shared_by', $userId)->orWhere('shared_with', $userId)->delete();
 
         // Shared links
-        $photoIds = $db->table('photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $photoIds = $db->table('tbl_photos')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $ids      = array_column($photoIds, 'id');
         if (! empty($ids)) {
-            $db->table('shared_links')->whereIn('photo_id', $ids)->delete();
+            $db->table('tbl_shared_links')->whereIn('photo_id', $ids)->delete();
         }
 
         // Albums
-        $albumIds = $db->table('albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
+        $albumIds = $db->table('tbl_albums')->select('id')->where('user_id', $userId)->get()->getResultArray();
         $aIds     = array_column($albumIds, 'id');
         if (! empty($aIds)) {
-            $db->table('album_photos')->whereIn('album_id', $aIds)->delete();
+            $db->table('tbl_album_photos')->whereIn('album_id', $aIds)->delete();
         }
-        $db->table('albums')->where('user_id', $userId)->delete();
+        $db->table('tbl_albums')->where('user_id', $userId)->delete();
 
         // Photos
         $photoModel->where('user_id', $userId)->purgeDeleted();
-        $db->table('photos')->where('user_id', $userId)->delete();
+        $db->table('tbl_photos')->where('user_id', $userId)->delete();
 
         // Delete avatar file
         $userModel = new UserModel();

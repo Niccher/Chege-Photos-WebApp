@@ -223,14 +223,14 @@ class Photos extends BaseController
         $shareModel = new \App\Models\PhotoShareModel();
 
         // 1. Photos I've shared via Public Links
-        $publicShares = $linkModel->select('photos.*, tbl_shared_links.access_token')
-            ->join('photos', 'photos.id = tbl_shared_links.photo_id')
-            ->where('photos.user_id', auth()->id())
+        $publicShares = $linkModel->select('tbl_photos.*, tbl_shared_links.access_token')
+            ->join('tbl_photos', 'tbl_photos.id = tbl_shared_links.photo_id')
+            ->where('tbl_photos.user_id', auth()->id())
             ->findAll();
 
         // 2. Photos others shared WITH me
-        $sharedWithMe = $shareModel->select('photos.*, tbl_photo_shares.permission')
-            ->join('photos', 'photos.id = tbl_photo_shares.photo_id')
+        $sharedWithMe = $shareModel->select('tbl_photos.*, tbl_photo_shares.permission')
+            ->join('tbl_photos', 'tbl_photos.id = tbl_photo_shares.photo_id')
             ->where('tbl_photo_shares.shared_with', auth()->id())
             ->findAll();
 
@@ -483,8 +483,8 @@ class Photos extends BaseController
             ->getResultArray();
 
         // 13. Sharing Stats
-        $publicShares = $linkModel->join('photos', 'photos.id = tbl_shared_links.photo_id')
-                                   ->where('photos.user_id', $userId)->countAllResults();
+        $publicShares = $linkModel->join('tbl_photos', 'tbl_photos.id = tbl_shared_links.photo_id')
+                                   ->where('tbl_photos.user_id', $userId)->countAllResults();
         $internalShares = $shareModel->where('shared_by', $userId)->countAllResults();
 
         // 14. Library lifespan in days
@@ -663,13 +663,13 @@ class Photos extends BaseController
             $rules = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
             $photoModel->where('user_id', $userId);
             SmartAlbumRules::apply($photoModel, $rules);
-            $query = $photoModel->select('photos.*')
+            $query = $photoModel->select('tbl_photos.*')
                 ->orderBy('taken_at', 'DESC');
         } else {
-            $query = $photoModel->select('photos.*, album_photos.added_at as album_added_at')
-                ->join('album_photos', 'album_photos.photo_id = photos.id')
-                ->where('album_photos.album_id', $id)
-                ->orderBy('album_photos.added_at', 'DESC');
+            $query = $photoModel->select('tbl_photos.*, tbl_album_photos.added_at as album_added_at')
+                ->join('tbl_album_photos', 'tbl_album_photos.photo_id = tbl_photos.id')
+                ->where('tbl_album_photos.album_id', $id)
+                ->orderBy('tbl_album_photos.added_at', 'DESC');
         }
 
         $data = [
@@ -770,7 +770,7 @@ class Photos extends BaseController
     public function addPhotoToAlbum()
     {
         $db = \Config\Database::connect();
-        $builder = $db->table('album_photos');
+        $builder = $db->table('tbl_album_photos');
 
         $albumId = $this->request->getPost('album_id');
         $photoId = $this->request->getPost('photo_id');
@@ -887,9 +887,9 @@ class Photos extends BaseController
             $id = (int) $photo['id'];
 
             // Clean related tables
-            $db->table('album_photos')->where('photo_id', $id)->delete();
-            $db->table('photo_shares')->where('photo_id', $id)->delete();
-            $db->table('shared_links')->where('photo_id', $id)->delete();
+            $db->table('tbl_album_photos')->where('photo_id', $id)->delete();
+            $db->table('tbl_photo_shares')->where('photo_id', $id)->delete();
+            $db->table('tbl_shared_links')->where('photo_id', $id)->delete();
 
             // Delete physical files
             foreach (['path', 'thumbnail_path'] as $field) {
@@ -1038,7 +1038,7 @@ class Photos extends BaseController
                     return $this->response->setJSON(['status' => 'error', 'message' => 'Smart albums follow rules automatically; you cannot add photos manually.']);
                 }
 
-                $builder = $db->table('album_photos');
+                $builder = $db->table('tbl_album_photos');
                 foreach ($photoIds as $id) {
                     $exists = $builder->where(['album_id' => $albumId, 'photo_id' => $id])->get()->getRow();
                     if (!$exists) {

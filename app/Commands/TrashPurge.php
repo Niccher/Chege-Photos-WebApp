@@ -55,9 +55,9 @@ class TrashPurge extends BaseCommand
             $id = (int) $photo['id'];
 
             // Clean related rows
-            $db->table('album_photos')->where('photo_id', $id)->delete();
-            $db->table('photo_shares')->where('photo_id', $id)->delete();
-            $db->table('shared_links')->where('photo_id', $id)->delete();
+            $db->table('tbl_album_photos')->where('photo_id', $id)->delete();
+            $db->table('tbl_photo_shares')->where('photo_id', $id)->delete();
+            $db->table('tbl_shared_links')->where('photo_id', $id)->delete();
 
             // Delete physical files
             foreach (['path', 'thumbnail_path'] as $field) {

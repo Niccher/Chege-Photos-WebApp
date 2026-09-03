@@ -44,8 +44,8 @@ class AlbumModel extends Model
                 $photo = $pm->orderBy('taken_at', 'DESC')->first();
                 $album['thumbnail'] = $photo['thumbnail_path'] ?? null;
             } else {
-                $photo = $db->table('album_photos')
-                            ->join('photos', 'photos.id = album_photos.photo_id')
+                $photo = $db->table('tbl_album_photos')
+                            ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
                             ->where('album_id', $album['id'])
                             ->orderBy('added_at', 'DESC')
                             ->get()->getRowArray();
@@ -58,14 +58,14 @@ class AlbumModel extends Model
                 $album['photo_count'] = (string) $count;
                 $album['video_count'] = '0';
             } else {
-                $total = $db->table('album_photos')
-                    ->join('photos', 'photos.id = album_photos.photo_id')
-                    ->where('album_photos.album_id', $album['id'])
+                $total = $db->table('tbl_album_photos')
+                    ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
+                    ->where('tbl_album_photos.album_id', $album['id'])
                     ->countAllResults();
-                $videos = $db->table('album_photos')
-                    ->join('photos', 'photos.id = album_photos.photo_id')
-                    ->where('album_photos.album_id', $album['id'])
-                    ->where('photos.mime_type LIKE', 'video/%')
+                $videos = $db->table('tbl_album_photos')
+                    ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
+                    ->where('tbl_album_photos.album_id', $album['id'])
+                    ->where('tbl_photos.mime_type LIKE', 'video/%')
                     ->countAllResults();
                 $album['photo_count'] = (string) ($total - $videos);
                 $album['video_count'] = (string) $videos;

@@ -74,8 +74,8 @@ abstract class BaseController extends Controller
         $exploreCount = $photoModel->where('user_id', $userId)->where('is_archived', false)
             ->where('latitude IS NOT NULL')->where('longitude IS NOT NULL')->countAllResults();
 
-        $publicLinkCount   = $linkModel->join('photos', 'photos.id = tbl_shared_links.photo_id')
-            ->where('photos.user_id', $userId)->countAllResults();
+        $publicLinkCount   = $linkModel->join('tbl_photos', 'tbl_photos.id = tbl_shared_links.photo_id')
+            ->where('tbl_photos.user_id', $userId)->countAllResults();
         $sharedWithMeCount = $shareModel->where('shared_with', $userId)->countAllResults();
 
         $archiveCount   = $photoModel->where('user_id', $userId)->where('is_archived', true)->countAllResults();

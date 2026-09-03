@@ -100,13 +100,13 @@ class ApiController extends BaseController
                 $photos = $photoModel->orderBy('taken_at', 'DESC')->findAll();
             } else {
                 $db     = \Config\Database::connect();
-                $photos = $db->table('album_photos')
-                    ->select('photos.*')
-                    ->join('photos', 'photos.id = album_photos.photo_id')
-                    ->where('album_photos.album_id', $albumId)
-                    ->where('photos.user_id', $userId)
-                    ->where('photos.is_archived', false)
-                    ->orderBy('photos.taken_at', 'DESC')
+                $photos = $db->table('tbl_album_photos')
+                    ->select('tbl_photos.*')
+                    ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
+                    ->where('tbl_album_photos.album_id', $albumId)
+                    ->where('tbl_photos.user_id', $userId)
+                    ->where('tbl_photos.is_archived', false)
+                    ->orderBy('tbl_photos.taken_at', 'DESC')
                     ->get()->getResultArray();
             }
 
@@ -347,14 +347,14 @@ class ApiController extends BaseController
             $db = \Config\Database::connect();
             $updatedAlbum = $albumModel->find($id);
 
-            $total = $db->table('album_photos')
-                ->join('photos', 'photos.id = album_photos.photo_id')
-                ->where('album_photos.album_id', $id)
+            $total = $db->table('tbl_album_photos')
+                ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
+                ->where('tbl_album_photos.album_id', $id)
                 ->countAllResults();
-            $videos = $db->table('album_photos')
-                ->join('photos', 'photos.id = album_photos.photo_id')
-                ->where('album_photos.album_id', $id)
-                ->where('photos.mime_type LIKE', 'video/%')
+            $videos = $db->table('tbl_album_photos')
+                ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
+                ->where('tbl_album_photos.album_id', $id)
+                ->where('tbl_photos.mime_type LIKE', 'video/%')
                 ->countAllResults();
 
             $formattedAlbum = [
@@ -402,7 +402,7 @@ class ApiController extends BaseController
             }
 
             $db = \Config\Database::connect();
-            $db->table('album_photos')->where('album_id', $id)->delete();
+            $db->table('tbl_album_photos')->where('album_id', $id)->delete();
             $albumModel->delete($id);
 
             $this->clearSidebarCountsCache($userId);

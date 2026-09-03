@@ -53,6 +53,12 @@ require FCPATH . '../app/Config/Paths.php';
 
 $paths = new Paths();
 
+// Ensure CI_ENVIRONMENT from container or server environment is recognized
+$appEnv = getenv('CI_ENVIRONMENT') ?: ($_SERVER['CI_ENVIRONMENT'] ?? ($_ENV['CI_ENVIRONMENT'] ?? 'development'));
+putenv("CI_ENVIRONMENT={$appEnv}");
+$_SERVER['CI_ENVIRONMENT'] = $appEnv;
+$_ENV['CI_ENVIRONMENT']     = $appEnv;
+
 // LOAD THE FRAMEWORK BOOTSTRAP FILE
 require $paths->systemDirectory . '/Boot.php';
 
