@@ -551,9 +551,10 @@ class Admin extends BaseController
         $db = \Config\Database::connect();
         $tokens = $db->table('tbl_auth_tokens t')
             ->select('t.*, u.username')
+            ->join('(SELECT MAX(id) AS max_id FROM tbl_auth_tokens WHERE device_uuid IS NOT NULL AND device_uuid != \'\' GROUP BY device_uuid) latest', 't.id = latest.max_id')
             ->join('users u', 'u.id = t.user_id', 'left')
-            ->where('t.device_uuid IS NOT NULL')
-            ->groupBy('t.device_uuid')
+            ->orderBy('t.used_at', 'DESC')
+            ->orderBy('t.id', 'DESC')
             ->get()
             ->getResultArray();
 
