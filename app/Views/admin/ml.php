@@ -108,8 +108,8 @@
                         <div>
                             <h6 class="mb-1 small fw-bold">Trigger HDBSCAN Clustering</h6>
                             <p class="text-muted small mb-1">Re-group and align all extracted face vectors.</p>
-                            <span class="badge bg-primary bg-opacity-10 text-primary small me-1" id="badgeUnassignedFaces">Unassigned Faces: <?= esc($mlStats['unassigned']) ?></span>
-                            <span class="badge bg-success bg-opacity-10 text-success small" id="badgeTotalPersons">Persons (Clusters): <?= esc($mlStats['total_persons']) ?></span>
+                            <span class="badge bg-primary text-white rounded-pill px-2 py-1 small me-1" id="badgeUnassignedFaces">Unassigned Faces: <?= esc($mlStats['unassigned']) ?></span>
+                            <span class="badge bg-success text-white rounded-pill px-2 py-1 small" id="badgeTotalPersons">Persons (Clusters): <?= esc($mlStats['total_persons']) ?></span>
                         </div>
                         <button class="btn btn-outline-primary btn-sm rounded-pill px-3" id="btnTriggerCluster">
                             <i class="bi bi-diagram-3 me-1"></i> Cluster
@@ -120,7 +120,7 @@
                         <div>
                             <h6 class="mb-1 small fw-bold text-danger">Reset Face Encodings</h6>
                             <p class="text-muted small mb-1">Wipe vector spaces and MySQL tables clean.</p>
-                            <span class="badge bg-danger bg-opacity-10 text-danger small" id="badgeTotalEncodings">Total Encodings (Vectors): <?= esc($mlStats['total_encodings']) ?></span>
+                            <span class="badge bg-danger text-white rounded-pill px-2 py-1 small" id="badgeTotalEncodings">Total Encodings (Vectors): <?= esc($mlStats['total_encodings']) ?></span>
                         </div>
                         <button class="btn btn-danger btn-sm rounded-pill px-3" id="btnTriggerReset" data-bs-toggle="modal" data-bs-target="#resetMlModal">
                             <i class="bi bi-trash me-1"></i> Reset
@@ -137,29 +137,53 @@
                 <h6 class="fw-bold mb-4"><i class="bi bi-cpu text-primary me-2"></i>Microservice Health</h6>
                 
                 <div class="d-flex flex-column gap-2 small">
-                    <div class="d-flex justify-content-between border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">FastAPI Service:</span>
-                        <span class="fw-bold text-<?= $mlHealth['online'] ? 'success' : 'danger' ?>"><?= $mlHealth['online'] ? 'ONLINE' : 'OFFLINE' ?></span>
+                        <?php if ($mlHealth['online']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">ONLINE</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">OFFLINE</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">MySQL connection:</span>
-                        <span class="fw-bold text-<?= $mlHealth['db'] ? 'success' : 'danger' ?>"><?= $mlHealth['db'] ? 'CONNECTED' : 'DISCONNECTED' ?></span>
+                        <?php if ($mlHealth['db']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">CONNECTED</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">DISCONNECTED</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">Qdrant Vector DB:</span>
-                        <span class="fw-bold text-<?= $mlHealth['qdrant'] ? 'success' : 'danger' ?>"><?= $mlHealth['qdrant'] ? 'CONNECTED' : 'DISCONNECTED' ?></span>
+                        <?php if ($mlHealth['qdrant']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">CONNECTED</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">DISCONNECTED</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">Buffalo-L Weights:</span>
-                        <span class="fw-bold text-<?= $mlHealth['models'] ? 'success' : 'danger' ?>"><?= $mlHealth['models'] ? 'LOADED' : 'UNLOADED' ?></span>
+                        <?php if ($mlHealth['models']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">LOADED</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">UNLOADED</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">CLIP Model:</span>
-                        <span class="fw-bold text-<?= $mlHealth['clip'] ? 'success' : 'danger' ?>"><?= $mlHealth['clip'] ? 'LOADED' : 'UNLOADED' ?></span>
+                        <?php if ($mlHealth['clip']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">LOADED</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">UNLOADED</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">YOLOv8 ONNX Model:</span>
-                        <span class="fw-bold text-<?= $mlHealth['yolo'] ? 'success' : 'danger' ?>"><?= $mlHealth['yolo'] ? 'LOADED' : 'UNLOADED' ?></span>
+                        <?php if ($mlHealth['yolo']): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">LOADED</span>
+                        <?php else: ?>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">UNLOADED</span>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

@@ -66,9 +66,9 @@
                             <span class="text-muted small">FastAPI API availability</span>
                         </div>
                         <?php if ($mlHealth['online']): ?>
-                            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1 fw-bold">ONLINE</span>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-bold">ONLINE</span>
                         <?php else: ?>
-                            <span class="badge bg-danger bg-opacity-25 text-danger rounded-pill px-3 py-1 fw-bold">OFFLINE</span>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-bold">OFFLINE</span>
                         <?php endif; ?>
                     </div>
 
@@ -78,9 +78,9 @@
                             <span class="text-muted small">ML access to shared DB</span>
                         </div>
                         <?php if ($mlHealth['db']): ?>
-                            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1 fw-bold">CONNECTED</span>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-bold">CONNECTED</span>
                         <?php else: ?>
-                            <span class="badge bg-danger bg-opacity-25 text-danger rounded-pill px-3 py-1 fw-bold">DISCONNECTED</span>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-bold">DISCONNECTED</span>
                         <?php endif; ?>
                     </div>
 
@@ -90,9 +90,9 @@
                             <span class="text-muted small">Cosine similarity database</span>
                         </div>
                         <?php if ($mlHealth['qdrant']): ?>
-                            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1 fw-bold">CONNECTED</span>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-bold">CONNECTED</span>
                         <?php else: ?>
-                            <span class="badge bg-danger bg-opacity-25 text-danger rounded-pill px-3 py-1 fw-bold">DISCONNECTED</span>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-bold">DISCONNECTED</span>
                         <?php endif; ?>
                     </div>
 
@@ -102,9 +102,9 @@
                             <span class="text-muted small">ResNet-100 weights status</span>
                         </div>
                         <?php if ($mlHealth['models']): ?>
-                            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1 fw-bold">LOADED</span>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-bold">LOADED</span>
                         <?php else: ?>
-                            <span class="badge bg-danger bg-opacity-25 text-danger rounded-pill px-3 py-1 fw-bold">UNLOADED</span>
+                            <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-bold">UNLOADED</span>
                         <?php endif; ?>
                     </div>
                 </div>

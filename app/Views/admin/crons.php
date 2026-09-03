@@ -24,19 +24,19 @@
             <div class="card border-0 shadow-sm rounded-card p-3 p-md-4" style="background: var(--card-bg); color: var(--text-primary);">
                 <div class="row g-3 align-items-center">
                     <div class="col-md-4 d-flex align-items-center gap-3">
-                        <div class="p-3 rounded-circle <?= $daemonActive ? 'bg-success bg-opacity-10 text-success' : 'bg-primary bg-opacity-10 text-primary' ?>">
+                        <div class="p-3 rounded-circle <?= $daemonActive ? 'bg-success text-white' : 'bg-primary text-white' ?> shadow-sm d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
                             <i class="bi <?= $daemonActive ? 'bi-broadcast-pin fs-3' : 'bi-clock-history fs-3' ?>"></i>
                         </div>
                         <div>
-                            <div class="d-flex align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-2 mb-1">
                                 <h6 class="fw-bold mb-0">Cron Service Status</h6>
                                 <?php if ($daemonActive): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-2 py-0.5 small">
-                                        <i class="bi bi-circle-fill me-1 small" style="font-size: 8px;"></i> ACTIVE &amp; RUNNING
+                                    <span class="badge bg-success text-white rounded-pill px-2.5 py-1 small fw-bold">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i> ACTIVE &amp; RUNNING
                                     </span>
                                 <?php else: ?>
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-2 py-0.5 small">
-                                        <i class="bi bi-circle-fill me-1 small" style="font-size: 8px;"></i> READY / ON-DEMAND
+                                    <span class="badge bg-primary text-white rounded-pill px-2.5 py-1 small fw-bold">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i> READY / ON-DEMAND
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -50,7 +50,7 @@
                     </div>
                     <div class="col-6 col-md-4 border-start border-light ps-md-4">
                         <span class="text-muted small d-block">Configured Background Jobs</span>
-                        <span class="fw-bold text-success"><i class="bi bi-check2-circle me-1"></i><?= count($tasks) ?> Tasks Seeded &amp; Active</span>
+                        <span class="fw-bold text-dark"><i class="bi bi-check2-circle me-1 text-success"></i><?= count($tasks) ?> Tasks Seeded &amp; Active</span>
                     </div>
                 </div>
             </div>
@@ -103,15 +103,15 @@
                                     </div>
                                     <div>
                                         <?php if ($task['last_status'] === 'success'): ?>
-                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3 py-1 small">
+                                            <span class="badge bg-success text-white rounded-pill px-3 py-1 small fw-bold">
                                                 <i class="bi bi-check-circle-fill me-1"></i> ACTIVE &amp; RUNNING
                                             </span>
                                         <?php elseif ($task['last_status'] === 'failed'): ?>
-                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3 py-1 small">
+                                            <span class="badge bg-danger text-white rounded-pill px-3 py-1 small fw-bold">
                                                 <i class="bi bi-exclamation-triangle-fill me-1"></i> FAILED LAST RUN
                                             </span>
                                         <?php else: ?>
-                                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3 py-1 small">
+                                            <span class="badge bg-primary text-white rounded-pill px-3 py-1 small fw-bold">
                                                 <i class="bi bi-clock-history me-1"></i> SCHEDULED
                                             </span>
                                         <?php endif; ?>
@@ -246,11 +246,11 @@
                                         </td>
                                         <td>
                                             <?php if ($log['status'] === 'success'): ?>
-                                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">
+                                                <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-bold">
                                                     <i class="bi bi-check-circle me-1"></i> Success
                                                 </span>
                                             <?php else: ?>
-                                                <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1">
+                                                <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-bold">
                                                     <i class="bi bi-exclamation-triangle me-1"></i> Failed
                                                 </span>
                                             <?php endif; ?>
