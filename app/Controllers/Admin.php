@@ -177,7 +177,7 @@ class Admin extends BaseController
             'settings' => [
                 'faceModelPack'     => setting('ML.faceModelPack') ?? 'buffalo_l',
                 'faceDetThresh'     => setting('ML.faceDetThresh') ?? 0.5,
-                'includeSensitive'  => setting('ML.includeSensitive') ?? false,
+                'includeSensitive'  => setting('ML.includeSensitive') ?? true,
                 'hdbscanMinCluster' => setting('ML.hdbscanMinCluster') ?? 2,
                 'hdbscanMinSamples' => setting('ML.hdbscanMinSamples') ?? 1,
                 'clipModelName'     => setting('ML.clipModelName') ?? 'openai/clip-vit-base-patch32',
@@ -250,8 +250,19 @@ class Admin extends BaseController
         $includeSensitive  = (bool) $this->request->getPost('includeSensitive');
         $hdbscanMinCluster = $this->request->getPost('hdbscanMinCluster');
         $hdbscanMinSamples = $this->request->getPost('hdbscanMinSamples');
-        $clipModelName     = $this->request->getPost('clipModelName');
+        $clipModelName     = trim($this->request->getPost('clipModelName') ?? 'openai/clip-vit-base-patch32');
         $objectDetThresh   = $this->request->getPost('objectDetThresh');
+
+        // Dimension safety check: prevent 768-d models from colliding with Qdrant's 512-d collection
+        $incompatibleModels = ['clip-vit-large', 'vit-l', 'siglip-so400m'];
+        foreach ($incompatibleModels as $incomp) {
+            if (stripos($clipModelName, $incomp) !== false) {
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => "Model '{$clipModelName}' generates 768-dimensional vectors. Your Qdrant collection is locked to 512 dimensions. Please choose a 512-d model (such as openai/clip-vit-base-patch16) to avoid vector dimension collision."
+                ])->setStatusCode(400);
+            }
+        }
 
         setting()->set('ML.faceModelPack', $faceModelPack);
         setting()->set('ML.faceDetThresh', (float) $faceDetThresh);
@@ -287,6 +298,7 @@ class Admin extends BaseController
                 'face_det_thresh'      => $faceDetThresh,
                 'clip_model_name'      => $clipModelName,
                 'object_det_threshold' => $objectDetThresh,
+                'include_sensitive'    => $includeSensitive ? 'true' : 'false',
             ]);
 
             $response = $client->post($url);
@@ -305,6 +317,74 @@ class Admin extends BaseController
             'status'  => 'success',
             'message' => 'ML parameters saved successfully (FastAPI background reload pending container restart).'
         ]);
+    }
+
+    public function autotuneMl()
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 60,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/faces/autotune';
+            $response = $client->post($url);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                return $this->response->setJSON($data);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'ML autotune failed: HTTP ' . $response->getStatusCode()
+            ])->setStatusCode(502);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cannot connect to ML service: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function simulateClustering()
+    {
+        $minClusterSize = (int) ($this->request->getPost('minClusterSize') ?? 2);
+        $minSamples     = (int) ($this->request->getPost('minSamples') ?? 1);
+
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 60,
+                'headers'         => [
+                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/faces/simulate?' . http_build_query([
+                'min_cluster_size' => $minClusterSize,
+                'min_samples'      => $minSamples,
+            ]);
+            $response = $client->post($url);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                return $this->response->setJSON($data);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'ML simulation failed: HTTP ' . $response->getStatusCode()
+            ])->setStatusCode(502);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cannot connect to ML service: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
     }
 
     public function storage()

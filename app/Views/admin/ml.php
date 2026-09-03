@@ -41,11 +41,34 @@
                         <span class="text-muted small">Minimum confidence score to extract/register a face.</span>
                     </div>
 
-                    <!-- CLIP Model Name -->
+                    <!-- CLIP Model Name & Dimension Protection -->
                     <div class="mb-4">
-                        <label class="form-label small fw-bold d-block">CLIP Model Name (Semantic Search)</label>
-                        <input type="text" class="form-control bg-light border-0 py-2" name="clipModelName" value="<?= esc($settings['clipModelName']) ?>">
-                        <span class="text-muted small">HuggingFace repository path of the CLIP text/image model to use for semantic search. Changing this triggers a model reload.</span>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold mb-0">CLIP Semantic Search Model</label>
+                            <span class="badge bg-success text-white rounded-pill px-2.5 py-1 small">
+                                <i class="bi bi-shield-check me-1"></i> 512-dim Enforced
+                            </span>
+                        </div>
+                        <select id="selectClipModel" class="form-select bg-light border-0 py-2 mb-2">
+                            <option value="openai/clip-vit-base-patch32" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch32' ? 'selected' : '' ?>>
+                                openai/clip-vit-base-patch32 (Default • Fastest • 512-d • ~350MB RAM)
+                            </option>
+                            <option value="openai/clip-vit-base-patch16" <?= $settings['clipModelName'] === 'openai/clip-vit-base-patch16' ? 'selected' : '' ?>>
+                                openai/clip-vit-base-patch16 (Recommended Upgrade • High Precision • 512-d • ~500MB RAM)
+                            </option>
+                            <option value="laion/CLIP-ViT-B-32-laion2B-s34B-b79K" <?= $settings['clipModelName'] === 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K' ? 'selected' : '' ?>>
+                                laion/CLIP-ViT-B-32-laion2B-s34B-b79K (2B Images Dataset • 512-d • ~400MB RAM)
+                            </option>
+                            <option value="custom" <?= !in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K']) ? 'selected' : '' ?>>
+                                Custom HuggingFace Model (Advanced)
+                            </option>
+                        </select>
+                        <input type="text" class="form-control bg-light border-0 py-2 font-monospace small" name="clipModelName" id="inputClipModelName"
+                               value="<?= esc($settings['clipModelName']) ?>" style="<?= in_array($settings['clipModelName'], ['openai/clip-vit-base-patch32', 'openai/clip-vit-base-patch16', 'laion/CLIP-ViT-B-32-laion2B-s34B-b79K']) ? 'display:none;' : '' ?>">
+                        <span class="text-muted small d-block">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Qdrant vector collection is locked to 512-d. Choosing a 768-d model (e.g. ViT-L-14) will cause dimension collision errors.
+                        </span>
                     </div>
 
                     <!-- YOLOv8 Object Detection Threshold -->
@@ -58,18 +81,37 @@
                         <span class="text-muted small">Minimum confidence score required to auto-tag a photo with object/scene labels on upload.</span>
                     </div>
 
-                    <!-- Minimum cluster size -->
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold d-block">HDBSCAN Minimum Cluster Size</label>
-                        <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinCluster" min="1" max="20" value="<?= esc($settings['hdbscanMinCluster']) ?>">
-                        <span class="text-muted small">Minimum number of facial occurrences required to form a new Person.</span>
-                    </div>
+                    <!-- HDBSCAN Section with Auto-Tuner & Advisory -->
+                    <div class="p-3 mb-4 rounded border" style="border-color: var(--border-color) !important; background: rgba(0,0,0,0.02);">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark">
+                                    <i class="bi bi-people-fill text-primary me-1"></i> HDBSCAN Face Clustering Hyperparameters
+                                </h6>
+                                <span class="text-muted small">Algorithmic clustering to discover people and group faces without supervision.</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-bold" id="btnAutotuneHdbscan">
+                                <i class="bi bi-lightning-charge-fill me-1 text-warning"></i> Auto-Tune from Data
+                            </button>
+                        </div>
 
-                    <!-- Minimum samples -->
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold d-block">HDBSCAN Minimum Samples</label>
-                        <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinSamples" min="1" max="20" value="<?= esc($settings['hdbscanMinSamples']) ?>">
-                        <span class="text-muted small">The number of samples in a neighborhood for a point to be considered a core point.</span>
+                        <!-- Minimum cluster size -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold d-block">HDBSCAN Minimum Cluster Size</label>
+                            <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinCluster" id="inputMinCluster" min="1" max="20" value="<?= esc($settings['hdbscanMinCluster']) ?>">
+                            <span class="text-muted small">Minimum facial occurrences to form a Person. (2 = allows small groups; 3 = filters out background strangers).</span>
+                        </div>
+
+                        <!-- Minimum samples -->
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold d-block">HDBSCAN Minimum Samples</label>
+                            <input type="number" class="form-control bg-light border-0 py-2" name="hdbscanMinSamples" id="inputMinSamples" min="1" max="20" value="<?= esc($settings['hdbscanMinSamples']) ?>">
+                            <span class="text-muted small">Neighborhood density threshold. Controls how conservative grouping is.</span>
+                            <div id="minSamplesWarning" class="alert alert-warning py-2 px-3 rounded small mt-2 mb-0" style="<?= (int)$settings['hdbscanMinSamples'] === 1 ? '' : 'display:none;' ?>">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                <strong>Advisory:</strong> Min Samples = 1 treats single faces as dense cores. This frequently causes <em>cluster bleeding</em> (falsely merging different people who look slightly similar). <strong>Recommended: 2</strong>.
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Age/gender estimation toggle -->
@@ -79,17 +121,20 @@
                                 <label class="form-label small fw-bold mb-0 d-block">Estimate Sensitive Attributes</label>
                                 <span class="text-muted small">Perform age and gender estimation during scans.</span>
                             </div>
-                            <input class="form-check-input ms-0 fs-4" type="checkbox" name="includeSensitive" value="1" <?= $settings['includeSensitive'] ? 'checked' : '' ?>>
+                            <input class="form-check-input ms-0 fs-4" type="checkbox" name="includeSensitive" value="1" <?= (!isset($settings['includeSensitive']) || $settings['includeSensitive']) ? 'checked' : '' ?>>
                         </div>
                     </div>
 
                     <!-- Save submit -->
-                    <div class="mt-4 pt-3 border-top d-flex align-items-center gap-2" style="border-color: var(--border-color) !important;">
+                    <div class="mt-4 pt-3 border-top d-flex flex-wrap align-items-center gap-2" style="border-color: var(--border-color) !important;">
                         <button type="submit" class="btn btn-primary px-4 rounded-pill">
                             <i class="bi bi-check-lg me-1"></i> Save ML Parameters
                         </button>
-                        <button type="button" class="btn btn-outline-secondary px-4 rounded-pill" id="btnResetMlDefaults">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to Defaults
+                        <button type="button" class="btn btn-outline-info px-4 rounded-pill" id="btnSimulateClustering">
+                            <i class="bi bi-eye me-1"></i> Simulate (Dry-Run)
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary px-4 rounded-pill ms-auto" id="btnResetMlDefaults">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset Defaults
                         </button>
                     </div>
                 </form>
@@ -323,6 +368,130 @@
         </div>
     </div>
 </div>
+
+<!-- Modal: Algorithmic Auto-Tuner -->
+<div class="modal fade" id="modalMlAutotune" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="color: var(--text-primary);">
+            <div class="modal-header border-bottom pb-3">
+                <h5 class="modal-title h6 fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                    <i class="bi bi-lightning-charge-fill text-warning fs-5"></i>
+                    <span>Algorithmic HDBSCAN Auto-Tuner</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="autotuneLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h6 class="fw-bold mb-1">Analyzing Actual Face Vectors in Qdrant...</h6>
+                    <p class="text-muted small mb-0">Running grid search and Silhouette Separation Analysis across cluster combinations.</p>
+                </div>
+
+                <div id="autotuneResults" style="display: none;">
+                    <div class="alert alert-success d-flex align-items-center gap-3 p-3 rounded mb-4">
+                        <i class="bi bi-check-circle-fill fs-2 text-success"></i>
+                        <div>
+                            <div class="fw-bold text-success fs-6" id="autotuneRecommendationTitle">Optimal Parameters Discovered</div>
+                            <div class="small text-muted" id="autotuneRationale"></div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded text-center bg-light">
+                                <span class="text-muted small d-block mb-1">Recommended Min Cluster Size</span>
+                                <span class="fs-3 fw-bold text-primary" id="autoRecMcs">-</span>
+                                <span class="d-block text-muted" style="font-size: 11px;">Minimum photos to form a Person</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded text-center bg-light">
+                                <span class="text-muted small d-block mb-1">Recommended Min Samples</span>
+                                <span class="fs-3 fw-bold text-primary" id="autoRecMs">-</span>
+                                <span class="d-block text-muted" style="font-size: 11px;">Density threshold (prevents bleeding)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold small mb-2 text-dark">Evaluated Parameter Configurations:</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-hover align-middle small mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Min Cluster Size</th>
+                                    <th>Min Samples</th>
+                                    <th>Silhouette Quality</th>
+                                    <th>Discovered People</th>
+                                    <th>Noise Ratio</th>
+                                    <th class="text-end">Rank</th>
+                                </tr>
+                            </thead>
+                            <tbody id="autotuneCandidatesTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top pt-3 d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success rounded-pill px-4 fw-bold" id="btnApplyAutotune" style="display: none;">
+                    <i class="bi bi-check2-circle me-1"></i> Apply Recommended Settings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Clustering Simulation Preview -->
+<div class="modal fade" id="modalMlSimulate" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="color: var(--text-primary);">
+            <div class="modal-header border-bottom pb-3">
+                <h5 class="modal-title h6 fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                    <i class="bi bi-eye text-info fs-5"></i>
+                    <span>Clustering Dry-Run Simulation</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="simulateLoading" class="text-center py-4">
+                    <div class="spinner-border text-info mb-2" role="status"></div>
+                    <p class="text-muted small mb-0">Simulating clustering impact on current vectors...</p>
+                </div>
+                <div id="simulateResults" style="display: none;">
+                    <p class="small text-muted mb-3">Projected results based on your selected parameters (no database changes made):</p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-2.5 border rounded text-center bg-light">
+                                <span class="text-muted small d-block">Projected People</span>
+                                <span class="fs-4 fw-bold text-success" id="simPeopleCount">-</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2.5 border rounded text-center bg-light">
+                                <span class="text-muted small d-block">Unassigned Faces</span>
+                                <span class="fs-4 fw-bold text-muted" id="simNoiseCount">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-2.5 border rounded mb-3 small bg-light">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Silhouette Separation Score:</span>
+                            <span class="fw-bold" id="simSilhouette">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Noise Ratio:</span>
+                            <span class="fw-bold" id="simNoiseRatio">-</span>
+                        </div>
+                    </div>
+                    <div id="simAdvisoryBox" class="alert alert-warning small mb-0" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-top pt-3">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 <?php $this->endSection() ?>
 
 <?php $this->section('scripts') ?>
@@ -410,17 +579,143 @@
             });
         });
 
+        // CLIP Model selection
+        $('#selectClipModel').on('change', function() {
+            var val = $(this).val();
+            if (val === 'custom') {
+                $('#inputClipModelName').show().focus();
+            } else {
+                $('#inputClipModelName').val(val).hide();
+            }
+        });
+
+        // HDBSCAN Min Samples advisory toggle
+        $('#inputMinSamples').on('input', function() {
+            if (parseInt($(this).val()) === 1) {
+                $('#minSamplesWarning').slideDown(150);
+            } else {
+                $('#minSamplesWarning').slideUp(150);
+            }
+        });
+
+        // HDBSCAN Algorithmic Auto-Tuner
+        $('#btnAutotuneHdbscan').on('click', function() {
+            var modal = new bootstrap.Modal(document.getElementById('modalMlAutotune'));
+            modal.show();
+            $('#autotuneLoading').show();
+            $('#autotuneResults').hide();
+            $('#btnApplyAutotune').hide();
+
+            $.post(BASE_URL + 'admin/ml/autotune', function(res) {
+                $('#autotuneLoading').hide();
+                $('#autotuneResults').show();
+
+                if (res.status === 'success') {
+                    $('#autotuneRecommendationTitle').text('Optimal Parameters Discovered');
+                    $('#autotuneRationale').text(res.rationale || '');
+                    $('#autoRecMcs').text(res.recommended_min_cluster_size);
+                    $('#autoRecMs').text(res.recommended_min_samples);
+                    $('#btnApplyAutotune').data('mcs', res.recommended_min_cluster_size).data('ms', res.recommended_min_samples).show();
+
+                    var rowsHtml = '';
+                    if (res.top_candidates && res.top_candidates.length > 0) {
+                        res.top_candidates.forEach(function(c, idx) {
+                            var badge = idx === 0 
+                                ? '<span class="badge bg-success text-white">Best</span>' 
+                                : '<span class="badge bg-secondary text-white">#' + (idx + 1) + '</span>';
+                            rowsHtml += '<tr>' +
+                                '<td><code>' + c.min_cluster_size + '</code></td>' +
+                                '<td><code>' + c.min_samples + '</code></td>' +
+                                '<td><span class="fw-bold text-primary">' + c.silhouette_score + '</span></td>' +
+                                '<td>' + c.n_clusters + '</td>' +
+                                '<td>' + (c.noise_ratio * 100).toFixed(1) + '%</td>' +
+                                '<td class="text-end">' + badge + '</td>' +
+                            '</tr>';
+                        });
+                    }
+                    $('#autotuneCandidatesTable').html(rowsHtml);
+                } else {
+                    $('#autotuneRecommendationTitle').text('Autotune Advisory');
+                    $('#autotuneRationale').text(res.message || 'Could not run cluster optimization.');
+                    $('#autoRecMcs').text('-');
+                    $('#autoRecMs').text('-');
+                    $('#autotuneCandidatesTable').html('<tr><td colspan="6" class="text-center text-muted py-3">' + (res.message || 'Insufficient data') + '</td></tr>');
+                }
+            }).fail(function(xhr) {
+                $('#autotuneLoading').hide();
+                $('#autotuneResults').show();
+                $('#autotuneRecommendationTitle').text('Autotune Request Error');
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP ' + xhr.status;
+                $('#autotuneRationale').text('Failed to connect to ML microservice: ' + err);
+            });
+        });
+
+        // Apply autotuned values
+        $('#btnApplyAutotune').on('click', function() {
+            var mcs = $(this).data('mcs');
+            var ms = $(this).data('ms');
+            if (mcs) $('#inputMinCluster').val(mcs);
+            if (ms) {
+                $('#inputMinSamples').val(ms);
+                if (parseInt(ms) === 1) $('#minSamplesWarning').slideDown(150); else $('#minSamplesWarning').slideUp(150);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalMlAutotune')).hide();
+            showToast('Applied optimal parameters! Click "Save ML Parameters" to persist.', 'success');
+        });
+
+        // Simulate Clustering Dry-Run
+        $('#btnSimulateClustering').on('click', function() {
+            var modal = new bootstrap.Modal(document.getElementById('modalMlSimulate'));
+            modal.show();
+            $('#simulateLoading').show();
+            $('#simulateResults').hide();
+
+            var mcs = $('#inputMinCluster').val();
+            var ms = $('#inputMinSamples').val();
+
+            $.post(BASE_URL + 'admin/ml/simulate', { minClusterSize: mcs, minSamples: ms }, function(res) {
+                $('#simulateLoading').hide();
+                $('#simulateResults').show();
+
+                if (res.status === 'success') {
+                    $('#simPeopleCount').text(res.projected_people);
+                    $('#simNoiseCount').text(res.projected_noise + ' (' + (res.noise_ratio * 100).toFixed(1) + '%)');
+                    $('#simSilhouette').text(res.silhouette_score);
+                    $('#simNoiseRatio').text((res.noise_ratio * 100).toFixed(1) + '%');
+
+                    if (res.advisory) {
+                        $('#simAdvisoryBox').text(res.advisory).show();
+                    } else {
+                        $('#simAdvisoryBox').hide();
+                    }
+                } else {
+                    $('#simPeopleCount').text('-');
+                    $('#simNoiseCount').text('-');
+                    $('#simSilhouette').text('-');
+                    $('#simNoiseRatio').text('-');
+                    $('#simAdvisoryBox').text(res.message || 'Simulation error').show();
+                }
+            }).fail(function(xhr) {
+                $('#simulateLoading').hide();
+                $('#simulateResults').show();
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP ' + xhr.status;
+                $('#simAdvisoryBox').text('Simulation failed: ' + err).show();
+            });
+        });
+
         // Reset default values locally
         $('#btnResetMlDefaults').on('click', function() {
             $('select[name="faceModelPack"]').val('buffalo_l');
             $('#detThreshSlider').val(0.5);
             $('#detThreshValue').text(0.5);
-            $('input[name="clipModelName"]').val('openai/clip-vit-base-patch32');
+            $('#selectClipModel').val('openai/clip-vit-base-patch32');
+            $('#inputClipModelName').val('openai/clip-vit-base-patch32').hide();
             $('#objThreshSlider').val(0.5);
             $('#objThreshValue').text(0.5);
-            $('input[name="hdbscanMinCluster"]').val(2);
-            $('input[name="hdbscanMinSamples"]').val(1);
-            $('input[name="includeSensitive"]').prop('checked', false);
+            $('#inputMinCluster').val(2);
+            $('#inputMinSamples').val(2);
+            $('#minSamplesWarning').hide();
+            $('input[name="includeSensitive"]').prop('checked', true);
             showToast('Form fields filled with default values. Click "Save ML Parameters" to submit.', 'info');
         });
 
