@@ -15,6 +15,10 @@ $current_uri = uri_string();
             <i class="bi bi-sliders fs-5"></i>
             <span>Preferences</span>
         </a>
+        <a class="list-group-item list-group-item-action <?= ($current_uri === 'settings/notifications') ? 'active' : '' ?> p-3 border-0 d-flex align-items-center gap-3" href="<?= base_url('settings/notifications') ?>">
+            <i class="bi bi-bell fs-5"></i>
+            <span>Notifications</span>
+        </a>
         <a class="list-group-item list-group-item-action <?= ($current_uri === 'settings/storage') ? 'active' : '' ?> p-3 border-0 d-flex align-items-center gap-3" href="<?= base_url('settings/storage') ?>">
             <i class="bi bi-cloud-check fs-5"></i>
             <span>Storage</span>

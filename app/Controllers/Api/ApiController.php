@@ -8,6 +8,34 @@ use CodeIgniter\HTTP\ResponseInterface;
 class ApiController extends BaseController
 {
     /**
+     * Get dynamic system configuration and mobile client capabilities.
+     */
+    public function config()
+    {
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data'   => [
+                'app_name'               => setting('App.siteName') ?? 'Chege Photos',
+                'support_email'          => setting('App.supportEmail') ?? 'support@chegephotos.com',
+                'max_upload_size_mb'     => (int) (setting('App.maxUploadSizeMb') ?: 500),
+                'max_batch_upload_count' => (int) (setting('App.maxBatchUploadCount') ?: 50),
+                'allowed_extensions'     => setting('App.allowedExtensions') ?: 'jpg,jpeg,png,webp,heic,tiff,mp4,mov,m4v,webm,mkv,avi',
+                'default_storage_limit'  => (int) (setting('App.storageLimit') ?: 1073741824),
+                'allow_registration'     => (bool) (setting('Auth.allowRegistration') ?? true),
+                'timezone'               => setting('App.timezone') ?? 'Africa/Nairobi',
+                'date_format'            => setting('App.dateFormat') ?? 'Y-m-d',
+                'capabilities'           => [
+                    'video_upload'     => true,
+                    'face_recognition' => true,
+                    'semantic_search'  => true,
+                    'object_tagging'   => true,
+                    'photo_editing'    => false, // Explicitly disabled for Android for now
+                ]
+            ]
+        ]);
+    }
+
+    /**
      * Get list of photos for the authenticated user.
      *
      * @return ResponseInterface
@@ -160,19 +188,52 @@ class ApiController extends BaseController
 
             if ($field === 'memories') {
                 $today        = date('m-d');
-                $thisYear     = date('Y');
-                $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
+                $thisYear     = (int) date('Y');
+                $threeDaysAgo = date('m-d', strtotime('-3 days'));
+                $threeDaysFut = date('m-d', strtotime('+3 days'));
+
+                // Tier 1: On this exact calendar day in previous years
+                $builder = (new \App\Models\PhotoModel())
+                    ->where('user_id', $userId)
+                    ->where('is_archived', false)
+                    ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
+                    ->where('YEAR(taken_at) <', $thisYear);
+
+                if ($builder->countAllResults(false) > 0) {
+                    $query = $builder->orderBy('taken_at', 'DESC');
+                } else {
+                    // Tier 2: Within +/- 3 days in previous years
+                    $builder2 = (new \App\Models\PhotoModel())
+                        ->where('user_id', $userId)
+                        ->where('is_archived', false)
+                        ->where("DATE_FORMAT(taken_at, '%m-%d') >=", $threeDaysAgo)
+                        ->where("DATE_FORMAT(taken_at, '%m-%d') <=", $threeDaysFut)
+                        ->where('YEAR(taken_at) <', $thisYear);
+
+                    if ($builder2->countAllResults(false) > 0) {
+                        $query = $builder2->orderBy('taken_at', 'DESC');
+                    } else {
+                        // Tier 3: Same month in previous years
+                        $month = date('m');
+                        $query->where('is_archived', false)
+                              ->where("DATE_FORMAT(taken_at, '%m') =", $month)
+                              ->where('YEAR(taken_at) <', $thisYear)
+                              ->orderBy('is_favorite', 'DESC')
+                              ->orderBy('taken_at', 'DESC');
+                    }
+                }
+            } elseif ($field === 'explore') {
+                // Multi-modal explore: Photos with GPS, or analyzed by ML, or favorited
                 $query->where('is_archived', false)
                       ->groupStart()
-                          ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
-                          ->where('YEAR(taken_at) <', $thisYear)
+                          ->where('latitude IS NOT NULL')
+                          ->where('longitude IS NOT NULL')
+                          ->orWhere('scanned_tag', 1)
+                          ->orWhere('scanned_face', 1)
+                          ->orWhere('is_favorite', true)
                       ->groupEnd()
-                      ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
+                      ->orderBy('is_favorite', 'DESC')
                       ->orderBy('taken_at', 'DESC');
-            } elseif ($field === 'explore') {
-                $query->where('latitude IS NOT NULL')
-                      ->where('longitude IS NOT NULL')
-                      ->where('is_archived', false);
             } elseif ($field === 'is_deleted') {
                 // Use CodeIgniter's soft delete scoping instead of a raw column
                 $query->onlyDeleted();

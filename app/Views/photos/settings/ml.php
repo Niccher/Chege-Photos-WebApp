@@ -14,6 +14,11 @@
                 <i class="bi bi-info-circle me-1"></i> About
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link rounded-0 border-0 px-3 py-2 fw-semibold small" id="ml-privacy-tab" data-bs-toggle="pill" data-bs-target="#mlPrivacy" type="button" role="tab">
+                <i class="bi bi-shield-lock me-1"></i> Privacy &amp; AI Controls
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content p-4" id="mlPillsContent">
@@ -110,6 +115,56 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Privacy & AI Controls -->
+        <div class="tab-pane fade" id="mlPrivacy" role="tabpanel">
+            <h5 class="mb-1 fw-bold"><i class="bi bi-shield-lock me-2 text-primary"></i>Privacy &amp; Attribute Controls</h5>
+            <p class="text-muted small mb-4">Manage how machine learning data and estimated attributes are surfaced in your personal library.</p>
+
+            <form id="formMlPrivacy">
+                <div class="p-3 border rounded-3 mb-3" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1 fw-bold"><i class="bi bi-person-bounding-box text-info me-2"></i>Estimate Sensitive Attributes (Age &amp; Gender)</h6>
+                            <p class="text-muted small mb-0">Estimate and show age brackets and gender classifications when viewing recognized faces.</p>
+                        </div>
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="switchEstimateAttributes" value="1" <?= ($mlPrivacy['estimate_sensitive_attributes'] ?? true) ? 'checked' : '' ?> style="cursor: pointer; transform: scale(1.3);">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 border rounded-3 mb-3" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1 fw-bold"><i class="bi bi-eye-slash text-warning me-2"></i>Exclude Hidden Faces from Memories &amp; Explore</h6>
+                            <p class="text-muted small mb-0">Never feature unnamed or hidden background strangers in "On This Day" or highlight carousels.</p>
+                        </div>
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="switchExcludeHiddenMemories" value="1" <?= ($mlPrivacy['exclude_hidden_memories'] ?? true) ? 'checked' : '' ?> style="cursor: pointer; transform: scale(1.3);">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 border rounded-3 mb-4" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1 fw-bold"><i class="bi bi-cpu text-success me-2"></i>Background AI Auto-Indexing</h6>
+                            <p class="text-muted small mb-0">Automatically extract faces and generate semantic search embeddings as soon as new photos are uploaded.</p>
+                        </div>
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="switchAutoIndexing" value="1" <?= ($mlPrivacy['auto_indexing'] ?? true) ? 'checked' : '' ?> style="cursor: pointer; transform: scale(1.3);">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary rounded-pill px-4" id="btnSaveMlPrivacy">
+                        <i class="bi bi-check-lg me-1"></i> Save AI Privacy Settings
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -215,6 +270,30 @@
         $('#forceRescanModal').on('hidden.bs.modal', function () {
             $(this).find('input[type="text"]').val('');
             $(this).find('.btn-danger').prop('disabled', true);
+        });
+
+        // Save ML Privacy Settings
+        $('#formMlPrivacy').on('submit', function (e) {
+            e.preventDefault();
+            var $btn = $('#btnSaveMlPrivacy').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
+
+            var data = {
+                estimate_sensitive_attributes: $('#switchEstimateAttributes').is(':checked') ? 1 : 0,
+                exclude_hidden_memories: $('#switchExcludeHiddenMemories').is(':checked') ? 1 : 0,
+                auto_indexing: $('#switchAutoIndexing').is(':checked') ? 1 : 0
+            };
+
+            $.post(BASE_URL + 'settings/ml/privacy', data, function (res) {
+                $btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save AI Privacy Settings');
+                if (res.status === 'success') {
+                    showToast(res.message || 'AI Privacy settings updated successfully!', 'success');
+                } else {
+                    showToast(res.message || 'Failed to update privacy settings', 'danger');
+                }
+            }).fail(function () {
+                $btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Save AI Privacy Settings');
+                showToast('Failed to save settings.', 'danger');
+            });
         });
     });
 </script>

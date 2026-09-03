@@ -25,6 +25,62 @@
     </form>
 </div>
 
+<!-- Active Devices & Connected Apps Card -->
+<div class="card border-0 shadow-sm rounded-card p-4 mb-4" style="background: var(--card-bg); color: var(--text-primary);">
+    <h5 class="mb-2"><i class="bi bi-phone me-2 text-success"></i>Active Devices &amp; Connected Sessions</h5>
+    <p class="text-muted small mb-4">Manage Android smartphones and browser sessions currently authorized to access your library.</p>
+
+    <div class="table-responsive">
+        <table class="table align-middle table-hover text-nowrap small mb-0" style="color: var(--text-primary);">
+            <thead>
+                <tr class="text-muted">
+                    <th>Device</th>
+                    <th>System / OS</th>
+                    <th>Authorized Date</th>
+                    <th>Last Active</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($activeDevices)): ?>
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            <i class="bi bi-phone-vibrate fs-2 d-block mb-1 text-muted"></i>
+                            No additional devices connected.
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($activeDevices as $device): ?>
+                        <tr style="border-bottom: 1px solid var(--border-color) !important;">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi <?= (stripos($device['name'], 'android') !== false) ? 'bi-phone text-success fs-5' : 'bi-laptop text-primary fs-5' ?>"></i>
+                                    <div>
+                                        <div class="fw-bold"><?= esc($device['name']) ?></div>
+                                        <span class="text-muted" style="font-size: 11px;"><?= esc($device['device_id'] ? substr($device['device_id'], 0, 16) . '...' : 'Browser/Token') ?></span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border px-2 py-1">
+                                    <?= esc($device['os_version'] ?: 'Web App') ?>
+                                </span>
+                            </td>
+                            <td class="font-monospace text-muted"><?= esc($device['created_at'] ?? 'N/A') ?></td>
+                            <td class="font-monospace text-muted"><?= esc($device['last_used_at'] ?? 'Active') ?></td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-outline-danger btn-xs rounded-pill px-3 py-1 btn-revoke-device" data-id="<?= esc($device['id']) ?>" data-name="<?= esc($device['name']) ?>">
+                                    <i class="bi bi-x-circle me-1"></i> Revoke
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- Security & Logs Card -->
 <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
     <h5 class="mb-2"><i class="bi bi-clock-history me-2 text-info"></i>Security &amp; Activity Logs</h5>
@@ -107,6 +163,28 @@
                 } else {
                     showToast(res.message, 'danger');
                 }
+            });
+        });
+
+        // Revoke Device
+        $(document).on('click', '.btn-revoke-device', function() {
+            var id = $(this).data('id');
+            var name = $(this).data('name');
+            if (!confirm('Are you sure you want to revoke access for "' + name + '"? This will sign out the device.')) {
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+            $.post(BASE_URL + 'settings/tokens/revoke-device', { id: id }, function(res) {
+                if (res.status === 'success') {
+                    showToast('Device revoked successfully.', 'success');
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    showToast(res.message || 'Failed to revoke device', 'danger');
+                    $btn.prop('disabled', false).html('<i class="bi bi-x-circle me-1"></i> Revoke');
+                }
+            }).fail(function() {
+                showToast('Failed to revoke device.', 'danger');
+                $btn.prop('disabled', false).html('<i class="bi bi-x-circle me-1"></i> Revoke');
             });
         });
     });

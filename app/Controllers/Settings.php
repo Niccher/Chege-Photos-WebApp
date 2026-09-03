@@ -34,11 +34,37 @@ class Settings extends BaseController
         $user = auth()->user();
         $db = \Config\Database::connect();
 
+        $activeAccessTokens = [];
+        if ($user) {
+            $model = new \App\Models\AuthTokenModel();
+            $rawAccessTokens = $user->accessTokens();
+            $authTokens = $model->where('user_id', $userId)->where('is_used', 1)->findAll();
+            $deviceMap = [];
+            foreach ($authTokens as $t) {
+                $key = $t['device_name'] . ' (token)';
+                $deviceMap[$key] = $t;
+            }
+
+            foreach ($rawAccessTokens as $at) {
+                $mapped = $deviceMap[$at->name] ?? null;
+                $activeAccessTokens[] = [
+                    'id'             => $at->id,
+                    'name'           => $at->name,
+                    'scopes'         => $at->scopes,
+                    'last_used_at'   => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i') : null,
+                    'created_at'     => $at->created_at ? $at->created_at->format('Y-m-d H:i') : null,
+                    'os_version'     => $mapped['os_version'] ?? null,
+                    'device_id'      => $mapped['device_id'] ?? null,
+                ];
+            }
+        }
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
             'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
             'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'activeDevices'  => $activeAccessTokens,
             'logs'           => $db->table('sys_security_logs')
                 ->where('user_id', $userId)
                 ->orderBy('created_at', 'DESC')
@@ -61,9 +87,62 @@ class Settings extends BaseController
             'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
             'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
             'theme'          => setting('App.theme', "user:{$userId}") ?? 'auto',
+            'density'        => setting('App.gridDensity', "user:{$userId}") ?? 'standard',
+            'videoAutoplay'  => (bool) (setting('App.videoAutoplay', "user:{$userId}") ?? true),
         ];
 
         return view('photos/settings/preferences', $data);
+    }
+
+    public function updateDensity()
+    {
+        $userId  = auth()->id();
+        $density = $this->request->getPost('density') ?? 'standard';
+        if (!in_array($density, ['comfortable', 'standard', 'compact'])) {
+            $density = 'standard';
+        }
+        setting()->set('App.gridDensity', $density, "user:{$userId}");
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Grid density updated successfully']);
+    }
+
+    public function updateVideoAutoplay()
+    {
+        $userId   = auth()->id();
+        $autoplay = (bool) $this->request->getPost('autoplay');
+        setting()->set('App.videoAutoplay', $autoplay, "user:{$userId}");
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Video autoplay preference updated']);
+    }
+
+    public function notifications()
+    {
+        $userId = auth()->id();
+        $user = auth()->user();
+
+        $data = [
+            'user'           => $user,
+            'counts'         => $this->getSidebarCounts(),
+            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
+            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'notifications'  => [
+                'notifyMemoryDigest'   => (bool) (setting('User.notifyMemoryDigest', "user:{$userId}") ?? true),
+                'notifyQuotaAlert'     => (bool) (setting('User.notifyQuotaAlert', "user:{$userId}") ?? true),
+                'notifyAlbumInvites'   => (bool) (setting('User.notifyAlbumInvites', "user:{$userId}") ?? true),
+                'notifySecurityAlerts' => (bool) (setting('User.notifySecurityAlerts', "user:{$userId}") ?? true),
+            ]
+        ];
+
+        return view('photos/settings/notifications', $data);
+    }
+
+    public function updateNotifications()
+    {
+        $userId = auth()->id();
+        setting()->set('User.notifyMemoryDigest', (bool)$this->request->getPost('notifyMemoryDigest'), "user:{$userId}");
+        setting()->set('User.notifyQuotaAlert', (bool)$this->request->getPost('notifyQuotaAlert'), "user:{$userId}");
+        setting()->set('User.notifyAlbumInvites', (bool)$this->request->getPost('notifyAlbumInvites'), "user:{$userId}");
+        setting()->set('User.notifySecurityAlerts', (bool)$this->request->getPost('notifySecurityAlerts'), "user:{$userId}");
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'Notification preferences saved successfully']);
     }
 
     public function storage()
@@ -136,9 +215,103 @@ class Settings extends BaseController
                 'analyzed_images' => $analyzedImages,
                 'persons'         => $persons,
             ],
+            'mlPrivacy' => [
+                'estimate_sensitive_attributes' => (bool) (setting('ML.estimateSensitiveAttributes', "user:{$userId}") ?? true),
+                'exclude_hidden_memories'       => (bool) (setting('ML.excludeHiddenMemories', "user:{$userId}") ?? true),
+                'auto_indexing'                 => (bool) (setting('ML.autoIndexing', "user:{$userId}") ?? true),
+            ],
         ];
 
         return view('photos/settings/ml', $data);
+    }
+
+    public function updateMlPrivacy()
+    {
+        $userId = auth()->id();
+        setting()->set('ML.estimateSensitiveAttributes', (bool)$this->request->getPost('estimate_sensitive_attributes'), "user:{$userId}");
+        setting()->set('ML.excludeHiddenMemories', (bool)$this->request->getPost('exclude_hidden_memories'), "user:{$userId}");
+        setting()->set('ML.autoIndexing', (bool)$this->request->getPost('auto_indexing'), "user:{$userId}");
+
+        return $this->response->setJSON(['status' => 'success', 'message' => 'AI Privacy settings updated successfully']);
+    }
+
+    public function scanStorageCleanup()
+    {
+        $userId = auth()->id();
+        $db = \Config\Database::connect();
+
+        // 1. Exact duplicates by sha256
+        $dupRows = $db->query("
+            SELECT sha256, COUNT(*) as cnt, SUM(size) as total_bytes, MIN(size) as single_size
+            FROM tbl_photos
+            WHERE user_id = ? AND deleted_at IS NULL AND sha256 IS NOT NULL AND sha256 != ''
+            GROUP BY sha256
+            HAVING cnt > 1
+        ", [$userId])->getResultArray();
+
+        $dupCount = 0;
+        $dupReclaimBytes = 0;
+        foreach ($dupRows as $row) {
+            $extraFiles = (int) $row['cnt'] - 1;
+            $dupCount += $extraFiles;
+            $dupReclaimBytes += ($extraFiles * (int) $row['single_size']);
+        }
+
+        // 2. Large videos > 100 MB
+        $videoRows = $db->query("
+            SELECT id, size, title, mime_type
+            FROM tbl_photos
+            WHERE user_id = ? AND deleted_at IS NULL AND mime_type LIKE 'video/%' AND size > ?
+        ", [$userId, 100 * 1024 * 1024])->getResultArray();
+
+        $videoCount = count($videoRows);
+        $videoBytes = array_sum(array_column($videoRows, 'size'));
+
+        return $this->response->setJSON([
+            'status'             => 'success',
+            'duplicates_count'   => $dupCount,
+            'duplicates_size'    => $this->formatBytes($dupReclaimBytes),
+            'large_videos_count' => $videoCount,
+            'large_videos_size'  => $this->formatBytes($videoBytes),
+        ]);
+    }
+
+    public function purgeDuplicates()
+    {
+        $userId = auth()->id();
+        $photoModel = new \App\Models\PhotoModel();
+        $db = \Config\Database::connect();
+
+        // Find duplicate groups
+        $dupHashes = $db->query("
+            SELECT sha256
+            FROM tbl_photos
+            WHERE user_id = ? AND deleted_at IS NULL AND sha256 IS NOT NULL AND sha256 != ''
+            GROUP BY sha256
+            HAVING COUNT(*) > 1
+        ", [$userId])->getResultArray();
+
+        $purged = 0;
+        $freedBytes = 0;
+
+        foreach ($dupHashes as $item) {
+            $photos = $photoModel->where('user_id', $userId)
+                ->where('sha256', $item['sha256'])
+                ->orderBy('created_at', 'ASC')
+                ->findAll();
+
+            // Keep the first (oldest) one, soft-delete the rest to Trash
+            for ($i = 1; $i < count($photos); $i++) {
+                $photoModel->delete($photos[$i]['id']);
+                $freedBytes += (int) $photos[$i]['size'];
+                $purged++;
+            }
+        }
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "Moved {$purged} duplicate photo(s) to Trash, recovering " . $this->formatBytes($freedBytes) . " of quota space.",
+        ]);
     }
 
     public function export()

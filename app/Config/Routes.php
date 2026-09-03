@@ -40,6 +40,7 @@ $routes->post('api/v1/admin/storage/empty-trash', '\App\Controllers\Admin::empty
 
 // API Data Endpoints (token auth for Android app)
 $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($routes) {
+    $routes->get('config', 'ApiController::config');
     $routes->get('photos', 'ApiController::index', ['filter' => 'tokens:photos:read']);
     $routes->get('albums', 'ApiController::albums', ['filter' => 'tokens:photos:read']);
     $routes->get('albums/(:num)/photos', 'ApiController::albumPhotos/$1', ['filter' => 'tokens:photos:read']);
@@ -123,9 +124,17 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('settings/preferences', 'Settings::preferences');
     $routes->get('settings/storage', 'Settings::storage');
     $routes->get('settings/ml', 'Settings::ml');
+    $routes->get('settings/notifications', 'Settings::notifications');
     $routes->get('settings/export', 'Settings::export');
     $routes->get('settings/access-tokens', 'Settings::accessTokens');
     $routes->get('settings/danger', 'Settings::danger');
+
+    $routes->post('settings/notifications', 'Settings::updateNotifications');
+    $routes->post('settings/preferences/density', 'Settings::updateDensity');
+    $routes->post('settings/preferences/video-autoplay', 'Settings::updateVideoAutoplay');
+    $routes->post('settings/ml/privacy', 'Settings::updateMlPrivacy');
+    $routes->post('settings/storage/scan-clean', 'Settings::scanStorageCleanup');
+    $routes->post('settings/storage/purge-duplicates', 'Settings::purgeDuplicates');
 
     $routes->post('settings/profile', 'Settings::updateProfile');
     $routes->post('settings/avatar', 'Settings::updateAvatar');
