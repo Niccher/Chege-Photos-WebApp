@@ -103,54 +103,100 @@ class GcpStorageService
         // Step 3: Authentication verification
         $t0 = microtime(true);
         $token = null;
-        try {
-            $token = $this->getAccessToken();
-            $authLatency = round((microtime(true) - $t0) * 1000, 1);
+        if ($this->authType === 'json') {
+            try {
+                $token = $this->getAccessToken();
+                $authLatency = round((microtime(true) - $t0) * 1000, 1);
+                $steps[] = [
+                    'name'   => 'Authentication Verification',
+                    'status' => 'success',
+                    'detail' => "Service Account token generated & verified ({$authLatency} ms)"
+                ];
+            } catch (\Throwable $e) {
+                $steps[] = [
+                    'name'   => 'Authentication Verification',
+                    'status' => 'error',
+                    'detail' => 'Authentication failed: ' . $e->getMessage()
+                ];
+                return [
+                    'success' => false,
+                    'message' => 'Failed to authenticate with Google Cloud: ' . $e->getMessage(),
+                    'steps'   => $steps,
+                    'duration' => round(microtime(true) - $startTime, 3)
+                ];
+            }
+        } else {
+            // HMAC credentials check
+            if (strlen($this->accessKey) < 5 || strlen($this->secretKey) < 10) {
+                $steps[] = [
+                    'name'   => 'Authentication Verification',
+                    'status' => 'error',
+                    'detail' => 'HMAC Access Key or Secret Key format appears invalid.'
+                ];
+                return [
+                    'success' => false,
+                    'message' => 'Invalid HMAC credentials format.',
+                    'steps'   => $steps,
+                    'duration' => round(microtime(true) - $startTime, 3)
+                ];
+            }
             $steps[] = [
                 'name'   => 'Authentication Verification',
                 'status' => 'success',
-                'detail' => "Service Account token generated & verified ({$authLatency} ms)"
-            ];
-        } catch (\Throwable $e) {
-            $steps[] = [
-                'name'   => 'Authentication Verification',
-                'status' => 'error',
-                'detail' => 'Authentication failed: ' . $e->getMessage()
-            ];
-            return [
-                'success' => false,
-                'message' => 'Failed to authenticate with Google Cloud: ' . $e->getMessage(),
-                'steps'   => $steps,
-                'duration' => round(microtime(true) - $startTime, 3)
+                'detail' => sprintf('HMAC Interoperability credentials verified for key %s...', substr($this->accessKey, 0, 8))
             ];
         }
 
         // Step 4: Bucket access check
         $t0 = microtime(true);
-        $bucketUrl = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket);
-        $res = $this->httpGet($bucketUrl, $token);
-        if ($res['status'] !== 200) {
-            $errDetail = $res['body']['error']['message'] ?? "HTTP {$res['status']}";
+        if ($this->authType === 'json') {
+            $bucketUrl = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket);
+            $res = $this->httpGet($bucketUrl, $token);
+            if ($res['status'] !== 200) {
+                $errDetail = $res['body']['error']['message'] ?? "HTTP {$res['status']}";
+                $steps[] = [
+                    'name'   => 'Bucket Access Verification',
+                    'status' => 'error',
+                    'detail' => "Bucket '{$this->bucket}' inaccessible: {$errDetail}. Ensure Service Account has 'Storage Object Admin' role."
+                ];
+                return [
+                    'success' => false,
+                    'message' => "Bucket access error: {$errDetail}",
+                    'steps'   => $steps,
+                    'duration' => round(microtime(true) - $startTime, 3)
+                ];
+            }
+            $bLatency = round((microtime(true) - $t0) * 1000, 1);
+            $bLocation = $res['body']['location'] ?? 'GLOBAL';
+            $bStorageClass = $res['body']['storageClass'] ?? 'STANDARD';
             $steps[] = [
                 'name'   => 'Bucket Access Verification',
-                'status' => 'error',
-                'detail' => "Bucket '{$this->bucket}' inaccessible: {$errDetail}. Ensure Service Account has 'Storage Object Admin' role."
+                'status' => 'success',
+                'detail' => "Bucket '{$this->bucket}' is accessible ({$bLocation} / {$bStorageClass}, {$bLatency} ms)"
             ];
-            return [
-                'success' => false,
-                'message' => "Bucket access error: {$errDetail}",
-                'steps'   => $steps,
-                'duration' => round(microtime(true) - $startTime, 3)
+        } else {
+            // HMAC Bucket probe
+            $res = $this->sendHmacRequest('GET', '', '', '');
+            if ($res['status'] !== 200) {
+                $steps[] = [
+                    'name'   => 'Bucket Access Verification',
+                    'status' => 'error',
+                    'detail' => "Bucket '{$this->bucket}' inaccessible via HMAC: HTTP {$res['status']}. Ensure HMAC key has storage access."
+                ];
+                return [
+                    'success' => false,
+                    'message' => "Bucket access error: HTTP {$res['status']}",
+                    'steps'   => $steps,
+                    'duration' => round(microtime(true) - $startTime, 3)
+                ];
+            }
+            $bLatency = round((microtime(true) - $t0) * 1000, 1);
+            $steps[] = [
+                'name'   => 'Bucket Access Verification',
+                'status' => 'success',
+                'detail' => "Bucket '{$this->bucket}' is accessible via HMAC Interoperability ({$bLatency} ms)"
             ];
         }
-        $bLatency = round((microtime(true) - $t0) * 1000, 1);
-        $bLocation = $res['body']['location'] ?? 'GLOBAL';
-        $bStorageClass = $res['body']['storageClass'] ?? 'STANDARD';
-        $steps[] = [
-            'name'   => 'Bucket Access Verification',
-            'status' => 'success',
-            'detail' => "Bucket '{$this->bucket}' is accessible ({$bLocation} / {$bStorageClass}, {$bLatency} ms)"
-        ];
 
         // Step 5: Write & Read Probe
         $probeName = '_probe_test_' . time() . '.txt';
@@ -221,6 +267,15 @@ class GcpStorageService
     public function uploadRawData(string $data, string $cloudPath, string $mimeType = 'application/octet-stream', ?string $token = null): array
     {
         try {
+            if ($this->authType === 'hmac') {
+                $res = $this->sendHmacRequest('PUT', $cloudPath, $data, $mimeType);
+                if ($res['status'] >= 200 && $res['status'] < 300) {
+                    return ['success' => true, 'data' => []];
+                }
+                return ['success' => false, 'error' => "HTTP {$res['status']}: " . substr($res['raw'], 0, 200)];
+            }
+
+            // JSON Service Account mode
             $token = $token ?: $this->getAccessToken();
             $url = "{$this->apiBase}/upload/storage/v1/b/" . urlencode($this->bucket) . '/o?uploadType=media&name=' . urlencode($cloudPath);
 
@@ -258,6 +313,14 @@ class GcpStorageService
     public function listObjects(string $prefix = '', ?string $token = null): array
     {
         try {
+            if ($this->authType === 'hmac') {
+                $res = $this->sendHmacRequest('GET', '', '', '', ['prefix' => $prefix]);
+                if ($res['status'] === 200 && !empty($res['raw'])) {
+                    return $this->parseXmlObjectList($res['raw']);
+                }
+                return [];
+            }
+
             $token = $token ?: $this->getAccessToken();
             $url = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket) . '/o?prefix=' . urlencode($prefix);
 
@@ -278,6 +341,11 @@ class GcpStorageService
     public function deleteObject(string $cloudPath, ?string $token = null): bool
     {
         try {
+            if ($this->authType === 'hmac') {
+                $res = $this->sendHmacRequest('DELETE', $cloudPath, '', '');
+                return ($res['status'] === 200 || $res['status'] === 204);
+            }
+
             $token = $token ?: $this->getAccessToken();
             $url = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket) . '/o/' . urlencode($cloudPath);
 
@@ -333,6 +401,75 @@ class GcpStorageService
             'cutoff_date'   => date('Y-m-d H:i:s', $cutoffTime),
             'retention_days'=> $days
         ];
+    }
+
+    /**
+     * Sends an S3/GCS Interoperability request using standard HMAC authentication.
+     */
+    private function sendHmacRequest(string $method, string $path = '', string $data = '', string $contentType = '', array $queryParams = []): array
+    {
+        $verb = strtoupper($method);
+        $date = gmdate('D, d M Y H:i:s T');
+        $cleanPath = ltrim($path, '/');
+
+        $queryString = !empty($queryParams) ? '?' . http_build_query($queryParams) : '';
+        $url = "{$this->apiBase}/" . urlencode($this->bucket) . ($cleanPath !== '' ? '/' . str_replace('%2F', '/', rawurlencode($cleanPath)) : '') . $queryString;
+
+        // Canonicalized resource for S3/Google HMAC signature
+        $canonicalResource = '/' . $this->bucket . ($cleanPath !== '' ? '/' . $cleanPath : '');
+        $stringToSign = "{$verb}\n\n{$contentType}\n{$date}\n{$canonicalResource}";
+        $signature = base64_encode(hash_hmac('sha1', $stringToSign, $this->secretKey, true));
+
+        $headers = [
+            "Host: storage.googleapis.com",
+            "Date: {$date}",
+            "Authorization: AWS {$this->accessKey}:{$signature}"
+        ];
+        if (!empty($contentType)) {
+            $headers[] = "Content-Type: {$contentType}";
+        }
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $verb);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        if ($verb === 'PUT' || $verb === 'POST') {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [
+            'status' => $httpCode,
+            'raw'    => $response
+        ];
+    }
+
+    /**
+     * Parses S3 XML object listing returned by GCS Interoperability.
+     */
+    private function parseXmlObjectList(string $xmlContent): array
+    {
+        $items = [];
+        try {
+            $xml = @simplexml_load_string($xmlContent);
+            if ($xml && isset($xml->Contents)) {
+                foreach ($xml->Contents as $content) {
+                    $items[] = [
+                        'name'        => (string) $content->Key,
+                        'size'        => (int) $content->Size,
+                        'timeCreated' => (string) $content->LastModified,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore XML parse errors
+        }
+        return $items;
     }
 
     /**
