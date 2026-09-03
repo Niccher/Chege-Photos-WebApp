@@ -18,10 +18,16 @@ class CronRun extends BaseCommand
         $db  = \Config\Database::connect();
 
         $jobs = [
-            'trash:purge'         => setting('Cron.trashPurge') ?? '0 2 * * *',
-            'ml:cluster'          => setting('Cron.mlCluster') ?? '0 * * * *',
-            'ml:sweep'            => setting('Cron.mlSweep') ?? '*/5 * * * *',
-            'storage:clean-temp'  => setting('Cron.cleanTemp') ?? '30 1 * * *',
+            'trash:purge'                    => setting('Cron.trashPurge') ?? '0 2 * * *',
+            'ml:cluster'                     => setting('Cron.mlCluster') ?? '0 * * * *',
+            'ml:sweep'                       => setting('Cron.mlSweep') ?? '*/5 * * * *',
+            'storage:clean-temp'             => setting('Cron.cleanTemp') ?? '30 1 * * *',
+            'db:backup'                      => setting('Cron.dbBackup') ?? '0 3 * * *',
+            'cloud:sync'                     => setting('Cron.cloudSync') ?? '30 3 * * *',
+            'photos:generate-missing-thumbs' => setting('Cron.photosThumbs') ?? '*/30 * * * *',
+            'auth:prune-tokens'              => setting('Cron.authPrune') ?? '0 4 * * *',
+            'qdrant:sync-vectors'            => setting('Cron.qdrantSync') ?? '30 3 * * 0',
+            'logs:prune'                     => setting('Cron.logsPrune') ?? '30 4 * * 0',
         ];
 
         CLI::write('Checking scheduled tasks at: ' . date('Y-m-d H:i:s', $now), 'cyan');

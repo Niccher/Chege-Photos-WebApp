@@ -124,11 +124,26 @@ class Photos extends BaseController
             ]);
         }
 
+        $userId = auth()->id() ?: 1;
+        $yearMonth = date('Y/m');
         $newName = $file->getRandomName();
-        $file->move(FCPATH . 'uploads', $newName);
 
-        $fullPath = FCPATH . 'uploads/' . $newName;
-        $thumbnailPath = FCPATH . 'thumbnails/' . $newName;
+        // Target directories in user and date hierarchy
+        $subDir = "users/{$userId}/{$yearMonth}";
+        $targetUploadDir = FCPATH . "uploads/{$subDir}";
+        if (!is_dir($targetUploadDir)) {
+            mkdir($targetUploadDir, 0775, true);
+        }
+
+        $targetThumbDir = FCPATH . "thumbnails/{$subDir}";
+        if (!is_dir($targetThumbDir)) {
+            mkdir($targetThumbDir, 0775, true);
+        }
+
+        $file->move($targetUploadDir, $newName);
+
+        $fullPath = "{$targetUploadDir}/{$newName}";
+        $thumbnailPath = "{$targetThumbDir}/{$newName}";
 
         $isVideo = strpos($mimeType, 'video/') === 0;
         $imageInfo = $isVideo ? false : @getimagesize($fullPath);
@@ -138,19 +153,19 @@ class Photos extends BaseController
         $uploadSource = !empty($deviceUuid) ? 'android' : 'webapp';
 
         $data = [
-            'user_id'        => auth()->id(),
+            'user_id'        => $userId,
             'device_id'      => $this->request->getPost('device_id') ?? null,
             'device_uuid'    => $deviceUuid,
             'upload_source'  => $uploadSource,
             'filename'       => $newName,
-            'path'           => 'uploads/' . $newName,
+            'path'           => "uploads/{$subDir}/{$newName}",
             'mime_type'      => $isVideo ? $mimeType : ($imageInfo['mime'] ?? $mimeType),
             'width'          => $imageInfo ? $imageInfo[0] : null,
             'height'         => $imageInfo ? $imageInfo[1] : null,
             'size'           => $size,
             'file_hash'      => $fileHash,
             'taken_at'       => $metadata['taken_at'] ?? date('Y-m-d H:i:s'),
-            'thumbnail_path' => 'thumbnails/' . $newName,
+            'thumbnail_path' => "thumbnails/{$subDir}/{$newName}",
             'latitude'       => $metadata['lat'] ?? null,
             'longitude'      => $metadata['lng'] ?? null,
             'exif_data'      => $metadata['exif'] ?? null,

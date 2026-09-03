@@ -322,6 +322,22 @@ class Admin extends BaseController
         $uploadStats = $this->getDirectoryStats(FCPATH . 'uploads', ['avatars']);
         $thumbStats  = $this->getDirectoryStats(FCPATH . 'thumbnails');
 
+        $gcpService = new \App\Services\GcpStorageService();
+
+        // Recent Local Backups
+        $recentBackups = [];
+        $backupDir = WRITEPATH . 'backups/database/';
+        if (is_dir($backupDir)) {
+            foreach (glob($backupDir . '*.sql.gz') as $bf) {
+                $recentBackups[] = [
+                    'filename'   => basename($bf),
+                    'size'       => $this->formatBytes(filesize($bf)),
+                    'created_at' => date('Y-m-d H:i:s', filemtime($bf)),
+                ];
+            }
+            usort($recentBackups, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
+        }
+
         $data = [
             'counts' => $this->getSidebarCounts(),
             'storage' => [
@@ -333,6 +349,16 @@ class Admin extends BaseController
                 'thumbsCount'     => $thumbStats['count'],
                 'totalFootprint'  => $this->formatBytes($dbSize + $uploadStats['size'] + $thumbStats['size']),
             ],
+            'gcp' => [
+                'bucket'             => setting('Storage.gcpBucket') ?? env('GCP_BUCKET') ?? '',
+                'authType'           => setting('Storage.gcpAuthType') ?? env('GCP_AUTH_TYPE') ?? 'json',
+                'serviceAccountJson' => setting('Storage.gcpServiceAccountJson') ?? env('GCP_SERVICE_ACCOUNT_JSON') ?? '',
+                'accessKey'          => setting('Storage.gcpAccessKey') ?? env('GCP_ACCESS_KEY') ?? '',
+                'secretKey'          => setting('Storage.gcpSecretKey') ?? env('GCP_SECRET_KEY') ?? '',
+                'retentionDays'      => (int) (setting('Storage.backupRetentionDays') ?? 30),
+                'isConfigured'       => $gcpService->isConfigured(),
+            ],
+            'recentBackups'  => $recentBackups,
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
         ];
@@ -360,6 +386,66 @@ class Admin extends BaseController
             'status'  => 'success',
             'message' => 'Storage auto-purge configuration saved successfully.'
         ]);
+    }
+
+    public function saveGcpSettings()
+    {
+        $authType      = $this->request->getPost('authType') ?: 'json';
+        $bucket        = trim($this->request->getPost('bucket') ?? '');
+        $jsonCreds     = trim($this->request->getPost('serviceAccountJson') ?? '');
+        $accessKey     = trim($this->request->getPost('accessKey') ?? '');
+        $secretKey     = trim($this->request->getPost('secretKey') ?? '');
+        $retentionDays = max(1, (int) ($this->request->getPost('retentionDays') ?? 30));
+
+        setting()->set('Storage.gcpBucket', $bucket);
+        setting()->set('Storage.gcpAuthType', $authType);
+        setting()->set('Storage.gcpServiceAccountJson', $jsonCreds);
+        setting()->set('Storage.gcpAccessKey', $accessKey);
+        setting()->set('Storage.gcpSecretKey', $secretKey);
+        setting()->set('Storage.backupRetentionDays', $retentionDays);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Google Cloud Storage settings saved successfully.'
+        ]);
+    }
+
+    public function testGcpConnection()
+    {
+        $config = [
+            'bucket'             => trim($this->request->getPost('bucket') ?? setting('Storage.gcpBucket') ?? ''),
+            'authType'           => $this->request->getPost('authType') ?? setting('Storage.gcpAuthType') ?? 'json',
+            'serviceAccountJson' => trim($this->request->getPost('serviceAccountJson') ?? setting('Storage.gcpServiceAccountJson') ?? ''),
+            'accessKey'          => trim($this->request->getPost('accessKey') ?? setting('Storage.gcpAccessKey') ?? ''),
+            'secretKey'          => trim($this->request->getPost('secretKey') ?? setting('Storage.gcpSecretKey') ?? ''),
+            'retentionDays'      => (int) ($this->request->getPost('retentionDays') ?? 30)
+        ];
+
+        $gcp = new \App\Services\GcpStorageService($config);
+        $result = $gcp->testConnection();
+
+        return $this->response->setJSON($result);
+    }
+
+    public function triggerCloudBackup()
+    {
+        try {
+            ob_start();
+            command('db:backup');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Database backup and cloud sync completed successfully.',
+                'output'  => $output ?: 'Backup finished.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Backup failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
     }
 
     public function wipeSystem()
@@ -1420,6 +1506,96 @@ class Admin extends BaseController
                     '0 0 1 * *'  => 'Monthly on the 1st',
                 ],
             ],
+            [
+                'key'         => 'dbBackup',
+                'command'     => 'db:backup',
+                'name'        => 'Database Backup & Cloud Sync',
+                'description' => 'Creates a compressed MySQL database dump, streams it to Google Cloud Storage, and purges archives older than retention threshold.',
+                'default'     => '0 3 * * *',
+                'icon'        => 'bi-cloud-arrow-up',
+                'color'       => 'success',
+                'category'    => 'Backup & Disaster Recovery',
+                'presets'     => [
+                    '0 3 * * *'    => 'Daily at 3:00 AM UTC (Default)',
+                    '0 0 * * *'    => 'Daily at midnight',
+                    '0 */6 * * *'  => 'Every 6 hours',
+                ],
+            ],
+            [
+                'key'         => 'cloudSync',
+                'command'     => 'cloud:sync',
+                'name'        => 'Offsite Media Mirroring (GCP)',
+                'description' => 'Synchronizes newly uploaded photos and video frames from the last 24 hours to the remote Google Cloud Storage bucket.',
+                'default'     => '30 3 * * *',
+                'icon'        => 'bi-arrow-repeat',
+                'color'       => 'primary',
+                'category'    => 'Backup & Disaster Recovery',
+                'presets'     => [
+                    '30 3 * * *'   => 'Daily at 3:30 AM UTC (Default)',
+                    '0 * * * *'    => 'Hourly',
+                    '0 0 * * *'    => 'Daily at midnight',
+                ],
+            ],
+            [
+                'key'         => 'photosThumbs',
+                'command'     => 'photos:generate-missing-thumbs',
+                'name'        => 'Thumbnail Auto-Healer',
+                'description' => 'Scans photo records for missing thumbnails and automatically regenerates high-speed WebP previews to prevent gallery rendering issues.',
+                'default'     => '*/30 * * * *',
+                'icon'        => 'bi-images',
+                'color'       => 'info',
+                'category'    => 'Media Maintenance',
+                'presets'     => [
+                    '*/15 * * * *' => 'Every 15 minutes',
+                    '*/30 * * * *' => 'Every 30 minutes (Default)',
+                    '0 * * * *'    => 'Hourly',
+                ],
+            ],
+            [
+                'key'         => 'authPrune',
+                'command'     => 'auth:prune-tokens',
+                'name'        => 'Session & Auth Token Pruner',
+                'description' => 'Purges expired, revoked, and abandoned authentication tokens and inactive device sessions older than 90 days.',
+                'default'     => '0 4 * * *',
+                'icon'        => 'bi-key',
+                'color'       => 'warning',
+                'category'    => 'Security & Auth',
+                'presets'     => [
+                    '0 4 * * *'    => 'Daily at 4:00 AM UTC (Default)',
+                    '0 0 * * *'    => 'Daily at midnight',
+                    '0 0 * * 0'    => 'Weekly on Sunday',
+                ],
+            ],
+            [
+                'key'         => 'qdrantSync',
+                'command'     => 'qdrant:sync-vectors',
+                'name'        => 'Vector Database Consistency Sync',
+                'description' => 'Audits relational MySQL face encodings against Qdrant vector points, purging orphaned vectors from deleted photos.',
+                'default'     => '30 3 * * 0',
+                'icon'        => 'bi-diagram-3',
+                'color'       => 'secondary',
+                'category'    => 'Machine Learning',
+                'presets'     => [
+                    '30 3 * * 0'   => 'Weekly on Sunday at 3:30 AM UTC (Default)',
+                    '0 0 * * 0'    => 'Weekly on Sunday at midnight',
+                    '0 0 1 * *'    => 'Monthly on the 1st',
+                ],
+            ],
+            [
+                'key'         => 'logsPrune',
+                'command'     => 'logs:prune',
+                'name'        => 'System Log Rotation & Cleanup',
+                'description' => 'Rotates and prunes background execution logs, email transaction logs, and local log files older than 30 days.',
+                'default'     => '30 4 * * 0',
+                'icon'        => 'bi-journal-x',
+                'color'       => 'dark',
+                'category'    => 'Storage & Maintenance',
+                'presets'     => [
+                    '30 4 * * 0'   => 'Weekly on Sunday at 4:30 AM UTC (Default)',
+                    '0 0 * * 0'    => 'Weekly on Sunday at midnight',
+                    '0 0 1 * *'    => 'Monthly on the 1st',
+                ],
+            ],
         ];
 
         // Process each task with live stats, next run time, and last execution log
@@ -1491,24 +1667,18 @@ class Admin extends BaseController
 
     public function saveCronSettings()
     {
-        $rules = [
-            'trashPurge' => 'required|string',
-            'mlCluster'  => 'required|string',
-            'mlSweep'    => 'required|string',
-            'cleanTemp'  => 'required|string',
+        $keys = [
+            'trashPurge', 'mlCluster', 'mlSweep', 'cleanTemp',
+            'dbBackup', 'cloudSync', 'photosThumbs', 'authPrune',
+            'qdrantSync', 'logsPrune'
         ];
 
-        if (! $this->validate($rules)) {
-            return $this->response->setJSON([
-                'status'  => 'error',
-                'message' => implode(' ', $this->validator->getErrors())
-            ])->setStatusCode(400);
+        foreach ($keys as $k) {
+            $val = $this->request->getPost($k);
+            if ($val !== null && $val !== '') {
+                setting()->set("Cron.{$k}", trim($val));
+            }
         }
-
-        setting()->set('Cron.trashPurge', $this->request->getPost('trashPurge'));
-        setting()->set('Cron.mlCluster', $this->request->getPost('mlCluster'));
-        setting()->set('Cron.mlSweep', $this->request->getPost('mlSweep'));
-        setting()->set('Cron.cleanTemp', $this->request->getPost('cleanTemp'));
 
         return $this->response->setJSON([
             'status'  => 'success',
@@ -1519,7 +1689,12 @@ class Admin extends BaseController
     public function runCronJob()
     {
         $job = $this->request->getPost('job');
-        $validJobs = ['ml:cluster', 'ml:sweep', 'trash:purge', 'storage:clean-temp'];
+        $validJobs = [
+            'ml:cluster', 'ml:sweep', 'trash:purge', 'storage:clean-temp',
+            'db:backup', 'cloud:sync', 'photos:generate-missing-thumbs',
+            'auth:prune-tokens', 'qdrant:sync-vectors', 'logs:prune',
+            'photos:migrate-storage'
+        ];
 
         if (! in_array($job, $validJobs, true)) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid job target.'])->setStatusCode(400);
