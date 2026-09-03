@@ -12,6 +12,34 @@ class Admin extends BaseController
 {
     private const DEFAULT_ML_URL = 'http://ml-chege-photos:8000';
 
+    private function getMlUrl(): string
+    {
+        if ($url = env('ML_URL') ?: (setting('ML.url') ?: getenv('ML_URL'))) {
+            return rtrim($url, '/');
+        }
+
+        // Auto-detect Railway internal networking environment
+        if (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) {
+            return 'http://ml-chege-photos.railway.internal:8000';
+        }
+
+        return self::DEFAULT_ML_URL;
+    }
+
+    private function getQdrantUrl(): string
+    {
+        if ($url = env('QDRANT_URL') ?: getenv('QDRANT_URL')) {
+            return rtrim($url, '/');
+        }
+
+        // Auto-detect Railway internal networking environment
+        if (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) {
+            return 'http://ml-qdrant.railway.internal:6333';
+        }
+
+        return 'http://ml-qdrant:6333';
+    }
+
     public function home()
     {
         $userModel  = new UserModel();
@@ -243,7 +271,7 @@ class Admin extends BaseController
                 ]
             ]);
 
-            $url = self::DEFAULT_ML_URL . '/api/v1/models/reload?' . http_build_query([
+            $url = $this->getMlUrl() . '/api/v1/models/reload?' . http_build_query([
                 'model_pack'           => $faceModelPack,
                 'face_det_thresh'      => $faceDetThresh,
                 'clip_model_name'      => $clipModelName,
@@ -657,7 +685,7 @@ class Admin extends BaseController
                 ]
             ]);
 
-            $response = $client->delete(self::DEFAULT_ML_URL . '/api/v1/faces/reset');
+            $response = $client->delete($this->getMlUrl() . '/api/v1/faces/reset');
 
             if ($response->getStatusCode() === 200) {
                 return $this->response->setJSON([
@@ -694,7 +722,7 @@ class Admin extends BaseController
             $minSamples = setting('ML.hdbscanMinSamples') ?? 1;
 
             $response = $client->post(
-                self::DEFAULT_ML_URL . '/api/v1/faces/cluster?min_cluster_size=' . $minCluster . '&min_samples=' . $minSamples
+                $this->getMlUrl() . '/api/v1/faces/cluster?min_cluster_size=' . $minCluster . '&min_samples=' . $minSamples
             );
 
             if ($response->getStatusCode() === 200) {
@@ -764,7 +792,7 @@ class Admin extends BaseController
         foreach ($photos as $p) {
             $photoId = (int) $p['id'];
             try {
-                $client->post(self::DEFAULT_ML_URL . '/api/v1/faces/encode', [
+                $client->post($this->getMlUrl() . '/api/v1/faces/encode', [
                     'form_params' => [
                         'photo_id'   => $photoId,
                         'scan_faces' => $type === 'faces' ? 1 : 0,
@@ -933,7 +961,7 @@ class Admin extends BaseController
         if (! empty($ids)) {
             try {
                 $client = service('curlrequest', ['connect_timeout' => 5, 'timeout' => 30]);
-                $client->post(self::DEFAULT_ML_URL . '/api/v1/faces/delete-by-photo-ids', [
+                $client->post($this->getMlUrl() . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => ['Content-Type' => 'application/json'],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);
@@ -1020,7 +1048,7 @@ class Admin extends BaseController
         if (! empty($ids)) {
             try {
                 $client = service('curlrequest', ['connect_timeout' => 5, 'timeout' => 30]);
-                $client->post(self::DEFAULT_ML_URL . '/api/v1/faces/delete-by-photo-ids', [
+                $client->post($this->getMlUrl() . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => ['Content-Type' => 'application/json'],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);
@@ -1423,7 +1451,7 @@ class Admin extends BaseController
                 ]
             ]);
 
-            $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+            $response = $client->get($this->getMlUrl() . '/api/v1/health');
 
             if ($response->getStatusCode() === 200) {
                 $body = json_decode($response->getBody(), true);
@@ -1530,7 +1558,7 @@ class Admin extends BaseController
                         ]
                     ]);
                     $start = microtime(true);
-                    $mlUrl = env('ML_URL') ?: self::DEFAULT_ML_URL;
+                    $mlUrl = $this->getMlUrl();
                     $response = $client->get($mlUrl . '/api/v1/health');
                     $elapsed = round((microtime(true) - $start) * 1000, 2);
                     if ($response->getStatusCode() === 200) {
@@ -1555,7 +1583,7 @@ class Admin extends BaseController
                         'timeout'         => 3,
                     ]);
                     $start = microtime(true);
-                    $qdrantUrl = env('QDRANT_URL') ?: 'http://ml-qdrant:6333';
+                    $qdrantUrl = $this->getQdrantUrl();
                     $response = $client->get($qdrantUrl . '/collections');
                     $elapsed = round((microtime(true) - $start) * 1000, 2);
                     if ($response->getStatusCode() === 200) {
@@ -1583,7 +1611,7 @@ class Admin extends BaseController
                             'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
                         ]
                     ]);
-                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    $response = $client->get($this->getMlUrl() . '/api/v1/health');
                     if ($response->getStatusCode() === 200) {
                         $body = json_decode($response->getBody(), true);
                         if ($body['clip_loaded'] ?? false) {
@@ -1615,7 +1643,7 @@ class Admin extends BaseController
                             'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
                         ]
                     ]);
-                    $response = $client->get(self::DEFAULT_ML_URL . '/api/v1/health');
+                    $response = $client->get($this->getMlUrl() . '/api/v1/health');
                     if ($response->getStatusCode() === 200) {
                         $body = json_decode($response->getBody(), true);
                         if ($body['yolo_loaded'] ?? false) {

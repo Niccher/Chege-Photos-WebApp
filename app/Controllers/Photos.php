@@ -1221,7 +1221,8 @@ class Photos extends BaseController
     private function triggerFaceScan(int $photoId): void
     {
         try {
-            $mlUrl = env('ML_URL') ?: 'http://ml-chege-photos:8000';
+            $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+            $mlUrl = env('ML_URL') ?: $mlDefault;
             $client = service('curlrequest', [
                 'connect_timeout' => 10,
                 'timeout'        => 60,
@@ -1245,7 +1246,8 @@ class Photos extends BaseController
 
     private function triggerFaceScanAsync(int $photoId): void
     {
-        $mlUrl = env('ML_URL') ?: 'http://ml-chege-photos:8000';
+        $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+        $mlUrl = env('ML_URL') ?: $mlDefault;
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $mlUrl . '/api/v1/faces/encode',
@@ -1343,7 +1345,8 @@ class Photos extends BaseController
                 ]
             ]);
 
-            $url = (env('ML_URL') ?: 'http://ml-chege-photos:8000') . '/api/v1/search/semantic?' . http_build_query([
+            $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+            $url = (env('ML_URL') ?: $mlDefault) . '/api/v1/search/semantic?' . http_build_query([
                 'query'   => $q,
                 'limit'   => 100,
                 'user_id' => auth()->id() ?: 0

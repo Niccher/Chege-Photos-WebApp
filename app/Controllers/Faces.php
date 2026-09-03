@@ -20,7 +20,7 @@ class Faces extends BaseController
                 'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
             ]
         ]);
-        $baseUrl = env('ML_URL') ?: self::ML_BASE;
+        $baseUrl = env('ML_URL') ?: (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID') ? 'http://ml-chege-photos.railway.internal:8000' : self::ML_BASE);
         $url = $baseUrl . $path;
 
         try {

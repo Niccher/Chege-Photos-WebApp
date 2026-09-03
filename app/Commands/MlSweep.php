@@ -17,7 +17,8 @@ class MlSweep extends BaseCommand
         $startTime  = microtime(true);
         $db         = \Config\Database::connect();
         $photoModel = new \App\Models\PhotoModel();
-        $mlUrl      = env('ML_URL', 'http://ml-chege-photos:8000');
+        $mlDefault  = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+        $mlUrl      = env('ML_URL', $mlDefault);
 
         $photos = $photoModel->select('id, scanned_face, scanned_tag, scanned_clip')
             ->groupStart()

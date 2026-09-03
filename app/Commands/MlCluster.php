@@ -16,7 +16,8 @@ class MlCluster extends BaseCommand
     {
         $startTime = microtime(true);
         $db        = \Config\Database::connect();
-        $mlUrl     = env('ML_URL', 'http://ml-chege-photos:8000');
+        $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+        $mlUrl     = env('ML_URL', $mlDefault);
 
         try {
             $client = service('curlrequest', [
