@@ -34,6 +34,17 @@ class Admin extends BaseController
 
         // Auto-detect Railway internal networking environment
         if (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) {
+            $candidates = [
+                'ml-qdrant.railway.internal',
+                'qdrant.railway.internal',
+                'ml-qdrant',
+                'qdrant'
+            ];
+            foreach ($candidates as $host) {
+                if (gethostbyname($host) !== $host) {
+                    return "http://{$host}:6333";
+                }
+            }
             return 'http://ml-qdrant.railway.internal:6333';
         }
 
@@ -1577,30 +1588,44 @@ class Admin extends BaseController
                 }
 
             case 'qdrant':
-                try {
-                    $client = service('curlrequest', [
-                        'connect_timeout' => 2,
-                        'timeout'         => 3,
-                    ]);
-                    $start = microtime(true);
-                    $qdrantUrl = $this->getQdrantUrl();
-                    $response = $client->get($qdrantUrl . '/collections');
-                    $elapsed = round((microtime(true) - $start) * 1000, 2);
-                    if ($response->getStatusCode() === 200) {
-                        $body = json_decode($response->getBody(), true);
-                        $count = count($body['result']['collections'] ?? []);
-                        return $this->response->setJSON([
-                            'status'  => 'success',
-                            'message' => "Qdrant Vector database is online in {$elapsed}ms. Collections registered: {$count}."
-                        ]);
+                $client = service('curlrequest', [
+                    'connect_timeout' => 2,
+                    'timeout'         => 3,
+                ]);
+
+                $candidates = array_unique(array_filter([
+                    env('QDRANT_URL'),
+                    getenv('QDRANT_URL'),
+                    $this->getQdrantUrl(),
+                    'http://ml-qdrant.railway.internal:6333',
+                    'http://qdrant.railway.internal:6333',
+                    'http://ml-qdrant:6333',
+                    'http://qdrant:6333',
+                ]));
+
+                $lastError = '';
+                foreach ($candidates as $qdrantUrl) {
+                    try {
+                        $start = microtime(true);
+                        $response = $client->get(rtrim($qdrantUrl, '/') . '/collections');
+                        $elapsed = round((microtime(true) - $start) * 1000, 2);
+                        if ($response->getStatusCode() === 200) {
+                            $body = json_decode($response->getBody(), true);
+                            $count = count($body['result']['collections'] ?? []);
+                            return $this->response->setJSON([
+                                'status'  => 'success',
+                                'message' => "Qdrant Vector database is online ({$qdrantUrl}) in {$elapsed}ms. Collections: {$count}."
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        $lastError = $e->getMessage();
                     }
-                    throw new \Exception("Status code: " . $response->getStatusCode());
-                } catch (\Exception $e) {
-                    return $this->response->setJSON([
-                        'status'  => 'error',
-                        'message' => 'Qdrant check failed: ' . $e->getMessage()
-                    ]);
                 }
+
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => 'Qdrant check failed across candidate endpoints: ' . $lastError
+                ]);
 
             case 'clip':
                 try {
