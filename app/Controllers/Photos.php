@@ -159,12 +159,18 @@ class Photos extends BaseController
         $subDir = "users/{$userId}/{$yearMonth}";
         $targetUploadDir = FCPATH . "uploads/{$subDir}";
         if (!is_dir($targetUploadDir)) {
-            mkdir($targetUploadDir, 0775, true);
+            if (!@mkdir($targetUploadDir, 0777, true) && !is_dir($targetUploadDir)) {
+                @chmod(FCPATH . 'uploads', 0777);
+                @mkdir($targetUploadDir, 0777, true);
+            }
         }
 
         $targetThumbDir = FCPATH . "thumbnails/{$subDir}";
         if (!is_dir($targetThumbDir)) {
-            mkdir($targetThumbDir, 0775, true);
+            if (!@mkdir($targetThumbDir, 0777, true) && !is_dir($targetThumbDir)) {
+                @chmod(FCPATH . 'thumbnails', 0777);
+                @mkdir($targetThumbDir, 0777, true);
+            }
         }
 
         $file->move($targetUploadDir, $newName);

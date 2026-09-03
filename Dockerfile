@@ -46,9 +46,9 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-di
 # ── Application code ──────────────────────────────────────────────────────────
 COPY . /var/www/html
 
-RUN mkdir -p /var/www/html/writable \
-    && chown -R www-data:www-data /var/www/html/writable \
-    && chmod -R 775 /var/www/html/writable
+RUN mkdir -p /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails \
+    && chown -R www-data:www-data /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails \
+    && chmod -R 777 /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

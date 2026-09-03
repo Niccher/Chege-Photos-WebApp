@@ -7,9 +7,11 @@ mkdir -p /var/www/html/writable/cache \
          /var/www/html/writable/logs \
          /var/www/html/writable/session \
          /var/www/html/writable/debugbar \
-         /var/www/html/writable/uploads
-chmod -R 777 /var/www/html/writable
-chown -R www-data:www-data /var/www/html/writable || true
+         /var/www/html/writable/uploads \
+         /var/www/html/public/uploads \
+         /var/www/html/public/thumbnails
+chmod -R 777 /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails
+chown -R www-data:www-data /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails || true
 
 # Wait for MySQL to be fully ready (beyond just ping)
 echo "Waiting for MySQL to accept connections..."
@@ -35,8 +37,8 @@ CI_ENVIRONMENT=development php spark migrate --all || { echo "FATAL ERROR: Migra
 CI_ENVIRONMENT=development php spark db:seed SystemDefaultSeeder || echo "WARNING: System default seeding skipped."
 
 # Fix permissions again after CLI commands (which run as root) might have created new files
-chown -R www-data:www-data /var/www/html/writable || true
-chmod -R 777 /var/www/html/writable
+chown -R www-data:www-data /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails || true
+chmod -R 777 /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails
 
 # Setup container cron jobs
 echo "Configuring container cron schedules..."
