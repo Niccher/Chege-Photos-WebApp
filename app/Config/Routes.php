@@ -36,6 +36,8 @@ $routes->post('api/v1/faces/search',      '\App\Controllers\Faces::apiSearch', [
 $routes->post('api/v1/admin/storage/save',        '\App\Controllers\Admin::saveStorageSettings', ['filter' => 'chain']);
 $routes->post('api/v1/admin/storage/wipe-system', '\App\Controllers\Admin::wipeSystem', ['filter' => 'chain']);
 $routes->post('api/v1/admin/storage/reset-data',  '\App\Controllers\Admin::resetDataKeepUsers', ['filter' => 'chain']);
+$routes->post('api/v1/admin/storage/purge-media', '\App\Controllers\Admin::purgeMediaKeepTokens', ['filter' => 'chain']);
+$routes->post('admin/storage/purge-media',        '\App\Controllers\Admin::purgeMediaKeepTokens', ['filter' => 'chain']);
 $routes->post('api/v1/admin/storage/empty-trash', '\App\Controllers\Admin::emptyTrashAll', ['filter' => 'chain']);
 
 // API Data Endpoints (token auth for Android app)

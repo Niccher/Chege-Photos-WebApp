@@ -331,8 +331,11 @@
                 <p class="text-muted small">Perform administrative data resets, empty trash files, or a complete factory reset.</p>
                 
                 <div class="d-flex flex-column gap-2 mt-3">
+                    <button type="button" class="btn btn-warning btn-sm rounded-pill w-100 fw-bold py-2 text-dark" id="btnPurgeMediaOnly" title="Deletes all photos, videos, albums & thumbnails while keeping accounts, tokens, and Android devices intact">
+                        <i class="bi bi-images me-1"></i> Purge Media Only (Keep Tokens & Devices)
+                    </button>
                     <button type="button" class="btn btn-outline-warning btn-sm rounded-pill w-100 fw-bold py-2" id="btnResetData">
-                        <i class="bi bi-trash-fill me-1"></i> Clear Data (Keep Users)
+                        <i class="bi bi-trash-fill me-1"></i> Clear Platform Data (Resets Tokens & Logs)
                     </button>
                     <button type="button" class="btn btn-outline-danger btn-sm rounded-pill w-100 fw-bold py-2" id="btnEmptyTrashAll">
                         <i class="bi bi-trash3-fill me-1"></i> Empty Trash (All Users)
@@ -663,6 +666,72 @@
                     });
                 }
             );
+        });
+
+        // Danger Zone: Purge Media Only (Keep Tokens & Devices)
+        $('#btnPurgeMediaOnly').on('click', function() {
+            Swal.fire({
+                title: 'PURGE ALL MEDIA ONLY?',
+                html: `
+                    <div class="text-start small">
+                        <p class="mb-2 text-muted">
+                            This action permanently deletes all uploaded photos, videos, albums, and thumbnails.
+                        </p>
+                        <div class="p-2 mb-2 rounded border" style="background: rgba(40, 167, 69, 0.08); border-color: rgba(40, 167, 69, 0.3) !important;">
+                            <strong class="text-success d-block mb-1"><i class="bi bi-shield-check me-1"></i> Kept Safe &amp; Intact:</strong>
+                            <ul class="mb-0 ps-3 text-secondary">
+                                <li>User accounts &amp; passwords</li>
+                                <li>Authentication tokens &amp; API keys</li>
+                                <li>Android paired devices (no logout needed)</li>
+                                <li>System logs &amp; application settings</li>
+                            </ul>
+                        </div>
+                        <div class="p-2 mb-3 rounded border" style="background: rgba(220, 53, 69, 0.08); border-color: rgba(220, 53, 69, 0.3) !important;">
+                            <strong class="text-danger d-block mb-1"><i class="bi bi-trash-fill me-1"></i> Permanently Removed:</strong>
+                            <ul class="mb-0 ps-3 text-secondary">
+                                <li>All uploaded photos &amp; videos</li>
+                                <li>All generated thumbnails</li>
+                                <li>All albums, shares, and tags</li>
+                                <li>Face clusters, scans, and people</li>
+                            </ul>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="checkPurgeGcpMedia">
+                            <label class="form-check-label text-muted" for="checkPurgeGcpMedia">
+                                Also purge mirrored media from Google Cloud Storage bucket
+                            </label>
+                        </div>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="bi bi-trash-fill me-1"></i> Yes, Purge Media',
+                cancelButtonText: 'Cancel'
+            }).then(function(result) {
+                if (result.isConfirmed) {
+                    var btn = $('#btnPurgeMediaOnly');
+                    var originalHtml = btn.html();
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Purging media...');
+
+                    var purgeGcp = $('#checkPurgeGcpMedia').is(':checked') ? 1 : 0;
+
+                    $.post(BASE_URL + 'api/v1/admin/storage/purge-media', { purge_gcp: purgeGcp }, function(res) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        if (res.status === 'success') {
+                            showToast(res.message, 'success');
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else {
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Failed to purge media: ' + err, 'danger');
+                    });
+                }
+            });
         });
 
         // Danger Zone: Clear Data (Keep Users)

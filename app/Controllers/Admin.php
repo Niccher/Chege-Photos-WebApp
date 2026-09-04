@@ -921,6 +921,121 @@ class Admin extends BaseController
         }
     }
 
+    public function purgeMediaKeepTokens()
+    {
+        helper('audit');
+        try {
+            $db = \Config\Database::connect();
+            $db->disableForeignKeyChecks();
+
+            // Strictly truncate tables holding media, albums, shares, tags, and facial scans.
+            // NOTE: tbl_auth_tokens, users, auth_identities, tbl_settings, and sys_* logs are PRESERVED!
+            $tablesToTruncate = [
+                'tbl_photos',
+                'tbl_albums',
+                'tbl_album_photos',
+                'tbl_photo_shares',
+                'tbl_shared_links',
+                'tbl_photo_tags',
+                'tbl_face_encodings',
+                'tbl_people',
+                'tbl_photo_scans',
+                'tbl_scan_jobs',
+                'tbl_face_clusters',
+                'tbl_face_annotations',
+            ];
+
+            foreach ($tablesToTruncate as $table) {
+                if ($db->tableExists($table)) {
+                    $db->table($table)->truncate();
+                }
+            }
+
+            $db->enableForeignKeyChecks();
+
+            // Delete uploaded photos, videos, and generated thumbnails locally (preserves avatars and .gitkeep)
+            $this->wipeUploadedFiles();
+
+            // Optional GCP Cloud Storage purge
+            $purgeGcp = filter_var($this->request->getPost('purge_gcp'), FILTER_VALIDATE_BOOLEAN);
+            $cloudPurgedCount = 0;
+
+            if ($purgeGcp) {
+                $gcp = new \App\Services\GcpStorageService();
+                if ($gcp->isConfigured()) {
+                    $uploadObjects = $gcp->listObjects('uploads/');
+                    $thumbObjects  = $gcp->listObjects('thumbnails/');
+
+                    $toDelete = [];
+                    foreach ($uploadObjects as $obj) {
+                        $name = $obj['name'] ?? '';
+                        if (!empty($name) && !str_starts_with($name, 'uploads/avatars/')) {
+                            $toDelete[] = $name;
+                        }
+                    }
+                    foreach ($thumbObjects as $obj) {
+                        $name = $obj['name'] ?? '';
+                        if (!empty($name)) {
+                            $toDelete[] = $name;
+                        }
+                    }
+
+                    if (function_exists('fastcgi_finish_request')) {
+                        $msg = 'Media purged locally and from database. User accounts, auth tokens, and Android devices remain active. Purging Google Cloud Storage in background...';
+                        $this->response->setJSON([
+                            'status'  => 'success',
+                            'message' => $msg
+                        ])->send();
+                        fastcgi_finish_request();
+                        ignore_user_abort(true);
+
+                        foreach ($toDelete as $cloudPath) {
+                            $gcp->deleteObject($cloudPath);
+                        }
+
+                        log_security_action('ADMIN_PURGE_MEDIA_ONLY', 'SUCCESS', [
+                            'admin_id'          => auth()->id(),
+                            'tokens_preserved'  => true,
+                            'devices_preserved' => true,
+                            'gcp_purged'        => true,
+                            'gcp_items_count'   => count($toDelete),
+                        ]);
+                        return;
+                    }
+
+                    foreach ($toDelete as $cloudPath) {
+                        if ($gcp->deleteObject($cloudPath)) {
+                            $cloudPurgedCount++;
+                        }
+                    }
+                }
+            }
+
+            log_security_action('ADMIN_PURGE_MEDIA_ONLY', 'SUCCESS', [
+                'admin_id'          => auth()->id(),
+                'tokens_preserved'  => true,
+                'devices_preserved' => true,
+                'gcp_purged'        => $purgeGcp,
+                'gcp_items_purged'  => $cloudPurgedCount,
+            ]);
+
+            $message = 'Media purged successfully. All photos, videos, albums, and thumbnails deleted. User accounts, auth tokens, and Android devices remain intact and logged in.';
+            if ($purgeGcp && $cloudPurgedCount > 0) {
+                $message .= " Also purged {$cloudPurgedCount} files from Google Cloud Storage.";
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => $message,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to purge media: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
     public function resetDataKeepUsers()
     {
         helper('audit');
