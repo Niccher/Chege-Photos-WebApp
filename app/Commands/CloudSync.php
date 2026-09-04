@@ -12,7 +12,7 @@ class CloudSync extends BaseCommand
     protected $group       = 'System';
     protected $name        = 'cloud:sync';
     protected $description = 'Synchronizes local media to Google Cloud Storage or hydrates missing media from GCP.';
-    protected $usage       = 'cloud:sync [--all] [--hydrate]';
+    protected $usage       = 'cloud:sync [--all] [--pending] [--hydrate] [--thumbnails-only]';
 
     public function run(array $params)
     {
@@ -33,30 +33,44 @@ class CloudSync extends BaseCommand
             return EXIT_SUCCESS;
         }
 
-        $syncAll = in_array('--all', $params, true);
-        $isHydrate = in_array('--hydrate', $params, true);
-        $photoModel = new PhotoModel();
+        $syncAll        = in_array('--all', $params, true);
+        $syncPending    = in_array('--pending', $params, true);
+        $isHydrate      = in_array('--hydrate', $params, true);
+        $thumbnailsOnly = in_array('--thumbnails-only', $params, true);
+        $photoModel     = new PhotoModel();
 
+        // -------------------------------------------------------------
+        // MODE 1: HYDRATE (Download missing files from GCP to Railway)
+        // -------------------------------------------------------------
         if ($isHydrate) {
-            CLI::write("Running GCP Container Hydration: Downloading missing media from GCP...", 'cyan');
+            $scopeText = $thumbnailsOnly ? 'thumbnails only' : 'media & thumbnails';
+            CLI::write("Running GCP Container Hydration ({$scopeText})...", 'cyan');
+
             $photos = $photoModel->orderBy('id', 'DESC')->findAll();
             $hydratedPhotos = 0;
             $hydratedThumbs = 0;
             $failed = 0;
 
             foreach ($photos as $photo) {
-                // Check original media
                 $uploadRel = ltrim($photo['path'], '/');
                 $uploadLocal = FCPATH . $uploadRel;
-                if (!file_exists($uploadLocal) || filesize($uploadLocal) === 0) {
-                    if ($gcpService->downloadFile($uploadRel, $uploadLocal)) {
-                        $hydratedPhotos++;
-                    } else {
-                        $failed++;
+
+                // 1. Download original media (unless thumbnails-only)
+                if (!$thumbnailsOnly) {
+                    if (!file_exists($uploadLocal) || filesize($uploadLocal) === 0) {
+                        if ($gcpService->downloadFile($uploadRel, $uploadLocal)) {
+                            $hydratedPhotos++;
+                            $photoModel->update($photo['id'], [
+                                'gcp_synced'    => 1,
+                                'gcp_synced_at' => date('Y-m-d H:i:s')
+                            ]);
+                        } else {
+                            $failed++;
+                        }
                     }
                 }
 
-                // Check thumbnail
+                // 2. Download thumbnail
                 if (!empty($photo['thumbnail_path'])) {
                     $thumbRel = ltrim($photo['thumbnail_path'], '/');
                     $thumbLocal = FCPATH . $thumbRel;
@@ -64,7 +78,7 @@ class CloudSync extends BaseCommand
                         if ($gcpService->downloadFile($thumbRel, $thumbLocal)) {
                             $hydratedThumbs++;
                         } elseif (file_exists($uploadLocal) && filesize($uploadLocal) > 0) {
-                            // Regenerate thumbnail from local upload
+                            // Regenerate thumbnail from local upload if available
                             $thumbDir = dirname($thumbLocal);
                             if (!is_dir($thumbDir)) {
                                 @mkdir($thumbDir, 0777, true);
@@ -96,34 +110,48 @@ class CloudSync extends BaseCommand
             return EXIT_SUCCESS;
         }
 
-        // Upload mode: Sync local files to GCP
+        // -------------------------------------------------------------
+        // MODE 2: UPLOAD / MIRROR (Push local files to GCP)
+        // -------------------------------------------------------------
         $query = $photoModel->orderBy('id', 'DESC');
-        if (!$syncAll) {
+        if ($syncPending) {
+            $query->groupStart()
+                  ->where('gcp_synced', 0)
+                  ->orWhere('gcp_synced IS NULL', null, false)
+                  ->groupEnd();
+        } elseif (!$syncAll) {
+            // Default: past 24 hours
             $yesterday = date('Y-m-d H:i:s', time() - 86400);
             $query->where('created_at >=', $yesterday);
         }
-        $photos = $query->findAll();
 
+        $photos = $query->findAll();
         $synced = 0;
         $failed = 0;
 
         CLI::write(sprintf("Found %d photo(s) to mirror to Google Cloud Storage...", count($photos)), 'cyan');
 
         foreach ($photos as $photo) {
-            // 1. Upload original media
             $relPath = ltrim($photo['path'], '/');
             $fullPath = is_file(WRITEPATH . $relPath) ? WRITEPATH . $relPath : FCPATH . $relPath;
+            $uploadSuccess = false;
 
             if (file_exists($fullPath)) {
                 $res = $gcpService->uploadFile($fullPath, $relPath, $photo['mime_type'] ?? null);
-                if ($res['success']) {
+                if (!empty($res['success'])) {
                     $synced++;
+                    $uploadSuccess = true;
+                    $photoModel->update($photo['id'], [
+                        'storage_driver' => 'hybrid',
+                        'gcp_synced'     => 1,
+                        'gcp_synced_at'  => date('Y-m-d H:i:s')
+                    ]);
                 } else {
                     $failed++;
                 }
             }
 
-            // 2. Upload thumbnail
+            // Also mirror thumbnail
             if (!empty($photo['thumbnail_path'])) {
                 $thumbRel = ltrim($photo['thumbnail_path'], '/');
                 $thumbFull = FCPATH . $thumbRel;

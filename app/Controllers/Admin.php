@@ -648,6 +648,15 @@ class Admin extends BaseController
             usort($recentBackups, fn($a, $b) => strcmp($b['created_at'], $a['created_at']));
         }
 
+        $photoModel = new \App\Models\PhotoModel();
+        $totalPhotos = $photoModel->countAllResults(false);
+        $syncedPhotos = 0;
+        $pendingPhotos = 0;
+        if ($db->fieldExists('gcp_synced', 'tbl_photos')) {
+            $syncedPhotos = $photoModel->where('gcp_synced', 1)->countAllResults(false);
+            $pendingPhotos = max(0, $totalPhotos - $syncedPhotos);
+        }
+
         $data = [
             'counts' => $this->getSidebarCounts(),
             'storage' => [
@@ -667,6 +676,10 @@ class Admin extends BaseController
                 'secretKey'          => setting('Storage.gcpSecretKey') ?? env('GCP_SECRET_KEY') ?? '',
                 'retentionDays'      => (int) (setting('Storage.backupRetentionDays') ?? 30),
                 'isConfigured'       => $gcpService->isConfigured(),
+                'totalPhotos'        => $totalPhotos,
+                'syncedPhotos'       => $syncedPhotos,
+                'pendingPhotos'      => $pendingPhotos,
+                'syncPercent'        => $totalPhotos > 0 ? round(($syncedPhotos / $totalPhotos) * 100, 1) : 100,
             ],
             'recentBackups'  => $recentBackups,
             'storageUsed'    => $this->formatBytes($totalBytes),
@@ -796,6 +809,48 @@ class Admin extends BaseController
             return $this->response->setJSON([
                 'status'  => 'error',
                 'message' => 'Media hydration failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function triggerMediaSyncPending()
+    {
+        try {
+            ob_start();
+            command('cloud:sync --pending');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Pending media sync to GCP completed.',
+                'output'  => $output ?: 'Sync finished.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Pending sync failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function triggerPruneCache()
+    {
+        try {
+            ob_start();
+            command('storage:prune-cache --days=14');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Local cache pruning completed.',
+                'output'  => $output ?: 'Prune finished.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cache prune failed: ' . $e->getMessage()
             ])->setStatusCode(500);
         }
     }

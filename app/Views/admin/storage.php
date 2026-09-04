@@ -98,6 +98,36 @@
                     </div>
                 </div>
 
+                <?php if (!empty($gcp['isConfigured'])): ?>
+                    <div class="row g-2 mb-4 p-3 rounded-card" style="background: rgba(var(--bs-primary-rgb), 0.05); border: 1px solid var(--border-color);">
+                        <div class="col-sm-4 d-flex align-items-center gap-2">
+                            <i class="bi bi-cloud-check text-success fs-4"></i>
+                            <div>
+                                <div class="fw-bold fs-6"><?= number_format($gcp['syncedPhotos'] ?? 0) ?> / <?= number_format($gcp['totalPhotos'] ?? 0) ?></div>
+                                <div class="text-muted small">Synced to GCP (<?= $gcp['syncPercent'] ?? 100 ?>%)</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4 d-flex align-items-center gap-2">
+                            <i class="bi bi-hourglass-split text-warning fs-4"></i>
+                            <div>
+                                <div class="fw-bold fs-6"><?= number_format($gcp['pendingPhotos'] ?? 0) ?></div>
+                                <div class="text-muted small">Pending Cloud Sync</div>
+                            </div>
+                        </div>
+                        <div class="col-sm-4 d-flex align-items-center justify-content-sm-end">
+                            <?php if (!empty($gcp['pendingPhotos']) && $gcp['pendingPhotos'] > 0): ?>
+                                <button type="button" class="btn btn-sm btn-warning rounded-pill px-3" id="btnSyncPending">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Sync <?= $gcp['pendingPhotos'] ?> Pending
+                                </button>
+                            <?php else: ?>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1.5 small">
+                                    <i class="bi bi-check2-all me-1"></i> 100% Synced
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <p class="text-muted small mb-4">
                     Protect your photo database and uploaded media against data loss by mirroring backups to a Google Cloud Storage bucket.
                     Automated background tasks prune archives older than your configured retention policy.
@@ -207,6 +237,9 @@
                         </button>
                         <button type="button" class="btn btn-outline-primary px-3 rounded-pill" id="btnHydrateMedia" title="Restore missing local media from GCP bucket">
                             <i class="bi bi-cloud-arrow-down me-1"></i> Hydrate from GCP
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary px-3 rounded-pill" id="btnPruneCache" title="Prune local media files older than 14 days that are already saved in GCP">
+                            <i class="bi bi-trash3 me-1"></i> Prune Local Cache
                         </button>
                         <button type="button" class="btn btn-outline-success px-4 rounded-pill ms-auto" id="btnTriggerBackup">
                             <i class="bi bi-cloud-arrow-up me-1"></i> Backup Database &amp; Sync Now
@@ -572,6 +605,64 @@
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Hydration failed: ' + err, 'danger');
             });
+        });
+
+        // Sync Pending to GCP
+        $('#btnSyncPending').on('click', function() {
+            var btn = $(this);
+            var originalHtml = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Syncing...');
+
+            $.post(BASE_URL + 'admin/storage/sync-pending', {}, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success') {
+                    Swal.fire({
+                        title: 'Pending Sync Complete!',
+                        html: '<p class="small text-muted">' + res.message + '</p><pre class="bg-light p-2 rounded text-start small font-monospace" style="max-height:200px; overflow-y:auto;">' + (res.output || '') + '</pre>',
+                        icon: 'success'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast('Pending sync failed: ' + err, 'danger');
+            });
+        });
+
+        // Prune Local Cache (Files older than 14 days already in GCP)
+        $('#btnPruneCache').on('click', function() {
+            promptConfirmation(
+                "PRUNE LOCAL CACHE?",
+                "This will delete local files older than 14 days that have already been backed up to GCP. Missing files will still be fetched on demand.",
+                function() {
+                    var btn = $('#btnPruneCache');
+                    var originalHtml = btn.html();
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Pruning...');
+
+                    $.post(BASE_URL + 'admin/storage/prune-cache', {}, function(res) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        if (res.status === 'success') {
+                            Swal.fire({
+                                title: 'Cache Pruning Complete!',
+                                html: '<p class="small text-muted">' + res.message + '</p><pre class="bg-light p-2 rounded text-start small font-monospace" style="max-height:200px; overflow-y:auto;">' + (res.output || '') + '</pre>',
+                                icon: 'success'
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Prune failed: ' + err, 'danger');
+                    });
+                }
+            );
         });
 
         // Danger Zone: Clear Data (Keep Users)

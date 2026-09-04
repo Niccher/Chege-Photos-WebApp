@@ -58,6 +58,14 @@ class MediaFallback extends BaseController
             // Attempt to hydrate requested file directly from GCP
             $downloaded = $gcp->downloadFile($relativePath, $localPath);
             if ($downloaded && file_exists($localPath) && filesize($localPath) > 0) {
+                if ($type === 'uploads') {
+                    try {
+                        $photoModel = new \App\Models\PhotoModel();
+                        $photoModel->where('path', $relativePath)->set(['gcp_synced' => 1, 'gcp_synced_at' => date('Y-m-d H:i:s')])->update();
+                    } catch (\Throwable $e) {
+                        // Non-blocking
+                    }
+                }
                 return $this->streamFile($localPath);
             }
         }

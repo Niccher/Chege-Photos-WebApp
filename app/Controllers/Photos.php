@@ -301,6 +301,9 @@ class Photos extends BaseController
             'width'          => $imageInfo ? $imageInfo[0] : null,
             'height'         => $imageInfo ? $imageInfo[1] : null,
             'size'           => $size,
+            'storage_driver' => 'hybrid',
+            'gcp_synced'     => 0,
+            'gcp_synced_at'  => null,
             'file_hash'      => $fileHash,
             'taken_at'       => $metadata['taken_at'] ?? date('Y-m-d H:i:s'),
             'thumbnail_path' => "thumbnails/{$subDir}/{$newName}",
@@ -320,14 +323,14 @@ class Photos extends BaseController
             $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId])->send();
             fastcgi_finish_request();
             ignore_user_abort(true);
-            $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type']);
+            $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type'], (int) $photoId);
             if (!$isVideo && $photoId) {
                 $this->triggerFaceScan((int) $photoId);
             }
             return;
         }
 
-        $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type']);
+        $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type'], (int) $photoId);
         if (!$isVideo && $photoId) {
             $this->triggerFaceScanAsync((int) $photoId);
         }
@@ -1572,7 +1575,7 @@ class Photos extends BaseController
             'updated_at'=> date('Y-m-d H:i:s')
         ]);
 
-        $this->mirrorToGcp($photo['path'], $photo['thumbnail_path']);
+        $this->mirrorToGcp($photo['path'], $photo['thumbnail_path'], null, (int) $id);
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Changes saved successfully']);
     }
@@ -1822,18 +1825,20 @@ class Photos extends BaseController
     /**
      * Mirrors media file and its thumbnail to Google Cloud Storage if configured.
      */
-    protected function mirrorToGcp(string $uploadPath, ?string $thumbPath = null, ?string $mime = null): void
+    protected function mirrorToGcp(string $uploadPath, ?string $thumbPath = null, ?string $mime = null, ?int $photoId = null): bool
     {
         try {
             $gcp = new \App\Services\GcpStorageService();
             if (!$gcp->isConfigured()) {
-                return;
+                return false;
             }
 
             $cleanUpload = ltrim($uploadPath, '/');
             $localUpload = FCPATH . $cleanUpload;
+            $uploaded = false;
             if (file_exists($localUpload)) {
-                $gcp->uploadFile($localUpload, $cleanUpload, $mime);
+                $res = $gcp->uploadFile($localUpload, $cleanUpload, $mime);
+                $uploaded = !empty($res['success']);
             }
 
             if ($thumbPath) {
@@ -1843,8 +1848,20 @@ class Photos extends BaseController
                     $gcp->uploadFile($localThumb, $cleanThumb, 'image/jpeg');
                 }
             }
+
+            if ($uploaded && $photoId) {
+                $photoModel = new \App\Models\PhotoModel();
+                $photoModel->update($photoId, [
+                    'storage_driver' => 'hybrid',
+                    'gcp_synced'     => 1,
+                    'gcp_synced_at'  => date('Y-m-d H:i:s'),
+                ]);
+            }
+
+            return $uploaded;
         } catch (\Throwable $e) {
             log_message('warning', 'GCP media mirroring failed: ' . $e->getMessage());
+            return false;
         }
     }
 

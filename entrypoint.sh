@@ -65,5 +65,9 @@ rm -f /etc/apache2/mods-enabled/mpm_event.load \
       /etc/apache2/mods-enabled/mpm_worker.load \
       /etc/apache2/mods-enabled/mpm_worker.conf
 
+# Pre-warm lightweight thumbnails from GCP in background (non-blocking for instant Apache boot)
+echo "Triggering background thumbnail pre-warming from GCP..."
+(sleep 4 && php /var/www/html/spark cloud:sync --hydrate --thumbnails-only >> /var/log/hydrate.log 2>&1) &
+
 echo "Migrations complete. Starting Apache..."
 exec apache2-foreground
