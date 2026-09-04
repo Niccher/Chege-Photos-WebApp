@@ -37,7 +37,7 @@
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100" style="background: var(--card-bg); border: 1px solid var(--border-color) !important;">
                 <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
-                    <span class="badge bg-primary bg-opacity-25 text-primary border border-primary px-2 py-1 small"><i class="bi bi-globe me-1"></i>WebApp</span>
+                    <span class="badge bg-primary text-white px-2.5 py-1 small fw-semibold shadow-sm"><i class="bi bi-globe me-1"></i>WebApp</span>
                     <span id="webStatusBadge" class="badge bg-success rounded-pill px-2">Online</span>
                 </div>
                 <div class="card-body">
@@ -77,7 +77,7 @@
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100" style="background: var(--card-bg); border: 1px solid var(--border-color) !important;">
                 <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
-                    <span class="badge bg-info bg-opacity-25 text-info border border-info px-2 py-1 small"><i class="bi bi-cpu me-1"></i>ML Service</span>
+                    <span class="badge bg-info text-dark px-2.5 py-1 small fw-semibold shadow-sm"><i class="bi bi-cpu me-1"></i>ML Service</span>
                     <span id="mlStatusBadge" class="badge bg-secondary rounded-pill px-2">Checking...</span>
                 </div>
                 <div class="card-body">
@@ -106,7 +106,7 @@
                         <strong id="mlUptime" class="font-monospace" style="color: var(--text-primary);">0m</strong>
                     </div>
                     <div class="small text-muted pt-2 d-flex flex-wrap gap-1" id="mlModelsList">
-                        <span class="badge bg-secondary bg-opacity-25 text-muted small">Loading models...</span>
+                        <span class="badge bg-secondary text-white small px-2 py-1">Loading models...</span>
                     </div>
                 </div>
             </div>
@@ -116,7 +116,7 @@
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100" style="background: var(--card-bg); border: 1px solid var(--border-color) !important;">
                 <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
-                    <span class="badge bg-purple bg-opacity-25 border px-2 py-1 small" style="color: #7c3aed; border-color: #7c3aed !important;"><i class="bi bi-diagram-3 me-1"></i>Qdrant</span>
+                    <span class="badge text-white px-2.5 py-1 small fw-semibold shadow-sm" style="background-color: #7c3aed;"><i class="bi bi-diagram-3 me-1"></i>Qdrant</span>
                     <span id="qdrantStatusBadge" class="badge bg-secondary rounded-pill px-2">Checking...</span>
                 </div>
                 <div class="card-body">
@@ -156,7 +156,7 @@
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm rounded-4 h-100" style="background: var(--card-bg); border: 1px solid var(--border-color) !important;">
                 <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
-                    <span class="badge bg-warning bg-opacity-25 text-warning border border-warning px-2 py-1 small"><i class="bi bi-database me-1"></i>MySQL</span>
+                    <span class="badge bg-warning text-dark px-2.5 py-1 small fw-semibold shadow-sm"><i class="bi bi-database me-1"></i>MySQL</span>
                     <span id="dbStatusBadge" class="badge bg-success rounded-pill px-2">Online</span>
                 </div>
                 <div class="card-body">
@@ -283,9 +283,9 @@
 
                 if (m.models) {
                     let tagsHtml = '';
-                    tagsHtml += `<span class="badge ${m.models.face_insightface ? 'bg-success bg-opacity-25 text-success border border-success' : 'bg-secondary bg-opacity-25 text-muted'}"><i class="bi bi-person-bounding-box me-1"></i>Face</span>`;
-                    tagsHtml += `<span class="badge ${m.models.clip_semantic ? 'bg-primary bg-opacity-25 text-primary border border-primary' : 'bg-secondary bg-opacity-25 text-muted'}"><i class="bi bi-search me-1"></i>CLIP</span>`;
-                    tagsHtml += `<span class="badge ${m.models.yolov8_objects ? 'bg-info bg-opacity-25 text-info border border-info' : 'bg-secondary bg-opacity-25 text-muted'}"><i class="bi bi-tag me-1"></i>YOLO</span>`;
+                    tagsHtml += `<span class="badge ${m.models.face_insightface ? 'bg-success text-white' : 'bg-secondary text-white-50'} px-2 py-1 shadow-sm"><i class="bi bi-person-bounding-box me-1"></i>Face</span>`;
+                    tagsHtml += `<span class="badge ${m.models.clip_semantic ? 'bg-primary text-white' : 'bg-secondary text-white-50'} px-2 py-1 shadow-sm"><i class="bi bi-search me-1"></i>CLIP</span>`;
+                    tagsHtml += `<span class="badge ${m.models.yolov8_objects ? 'bg-info text-dark' : 'bg-secondary text-white-50'} px-2 py-1 shadow-sm"><i class="bi bi-tag me-1"></i>YOLO</span>`;
                     $('#mlModelsList').html(tagsHtml);
                 }
             }

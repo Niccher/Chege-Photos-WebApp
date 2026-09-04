@@ -938,18 +938,61 @@ class Photos extends BaseController
 
     public function albums()
     {
+        $userId = auth()->id();
         $albumModel = new \App\Models\AlbumModel();
-        $albums = $albumModel->getAlbumsWithThumbs(auth()->id());
+        $albums = $albumModel->getAlbumsWithThumbs($userId);
+        $aiCollections = $albumModel->getAiCollections($userId);
 
         if ($this->request->getGet('json')) {
-            return $this->response->setJSON(['albums' => $albums]);
+            return $this->response->setJSON([
+                'albums'        => $albums,
+                'aiCollections' => $aiCollections,
+            ]);
         }
 
         $data = [
-            'albums' => $albums,
-            'counts' => $this->getSidebarCounts()
+            'albums'        => $albums,
+            'aiCollections' => $aiCollections,
+            'counts'        => $this->getSidebarCounts(),
         ];
         return view('photos/albums', $data);
+    }
+
+    public function smartCollection(string $key)
+    {
+        $presets = SmartAlbumRules::getPresets();
+        if (! isset($presets[$key])) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $preset     = $presets[$key];
+        $userId     = auth()->id();
+        $photoModel = new \App\Models\PhotoModel();
+        $rules      = SmartAlbumRules::fromArray($preset['rules']);
+
+        $photoModel->where('user_id', $userId);
+        SmartAlbumRules::apply($photoModel, $rules);
+        $query = $photoModel->select('tbl_photos.*')->orderBy('taken_at', 'DESC');
+
+        $data = [
+            'title'          => $preset['name'],
+            'subtitle'       => $preset['description'],
+            'isAiCollection' => true,
+            'collectionKey'  => $key,
+            'preset'         => $preset,
+            'photos'         => $query->paginate(100),
+            'pager'          => $photoModel->pager,
+            'counts'         => $this->getSidebarCounts(),
+        ];
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'photos'  => $data['photos'],
+                'hasMore' => $photoModel->pager->hasMore(),
+            ]);
+        }
+
+        return view('photos/index', $data);
     }
 
     public function viewAlbum($id)
@@ -1112,6 +1155,8 @@ class Photos extends BaseController
             'max_longitude'   => $this->request->getPost('max_longitude'),
             'favorite_only'   => $this->request->getPost('favorite_only'),
             'mime_kind'       => $this->request->getPost('mime_kind'),
+            'ai_tags'         => $this->request->getPost('ai_tags'),
+            'person_id'       => $this->request->getPost('person_id'),
         ]);
     }
 
@@ -1526,14 +1571,16 @@ class Photos extends BaseController
     private function triggerFaceScan(int $photoId): void
     {
         try {
-            $mlUrl = $this->getMlUrl();
+            $mlUrl     = $this->getMlUrl();
+            $webappUrl = rtrim(base_url(), '/');
             $client = service('curlrequest', [
                 'connect_timeout' => 10,
                 'timeout'        => 60,
             ]);
             $client->post($mlUrl . '/api/v1/faces/encode', [
                 'headers' => [
-                    'X-API-KEY' => $this->getMlApiKey()
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'X-Webapp-Url' => $webappUrl,
                 ],
                 'form_params' => [
                     'photo_id'   => $photoId,
@@ -1541,6 +1588,7 @@ class Photos extends BaseController
                     'scan_faces' => 1,
                     'scan_tags'  => 1,
                     'scan_clip'  => 1,
+                    'webapp_url' => $webappUrl,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -1550,13 +1598,15 @@ class Photos extends BaseController
 
     private function triggerFaceScanAsync(int $photoId): void
     {
-        $mlUrl = $this->getMlUrl();
+        $mlUrl     = $this->getMlUrl();
+        $webappUrl = rtrim(base_url(), '/');
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $mlUrl . '/api/v1/faces/encode',
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => [
-                'X-API-KEY: ' . $this->getMlApiKey()
+                'X-API-KEY: ' . $this->getMlApiKey(),
+                'X-Webapp-Url: ' . $webappUrl,
             ],
             CURLOPT_POSTFIELDS => http_build_query([
                 'photo_id'   => $photoId,
@@ -1564,6 +1614,7 @@ class Photos extends BaseController
                 'scan_faces' => 1,
                 'scan_tags'  => 1,
                 'scan_clip'  => 1,
+                'webapp_url' => $webappUrl,
             ]),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT_MS => 100,
@@ -1678,4 +1729,85 @@ class Photos extends BaseController
 
         return $query;
     }
+
+    public function apiSimilar(int $photoId): \CodeIgniter\HTTP\ResponseInterface
+    {
+        $userId = auth()->id() ?: 0;
+        $photoModel = new PhotoModel();
+        $targetPhoto = $photoModel->find($photoId);
+
+        if (! $targetPhoto) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Photo not found',
+            ])->setStatusCode(404);
+        }
+
+        $similarResults = [];
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 4,
+                'timeout'         => 8,
+                'headers'         => [
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'X-Webapp-Url' => rtrim(base_url(), '/'),
+                ],
+                'http_errors'     => false,
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/search/similar/' . $photoId . '?' . http_build_query([
+                'limit'   => 18,
+                'user_id' => $userId,
+            ]);
+
+            $response = $client->get($url);
+            if ($response->getStatusCode() === 200) {
+                $body = json_decode($response->getBody(), true);
+                $similarResults = $body['results'] ?? [];
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Similar photos lookup failed: ' . $e->getMessage());
+        }
+
+        if (empty($similarResults)) {
+            return $this->response->setJSON([
+                'status'   => 'success',
+                'photo_id' => $photoId,
+                'count'    => 0,
+                'photos'   => [],
+            ]);
+        }
+
+        $similarIds = array_column($similarResults, 'photo_id');
+        $scoreMap   = array_column($similarResults, 'score', 'photo_id');
+
+        $matchedPhotos = $photoModel
+            ->whereIn('id', $similarIds)
+            ->where('deleted_at', null)
+            ->findAll();
+
+        $photosOut = [];
+        foreach ($matchedPhotos as $p) {
+            $score = (float)($scoreMap[$p['id']] ?? 0.0);
+            $photosOut[] = [
+                'id'             => (int) $p['id'],
+                'filename'       => $p['filename'],
+                'url'            => base_url($p['path']),
+                'thumbnail_url'  => $p['thumbnail_path'] ? base_url($p['thumbnail_path']) : base_url($p['path']),
+                'taken_at'       => $p['taken_at'],
+                'score'          => $score,
+                'similarity_pct' => round($score * 100),
+            ];
+        }
+
+        usort($photosOut, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        return $this->response->setJSON([
+            'status'   => 'success',
+            'photo_id' => $photoId,
+            'count'    => count($photosOut),
+            'photos'   => $photosOut,
+        ]);
+    }
 }
+

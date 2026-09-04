@@ -43,13 +43,17 @@ class MlSweep extends BaseCommand
         $errors = 0;
 
         try {
+            helper('ml');
+            $webappUrl = function_exists('get_webapp_url') ? get_webapp_url() : rtrim(base_url(), '/');
+
             // Use a very short timeout (fire-and-forget): the ML service queues the job
             // asynchronously so we only need the request to be accepted, not completed.
             $client = service('curlrequest', [
                 'connect_timeout' => 2,
                 'timeout'         => 3,  // fire-and-forget — ML handles it async
                 'headers'         => [
-                    'X-API-KEY' => $mlKey,
+                    'X-API-KEY'    => $mlKey,
+                    'X-Webapp-Url' => $webappUrl,
                 ]
             ]);
 
@@ -62,6 +66,7 @@ class MlSweep extends BaseCommand
                             'scan_tags'  => $p['scanned_tag']  == 0 ? 1 : 0,
                             'scan_clip'  => $p['scanned_clip'] == 0 ? 1 : 0,
                             'async_task' => 1,
+                            'webapp_url' => $webappUrl,
                         ]
                     ]);
                     $queued++;

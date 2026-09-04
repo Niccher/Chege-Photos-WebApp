@@ -74,4 +74,35 @@ class AlbumModel extends Model
         
         return $albums;
     }
+
+    /**
+     * Get dynamic AI auto-albums with live matching counts and representative thumbnails
+     */
+    public function getAiCollections(int $userId): array
+    {
+        $presets = SmartAlbumRules::getPresets();
+        $collections = [];
+
+        foreach ($presets as $key => $preset) {
+            $rules = SmartAlbumRules::fromArray($preset['rules']);
+            $count = SmartAlbumRules::countMatching($userId, $rules);
+
+            $thumbnail = null;
+            if ($count > 0) {
+                $pm = new PhotoModel();
+                $pm->where('user_id', $userId);
+                SmartAlbumRules::apply($pm, $rules);
+                $first = $pm->orderBy('taken_at', 'DESC')->first();
+                $thumbnail = $first['thumbnail_path'] ?? null;
+            }
+
+            $collections[] = array_merge($preset, [
+                'key'         => $key,
+                'photo_count' => $count,
+                'thumbnail'   => $thumbnail,
+            ]);
+        }
+
+        return $collections;
+    }
 }

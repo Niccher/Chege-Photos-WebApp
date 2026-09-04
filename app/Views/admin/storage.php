@@ -62,6 +62,22 @@
                 </form>
             </div>
 
+            <!-- Duplicate Photo Storage Reclaimer Card -->
+            <div class="card border-0 shadow-sm rounded-card p-4 mb-4" style="background: var(--card-bg); color: var(--text-primary);">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h5 class="mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-copy text-warning"></i>
+                        <span>Duplicate Photo Detection &amp; Storage Reclaimer</span>
+                    </h5>
+                    <a href="<?= base_url('duplicates') ?>" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1.5 fw-semibold">
+                        <i class="bi bi-magic me-1"></i> Launch Duplicate Reclaimer
+                    </a>
+                </div>
+                <p class="text-muted small mb-0">
+                    Scan for exact binary file duplicates across your photo library. Group identical photos by SHA-256 hash and reclaim disk storage by moving redundant copies to the Trash bin in a single click.
+                </p>
+            </div>
+
             <!-- Google Cloud Storage (GCP) Card -->
             <div class="card border-0 shadow-sm rounded-card p-4 mb-4" style="background: var(--card-bg); color: var(--text-primary);">
                 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">

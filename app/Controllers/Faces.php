@@ -13,12 +13,16 @@ class Faces extends BaseController
 
     private function mlProxy(string $method, string $path, array $options = []): array
     {
+        $webappUrl = rtrim(base_url(), '/');
+        $defaultHeaders = [
+            'X-API-KEY'    => $this->getMlApiKey(),
+            'X-Webapp-Url' => $webappUrl,
+        ];
+        $options['headers'] = array_merge($defaultHeaders, $options['headers'] ?? []);
+
         $client = service('curlrequest', [
             'connect_timeout' => 30,
             'timeout'        => 120,
-            'headers'        => [
-                'X-API-KEY' => $this->getMlApiKey()
-            ]
         ]);
         $baseUrl = $this->getMlUrl();
         $url = $baseUrl . $path;
@@ -116,7 +120,7 @@ class Faces extends BaseController
         unset($uface);
 
         // Storage metrics for sidebar bar
-        $totalBytes     = (int)($photoModel->where('user_id', $userId)->selectSum('file_size')->first()['file_size'] ?? 0);
+        $totalBytes     = (int)($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
         $storageMetrics = self::calculateStorageMetrics($totalBytes);
 
         $data = [
@@ -689,31 +693,72 @@ class Faces extends BaseController
                 ]);
             }
 
-            // Fire-and-forget: very short timeout — ML service accepts and queues async
+            // Attempt high-performance batch queuing first
             $mlUrl    = $this->getMlUrl();
             $mlKey    = $this->getMlApiKey();
             $queued   = 0;
-            $client   = service('curlrequest', [
-                'connect_timeout' => 2,
-                'timeout'         => 2,
-                'headers'         => ['X-API-KEY' => $mlKey],
+            $chunks   = array_chunk($toQueue, 500);
+            $batchFailed = false;
+
+            $webappUrl = rtrim(base_url(), '/');
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 30,
+                'headers'         => [
+                    'X-API-KEY'    => $mlKey,
+                    'X-Webapp-Url' => $webappUrl,
+                ],
             ]);
 
-            foreach ($toQueue as $photoId) {
+            foreach ($chunks as $chunk) {
                 try {
-                    $client->post($mlUrl . '/api/v1/faces/encode', [
+                    $resp = $client->post($mlUrl . '/api/v1/faces/encode-batch', [
                         'form_params' => [
-                            'photo_id'   => $photoId,
-                            'async_task' => 1,
+                            'photo_ids'   => $chunk,
+                            'scan_faces'  => 1,
+                            'scan_tags'   => 1,
+                            'scan_clip'   => 1,
+                            'webapp_url'  => $webappUrl,
                         ],
                     ]);
-                    $queued++;
-                } catch (\Exception $e) {
-                    // Timeout = accepted but ML is processing — count as queued
-                    if (str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'Operation timed out')) {
-                        $queued++;
+                    $body = json_decode($resp->getBody(), true);
+                    if (isset($body['queued'])) {
+                        $queued += (int) $body['queued'];
+                    } else {
+                        $queued += count($chunk);
                     }
-                    // Network errors: silently skip, user can retry
+                } catch (\Exception $e) {
+                    $batchFailed = true;
+                    break;
+                }
+            }
+
+            // Fallback to individual requests if batch endpoint is not supported
+            if ($batchFailed) {
+                $clientShort = service('curlrequest', [
+                    'connect_timeout' => 2,
+                    'timeout'         => 2,
+                    'headers'         => [
+                        'X-API-KEY'    => $mlKey,
+                        'X-Webapp-Url' => $webappUrl,
+                    ],
+                ]);
+                $queued = 0;
+                foreach ($toQueue as $photoId) {
+                    try {
+                        $clientShort->post($mlUrl . '/api/v1/faces/encode', [
+                            'form_params' => [
+                                'photo_id'   => $photoId,
+                                'async_task' => 1,
+                                'webapp_url' => $webappUrl,
+                            ],
+                        ]);
+                        $queued++;
+                    } catch (\Exception $e) {
+                        if (str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'Operation timed out')) {
+                            $queued++;
+                        }
+                    }
                 }
             }
 
@@ -752,30 +797,78 @@ class Faces extends BaseController
             ]);
         }
 
-        $faceModel = new FaceEncodingModel();
         $photoModel = new \App\Models\PhotoModel();
 
         $photos = $photoModel
             ->like('mime_type', 'image/', 'after')
             ->where('deleted_at', null)
+            ->select('id')
             ->orderBy('id', 'ASC')
             ->findAll();
 
-        $processed = 0;
-        $errors = [];
-
-        foreach ($photos as $photo) {
-            $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
-                'form_params' => [
-                    'photo_id'   => $photo['id'],
-                    'async_task' => 1,
-                ],
+        $photoIds = array_map(fn($p) => (int) $p['id'], $photos);
+        $total = count($photoIds);
+        if ($total === 0) {
+            return $this->response->setJSON([
+                'status'    => 'success',
+                'processed' => 0,
+                'errors'    => [],
             ]);
+        }
 
-            if (isset($result['error'])) {
-                $errors[] = ['photo_id' => $photo['id'], 'error' => $result['error']];
-            } else {
-                $processed++;
+        // Try batch queuing first
+        $mlUrl    = $this->getMlUrl();
+        $mlKey    = $this->getMlApiKey();
+        $processed = 0;
+        $errors    = [];
+        $chunks    = array_chunk($photoIds, 500);
+        $batchFailed = false;
+
+        $webappUrl = rtrim(base_url(), '/');
+        $client = service('curlrequest', [
+            'connect_timeout' => 5,
+            'timeout'         => 30,
+            'headers'         => [
+                'X-API-KEY'    => $mlKey,
+                'X-Webapp-Url' => $webappUrl,
+            ],
+        ]);
+
+        foreach ($chunks as $chunk) {
+            try {
+                $resp = $client->post($mlUrl . '/api/v1/faces/encode-batch', [
+                    'form_params' => [
+                        'photo_ids'   => $chunk,
+                        'scan_faces'  => 1,
+                        'scan_tags'   => 1,
+                        'scan_clip'   => 1,
+                        'webapp_url'  => $webappUrl,
+                    ],
+                ]);
+                $body = json_decode($resp->getBody(), true);
+                $processed += isset($body['queued']) ? (int) $body['queued'] : count($chunk);
+            } catch (\Exception $e) {
+                $batchFailed = true;
+                break;
+            }
+        }
+
+        if ($batchFailed) {
+            $processed = 0;
+            foreach ($photoIds as $pid) {
+                $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
+                    'form_params' => [
+                        'photo_id'   => $pid,
+                        'async_task' => 1,
+                        'webapp_url' => $webappUrl,
+                    ],
+                ]);
+
+                if (isset($result['error'])) {
+                    $errors[] = ['photo_id' => $pid, 'error' => $result['error']];
+                } else {
+                    $processed++;
+                }
             }
         }
 
@@ -821,4 +914,100 @@ class Faces extends BaseController
             'results' => $results,
         ]);
     }
+
+    public function apiSetPersonCover(): ResponseInterface
+    {
+        $personId = (int) $this->request->getPost('person_id');
+        $faceId   = (int) $this->request->getPost('face_id');
+
+        if (!$personId || !$faceId) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'person_id and face_id are required',
+            ])->setStatusCode(400);
+        }
+
+        $personModel = new PersonModel();
+        $faceModel   = new FaceEncodingModel();
+
+        $person = $personModel->find($personId);
+        $face   = $faceModel->find($faceId);
+
+        if (!$person || !$face) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Person or Face not found',
+            ])->setStatusCode(404);
+        }
+
+        $personModel->update($personId, [
+            'thumbnail_face_id' => $faceId,
+        ]);
+
+        return $this->response->setJSON([
+            'status'   => 'success',
+            'message'  => 'Person cover face updated successfully.',
+            'person_id'=> $personId,
+            'face_id'  => $faceId,
+        ]);
+    }
+
+    public function apiDetachFace(): ResponseInterface
+    {
+        $faceId = (int) $this->request->getPost('face_id');
+        if (!$faceId) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'face_id is required',
+            ])->setStatusCode(400);
+        }
+
+        $faceModel = new FaceEncodingModel();
+        $face = $faceModel->find($faceId);
+        if (!$face) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Face not found',
+            ])->setStatusCode(404);
+        }
+
+        $faceModel->update($faceId, [
+            'person_id' => null,
+        ]);
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Face detached and moved to unassigned.',
+            'face_id' => $faceId,
+        ]);
+    }
+
+    public function apiScanStatus(): ResponseInterface
+    {
+        $userId = auth()->id();
+        $photoModel = new \App\Models\PhotoModel();
+        $totalPhotos = $photoModel->where('user_id', $userId)->countAllResults();
+        $scannedFaces = $photoModel->where('user_id', $userId)->where('scanned_face', 1)->countAllResults();
+        $unscanned = max(0, $totalPhotos - $scannedFaces);
+
+        $queueSize = 0;
+        $isProcessing = false;
+        try {
+            $h = $this->mlProxy('GET', '/api/v1/health');
+            if (isset($h['queue_size'])) {
+                $queueSize = (int)$h['queue_size'];
+                $isProcessing = (bool)($h['is_processing'] ?? false);
+            }
+        } catch (\Exception $e) {}
+
+        return $this->response->setJSON([
+            'status'        => 'success',
+            'total'         => $totalPhotos,
+            'scanned'       => $scannedFaces,
+            'unscanned'     => $unscanned,
+            'queue_size'    => $queueSize,
+            'is_processing' => $isProcessing,
+        ]);
+    }
 }
+

@@ -8,11 +8,57 @@ use App\Libraries\SmartAlbumRules;
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="h4 mb-0">Albums</h2>
-        <p class="text-muted small mb-0">Organize your photos into collections</p>
+        <p class="text-muted small mb-0">Organize your photos into collections and AI smart albums</p>
     </div>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAlbumModal">
         <i class="bi bi-plus-lg me-2"></i> New Album
     </button>
+</div>
+
+<?php if (! empty($aiCollections)): ?>
+    <!-- AI Smart Collections Banner -->
+    <div class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="h6 mb-0 fw-bold d-flex align-items-center gap-2">
+                    <i class="bi bi-stars text-warning"></i>
+                    <span>AI Smart Collections</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill small">Auto-Curated</span>
+                </h5>
+                <p class="text-muted small mb-0">Live collections generated dynamically by YOLO and CLIP models</p>
+            </div>
+        </div>
+        <div class="row g-3">
+            <?php foreach ($aiCollections as $col): ?>
+                <div class="col-6 col-md-4 col-lg-3">
+                    <a href="<?= base_url('albums/collection/' . $col['key']) ?>" class="text-decoration-none group">
+                        <div class="card border shadow-sm overflow-hidden h-100 album-card" style="background: var(--card-bg);">
+                            <div class="ratio ratio-16x9 bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center overflow-hidden position-relative">
+                                <?php if (! empty($col['thumbnail'])): ?>
+                                    <img src="<?= base_url($col['thumbnail']) ?>" class="object-fit-cover w-100 h-100" alt="<?= esc($col['name']) ?>">
+                                <?php else: ?>
+                                    <div class="d-flex align-items-center justify-content-center w-100 h-100 opacity-50">
+                                        <i class="bi <?= esc($col['icon']) ?>" style="font-size: 2.5rem;"></i>
+                                    </div>
+                                <?php endif; ?>
+                                <span class="position-absolute top-0 start-0 m-2 badge bg-<?= esc($col['color']) ?> rounded-pill shadow-sm">
+                                    <i class="bi <?= esc($col['icon']) ?> me-1"></i> <?= esc($col['photo_count']) ?> items
+                                </span>
+                            </div>
+                            <div class="card-body p-3">
+                                <h6 class="mb-1 text-truncate fw-semibold" style="color: var(--text-primary);"><?= esc($col['name']) ?></h6>
+                                <p class="text-muted small mb-0 text-truncate"><?= esc($col['description']) ?></p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="h6 mb-0 fw-bold">My Albums</h5>
 </div>
 
 <?php if (empty($albums)): ?>
@@ -130,6 +176,11 @@ use App\Libraries\SmartAlbumRules;
                                     <option value="<?= esc(SmartAlbumRules::MIME_IMAGE) ?>">Photos only</option>
                                     <option value="<?= esc(SmartAlbumRules::MIME_VIDEO) ?>">Videos only</option>
                                 </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">AI Detected Tags (comma-separated, e.g. dog, cat, car, food, beach)</label>
+                                <input type="text" name="ai_tags" class="form-control" placeholder="dog, cat, car, pizza...">
+                                <span class="text-muted extra-small">Automatically matches YOLOv8 and CLIP scene classifications</span>
                             </div>
                         </div>
                     </div>

@@ -503,14 +503,125 @@ $(document).ready(function () {
         });
         currentIndex = -1;
         $('#shareLinkPopup').addClass('d-none');
+        $('#metadataPanel').addClass('d-none');
+        $('#similarPhotosPanel').addClass('d-none');
     });
 
     $('#btnInfo').on('click', function () {
+        $('#similarPhotosPanel').addClass('d-none');
         $('#metadataPanel').toggleClass('d-none');
     });
 
     $('#btnCloseMetadata').on('click', function () {
         $('#metadataPanel').addClass('d-none');
+    });
+
+    // ── Visual Similarity Search ("Find Similar Photos") ─────
+    $('#btnFindSimilar').on('click', function () {
+        $('#metadataPanel').addClass('d-none');
+        $('#similarPhotosPanel').toggleClass('d-none');
+        if (!$('#similarPhotosPanel').hasClass('d-none') && currentPhotoId) {
+            loadSimilarPhotos(currentPhotoId);
+        }
+    });
+
+    $('#btnCloseSimilar').on('click', function () {
+        $('#similarPhotosPanel').addClass('d-none');
+    });
+
+    function loadSimilarPhotos(photoId) {
+        const container = $('#similarPhotosContent');
+        container.html(`
+            <div class="text-center py-5 text-muted">
+                <span class="spinner-border spinner-border-sm text-primary mb-2" role="status"></span>
+                <div class="small">Finding visually similar photos...</div>
+            </div>
+        `);
+
+        $.getJSON(BASE_URL + 'photos/' + photoId + '/similar', function (res) {
+            if (res.status === 'success' && res.photos && res.photos.length > 0) {
+                let html = '<div class="row g-2">';
+                res.photos.forEach(function (p) {
+                    const matchScore = p.similarity ? Math.round(p.similarity * 100) : 0;
+                    const thumbUrl = p.thumbnail_path ? BASE_URL + p.thumbnail_path : (BASE_URL + p.path);
+                    html += `
+                        <div class="col-6">
+                            <div class="card bg-dark border-0 rounded overflow-hidden similar-photo-card position-relative" style="cursor: pointer;" data-id="${p.id}" data-path="${p.path}">
+                                <div class="ratio ratio-1x1 bg-black">
+                                    <img src="${thumbUrl}" class="object-fit-cover w-100 h-100" alt="${p.filename || 'Photo'}" loading="lazy">
+                                </div>
+                                <span class="position-absolute top-0 end-0 m-1 badge bg-primary bg-opacity-75 text-white" style="font-size: 0.65rem;">
+                                    ${matchScore}% match
+                                </span>
+                                <div class="p-1.5 text-truncate" style="font-size: 0.72rem; color: #ccc;" title="${p.filename || ''}">
+                                    ${p.filename || 'Photo #' + p.id}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.html(html);
+            } else {
+                container.html(`
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-images fs-1 mb-2 d-block opacity-25"></i>
+                        <p class="small mb-1">No visually similar photos found.</p>
+                        <p class="extra-small text-secondary mb-0">Ensure CLIP semantic vectors are scanned for your library.</p>
+                    </div>
+                `);
+            }
+        }).fail(function () {
+            container.html(`
+                <div class="text-center py-5 text-danger">
+                    <i class="bi bi-exclamation-triangle fs-2 mb-2 d-block"></i>
+                    <span class="small">Unable to query similarity search.</span>
+                </div>
+            `);
+        });
+    }
+
+    // Clicking a similar photo loads it into the viewer
+    $(document).on('click', '.similar-photo-card', function () {
+        const clickedId = $(this).data('id');
+        let foundIdx = -1;
+        $allPhotos.each(function (idx) {
+            if ($(this).data('id') == clickedId) {
+                foundIdx = idx;
+                return false;
+            }
+        });
+
+        if (foundIdx >= 0) {
+            openPhoto(foundIdx);
+        } else {
+            window.location.href = BASE_URL + 'photos/' + clickedId;
+        }
+    });
+
+    // ── Save AI Preset Collection as Permanent Smart Album ────
+    $(document).on('click', '#btnSaveAiAsAlbum', function () {
+        const btn = $(this).prop('disabled', true);
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
+        $.post(BASE_URL + 'albums/create', {
+            album_type: 'smart',
+            name: btn.data('name'),
+            description: btn.data('description'),
+            ai_tags: btn.data('tags')
+        }, function (res) {
+            if (res.status === 'success') {
+                showToast('Saved to My Albums!', 'success');
+                setTimeout(function () {
+                    window.location.href = BASE_URL + 'albums/' + res.id;
+                }, 800);
+            } else {
+                showToast('Failed: ' + (res.message || 'Error'), 'danger');
+                btn.prop('disabled', false).html('<i class="bi bi-plus-circle me-1"></i> Save as Smart Album');
+            }
+        }, 'json').fail(function () {
+            btn.prop('disabled', false).html('<i class="bi bi-plus-circle me-1"></i> Save as Smart Album');
+            showToast('Network error saving album', 'danger');
+        });
     });
 
     // Public Sharing Link

@@ -312,8 +312,13 @@ class Admin extends BaseController
             ->getRowArray();
 
         // Fetch queue depth from ML health endpoint for real-time activity display
-        $queueSize    = 0;
-        $isProcessing = false;
+        $queueSize      = 0;
+        $isProcessing   = false;
+        $totalProcessed = 0;
+        $totalFailed    = 0;
+        $lastError      = null;
+        $lastErrorTime  = null;
+        $workersCount   = 1;
         if ($mlOnline) {
             try {
                 $hClient = service('curlrequest', ['connect_timeout' => 3, 'timeout' => 5,
@@ -321,8 +326,13 @@ class Admin extends BaseController
                 $hResp   = $hClient->get($activeUrl . '/api/v1/health');
                 $hData   = json_decode($hResp->getBody(), true);
                 if (is_array($hData)) {
-                    $queueSize    = (int)($hData['queue_size'] ?? 0);
-                    $isProcessing = (bool)($hData['is_processing'] ?? false);
+                    $queueSize      = (int)($hData['queue_size'] ?? 0);
+                    $isProcessing   = (bool)($hData['is_processing'] ?? false);
+                    $totalProcessed = (int)($hData['total_processed'] ?? 0);
+                    $totalFailed    = (int)($hData['total_failed'] ?? 0);
+                    $lastError      = $hData['last_error'] ?? null;
+                    $lastErrorTime  = $hData['last_error_time'] ?? null;
+                    $workersCount   = (int)($hData['concurrent_workers'] ?? 1);
                 }
             } catch (\Exception $e) {
                 // non-critical — ignore probe failure
@@ -330,15 +340,20 @@ class Admin extends BaseController
         }
 
         return $this->response->setJSON([
-            'status'        => 'success',
-            'ml_online'     => $mlOnline,
-            'ml_url'        => $activeUrl,
-            'latency_ms'    => $latencyMs,
-            'error_message' => $errorMessage,
-            'last_sweep'    => $lastSweep,
-            'queue_size'    => $queueSize,
-            'is_processing' => $isProcessing,
-            'stats'         => [
+            'status'          => 'success',
+            'ml_online'       => $mlOnline,
+            'ml_url'          => $activeUrl,
+            'latency_ms'      => $latencyMs,
+            'error_message'   => $errorMessage,
+            'last_sweep'      => $lastSweep,
+            'queue_size'      => $queueSize,
+            'is_processing'   => $isProcessing,
+            'total_processed' => $totalProcessed,
+            'total_failed'    => $totalFailed,
+            'last_error'      => $lastError,
+            'last_error_time' => $lastErrorTime,
+            'workers_count'   => $workersCount,
+            'stats'           => [
                 'total_encodings' => $totalEncodings,
                 'total_persons'   => $totalPersons,
                 'unassigned'      => $unassigned,
@@ -1173,11 +1188,13 @@ class Admin extends BaseController
             $db->table('tbl_photos')->update([$col => 0]);
         }
 
+        $webappUrl = rtrim(base_url(), '/');
         $client = service('curlrequest', [
             'connect_timeout' => 2,
             'timeout'         => 5,
             'headers'         => [
-                'X-API-KEY' => $this->getMlApiKey()
+                'X-API-KEY'    => $this->getMlApiKey(),
+                'X-Webapp-Url' => $webappUrl,
             ]
         ]);
 
@@ -1192,6 +1209,7 @@ class Admin extends BaseController
                         'scan_tags'  => $type === 'tags' ? 1 : 0,
                         'scan_clip'  => $type === 'clip' ? 1 : 0,
                         'async_task' => 1,
+                        'webapp_url' => $webappUrl,
                     ]
                 ]);
                 $queued++;
@@ -2176,6 +2194,86 @@ class Admin extends BaseController
         ])->setStatusCode(502);
     }
 
+    public function mlDiagnostics()
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 15,
+                'headers'         => [
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'X-Webapp-Url' => rtrim(base_url(), '/'),
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/health/diagnostics';
+            $response = $client->get($url);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody(), true);
+                return $this->response->setJSON($data);
+            }
+
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'ML diagnostics returned HTTP ' . $response->getStatusCode()
+            ])->setStatusCode(502);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Cannot connect to ML diagnostics: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function reapStaleScans()
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 15,
+                'headers'         => [
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'X-Webapp-Url' => rtrim(base_url(), '/'),
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/scan/reap-stale?max_age_sec=300';
+            $response = $client->post($url);
+            $data = json_decode($response->getBody(), true);
+            return $this->response->setJSON($data ?: ['status' => 'success']);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to reap stale scans: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function retryFailedScans()
+    {
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 30,
+                'headers'         => [
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'X-Webapp-Url' => rtrim(base_url(), '/'),
+                ]
+            ]);
+
+            $url = $this->getMlUrl() . '/api/v1/scan/retry-failed';
+            $response = $client->post($url);
+            $data = json_decode($response->getBody(), true);
+            return $this->response->setJSON($data ?: ['status' => 'success']);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to retry scans: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
     public function health()
     {
         $userId     = auth()->id();
@@ -2314,7 +2412,8 @@ class Admin extends BaseController
                         'connect_timeout' => 2,
                         'timeout'         => 3,
                         'headers'         => [
-                            'X-API-KEY' => $this->getMlApiKey()
+                            'X-API-KEY'    => $this->getMlApiKey(),
+                            'X-Webapp-Url' => rtrim(base_url(), '/'),
                         ]
                     ]);
                     $response = $client->get($this->getMlUrl() . '/api/v1/health');
@@ -2346,7 +2445,8 @@ class Admin extends BaseController
                         'connect_timeout' => 2,
                         'timeout'         => 3,
                         'headers'         => [
-                            'X-API-KEY' => $this->getMlApiKey()
+                            'X-API-KEY'    => $this->getMlApiKey(),
+                            'X-Webapp-Url' => rtrim(base_url(), '/'),
                         ]
                     ]);
                     $response = $client->get($this->getMlUrl() . '/api/v1/health');

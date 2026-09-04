@@ -407,6 +407,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--duplicates <?= (url_is('duplicates')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('duplicates') ?>">
+                        <span><i class="bi bi-copy"></i> Duplicates</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--archive <?= (url_is('archive')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('archive') ?>">
                         <span><i class="bi bi-archive"></i> Archive</span>
                         <span class="badge rounded-pill sidebar-count sidebar-count--archive"><?= (int) ($counts['archive'] ?? 0) ?></span>
@@ -532,6 +537,11 @@
                     </button>
 
                     <div class="vr bg-white opacity-25 mx-2" style="height: 20px;"></div>
+
+                    <!-- Find Similar Photos Button -->
+                    <button type="button" class="btn btn-link text-white p-2" id="btnFindSimilar" title="Find Visually Similar Photos">
+                        <i class="bi bi-images fs-5"></i>
+                    </button>
 
                     <!-- Info Toggle Button -->
                     <button type="button" class="btn btn-link text-white p-2" id="btnInfo" title="Info & Details">
@@ -741,6 +751,23 @@
 
                 </div>
             </div>
+
+            <!-- Visually Similar Photos Panel -->
+            <div id="similarPhotosPanel" class="h-100 d-none overflow-auto" style="width: 360px; z-index: 1057; background: #111; color: #e8e8e8; border-left: 1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex justify-content-between align-items-center px-4 pt-4 pb-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <span class="fw-semibold d-flex align-items-center gap-2" style="font-size: 1rem; letter-spacing: 0.02em;">
+                        <i class="bi bi-images text-primary"></i> Visually Similar
+                    </span>
+                    <button type="button" class="btn btn-link p-1 text-white opacity-50" id="btnCloseSimilar" title="Close panel">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="p-3" id="similarPhotosContent">
+                    <div class="text-center py-4 text-muted">
+                        <span class="spinner-border spinner-border-sm me-2"></span> Finding similar photos...
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -925,8 +952,11 @@
                         <span class="text-muted"><i class="bi bi-activity me-2"></i>Status:</span>
                         <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsStatusText">Idle (Waiting)</span>
                     </div>
-                    <div class="d-flex justify-content-end mb-1" style="font-size: 0.72rem;">
-                        <span class="badge bg-primary bg-opacity-25 text-primary d-none" id="mlQueueDepthBadge" style="font-size: 0.65rem;">0 in queue</span>
+                    <div class="d-flex justify-content-between align-items-center mb-1" style="font-size: 0.72rem;">
+                        <a href="<?= base_url('admin/ml') ?>" class="badge bg-danger text-white shadow-sm d-none text-decoration-none fw-bold" id="mlJobsErrorBadge" style="font-size: 0.65rem; padding: 0.3em 0.55em;" title="Click to view failure logs in Admin ML">
+                            <i class="bi bi-exclamation-octagon-fill me-1"></i><span id="mlJobsErrorCount">0</span> failed
+                        </a>
+                        <span class="badge bg-primary text-white shadow-sm d-none fw-bold ms-auto" id="mlQueueDepthBadge" style="font-size: 0.72rem; padding: 0.35em 0.65em;">0 in queue</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsStartRow" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-clock me-2"></i>Started At:</span>
@@ -1063,6 +1093,18 @@
                         $('#mlQueueDepthBadge').text(queueSize + ' in queue').removeClass('d-none');
                     } else {
                         $('#mlQueueDepthBadge').addClass('d-none');
+                    }
+
+                    // Show error count badge if ML reported failures
+                    var totalFailed = res.total_failed || 0;
+                    if (totalFailed > 0) {
+                        $('#mlJobsErrorCount').text(totalFailed);
+                        if (res.last_error) {
+                            $('#mlJobsErrorBadge').attr('title', 'Last Error: ' + res.last_error);
+                        }
+                        $('#mlJobsErrorBadge').removeClass('d-none');
+                    } else {
+                        $('#mlJobsErrorBadge').addClass('d-none');
                     }
 
                     // Track delta across polling ticks

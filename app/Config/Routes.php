@@ -81,12 +81,19 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('photos', 'Photos::index');
     $routes->get('backfill-exif', 'Photos::backfillExif');
     $routes->get('faces',          'Faces::index');
+    $routes->get('faces/scan-status', 'Faces::apiScanStatus');
     $routes->get('faces/person/(:num)', 'Faces::personPhotos/$1');
     $routes->get('faces/photo/(:num)', 'Faces::photo/$1');
     $routes->get('faces/unassigned', 'Faces::apiUnassigned');
     $routes->post('faces/persons/merge', 'Faces::apiMergePersons');
+    $routes->post('faces/persons/set-cover', 'Faces::apiSetPersonCover');
+    $routes->post('faces/detach', 'Faces::apiDetachFace');
     $routes->post('faces/assign-face', 'Faces::apiAssignFaceToPerson');
     $routes->post('faces/bulk-assign', 'Faces::apiBulkAssign');
+    $routes->get('photos/(:num)/similar', 'Photos::apiSimilar/$1');
+    $routes->get('tools/duplicates', 'Duplicates::index');
+    $routes->post('tools/duplicates/trash', 'Duplicates::apiTrashDuplicate');
+    $routes->post('tools/duplicates/auto-clean', 'Duplicates::apiAutoClean');
     $routes->post('photos/tags/add', 'Photos::addTag');
     $routes->post('photos/tags/remove', 'Photos::removeTag');
     $routes->post('upload', 'Photos::upload');
@@ -111,6 +118,7 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('memories',               'Photos::memories');
     $routes->get('albums',                 'Photos::albums');
     $routes->get('albums/(:num)',          'Photos::viewAlbum/$1');
+    $routes->get('albums/collection/(:segment)', 'Photos::smartCollection/$1');
     $routes->post('albums/create',         'Photos::createAlbum');
     $routes->post('albums/update-smart/(:num)', 'Photos::updateSmartAlbum/$1');
     $routes->post('albums/add-photo',      'Photos::addPhotoToAlbum');
@@ -118,6 +126,11 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('bulk-action', 'Photos::bulkAction');
 
     $routes->get('users/search',           'Photos::searchUsers');
+
+    // Duplicate Detection & Storage Reclaimer
+    $routes->get('duplicates',              'Duplicates::index');
+    $routes->post('duplicates/trash/(:num)','Duplicates::apiTrashDuplicate/$1');
+    $routes->post('duplicates/autoclean',   'Duplicates::apiAutoClean');
 
     $routes->get('settings', 'Settings::index');
     $routes->get('settings/profile', 'Settings::profile');
@@ -190,6 +203,9 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->get('ml/models-inventory', 'Admin::modelsInventory');
     $routes->post('ml/models-download', 'Admin::downloadModel');
     $routes->post('ml/test-connection', 'Admin::testMlConnection');
+    $routes->get('ml/diagnostics',      'Admin::mlDiagnostics');
+    $routes->post('ml/reap-stale',      'Admin::reapStaleScans');
+    $routes->post('ml/retry-failed',    'Admin::retryFailedScans');
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');

@@ -14,6 +14,53 @@ class SmartAlbumRules
     public const MIME_VIDEO = 'video';
 
     /**
+     * Preset AI collections definition
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function getPresets(): array
+    {
+        return [
+            'pets' => [
+                'name'        => 'Pets & Animals',
+                'description' => 'Photos featuring dogs, cats, birds, and other animals',
+                'icon'        => 'bi-feather',
+                'color'       => 'warning',
+                'rules'       => [
+                    'ai_tags' => ['dog', 'cat', 'bird', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe'],
+                ],
+            ],
+            'vehicles' => [
+                'name'        => 'Vehicles & Transport',
+                'description' => 'Cars, motorcycles, planes, trains, and boats',
+                'icon'        => 'bi-car-front',
+                'color'       => 'info',
+                'rules'       => [
+                    'ai_tags' => ['car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'bicycle'],
+                ],
+            ],
+            'food' => [
+                'name'        => 'Food & Dining',
+                'description' => 'Meals, dishes, drinks, and dining moments',
+                'icon'        => 'bi-cup-hot',
+                'color'       => 'danger',
+                'rules'       => [
+                    'ai_tags' => ['bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake'],
+                ],
+            ],
+            'documents' => [
+                'name'        => 'Documents & Notes',
+                'description' => 'Books, papers, receipts, and text documents',
+                'icon'        => 'bi-file-earmark-text',
+                'color'       => 'secondary',
+                'rules'       => [
+                    'ai_tags' => ['book', 'paper', 'document', 'text'],
+                ],
+            ],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function defaults(): array
@@ -29,6 +76,8 @@ class SmartAlbumRules
             'max_longitude'     => null,
             'favorite_only'     => false,
             'mime_kind'         => self::MIME_ANY,
+            'ai_tags'           => [],
+            'person_id'         => null,
         ];
     }
 
@@ -48,6 +97,11 @@ class SmartAlbumRules
             $mime = self::MIME_ANY;
         }
 
+        $aiTags = $raw['ai_tags'] ?? [];
+        if (is_string($aiTags)) {
+            $aiTags = array_filter(array_map('trim', explode(',', $aiTags)));
+        }
+
         return [
             'date_from'       => self::sanitizeDate($raw['date_from'] ?? null),
             'date_to'         => self::sanitizeDate($raw['date_to'] ?? null),
@@ -59,6 +113,8 @@ class SmartAlbumRules
             'max_longitude'   => self::sanitizeFloat($raw['max_longitude'] ?? null, -180, 180),
             'favorite_only'   => filter_var($raw['favorite_only'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'mime_kind'       => $mime,
+            'ai_tags'         => is_array($aiTags) ? array_values($aiTags) : [],
+            'person_id'       => !empty($raw['person_id']) ? (int)$raw['person_id'] : null,
         ];
     }
 
@@ -96,6 +152,9 @@ class SmartAlbumRules
         if (($r['mime_kind'] ?? self::MIME_ANY) !== self::MIME_ANY) {
             return true;
         }
+        if (! empty($r['ai_tags']) || ! empty($r['person_id'])) {
+            return true;
+        }
 
         return false;
     }
@@ -106,7 +165,7 @@ class SmartAlbumRules
     public static function validateForSave(array $r): ?string
     {
         if (! self::hasActiveCriteria($r)) {
-            return 'Choose at least one rule: a date range, camera text, GPS, favorites only, or photo/video type.';
+            return 'Choose at least one rule: a date range, camera text, GPS, favorites only, photo/video type, or AI tags.';
         }
         $from = $r['date_from'] ?? null;
         $to   = $r['date_to'] ?? null;
@@ -173,6 +232,42 @@ class SmartAlbumRules
             $photoModel->like('mime_type', 'image/', 'after');
         } elseif ($mime === self::MIME_VIDEO) {
             $photoModel->like('mime_type', 'video/', 'after');
+        }
+
+        // ── AI Tag Rules (YOLO detections) ──────────────────────
+        if (! empty($rules['ai_tags'])) {
+            $tags = is_array($rules['ai_tags']) ? $rules['ai_tags'] : array_map('trim', explode(',', (string)$rules['ai_tags']));
+            $tags = array_values(array_filter($tags));
+            if (! empty($tags)) {
+                $db = \Config\Database::connect();
+                $subRows = $db->table('tbl_photo_tags')
+                    ->select('photo_id')
+                    ->whereIn('tag', $tags)
+                    ->get()
+                    ->getResultArray();
+                $matchedIds = array_unique(array_column($subRows, 'photo_id'));
+                if (! empty($matchedIds)) {
+                    $photoModel->whereIn('id', $matchedIds);
+                } else {
+                    $photoModel->where('id', -1); // Force empty result if no photos match tags
+                }
+            }
+        }
+
+        // ── Person Recognition Rule ─────────────────────────────
+        if (! empty($rules['person_id'])) {
+            $db = \Config\Database::connect();
+            $subRows = $db->table('tbl_face_encodings')
+                ->select('photo_id')
+                ->where('person_id', (int)$rules['person_id'])
+                ->get()
+                ->getResultArray();
+            $matchedIds = array_unique(array_column($subRows, 'photo_id'));
+            if (! empty($matchedIds)) {
+                $photoModel->whereIn('id', $matchedIds);
+            } else {
+                $photoModel->where('id', -1);
+            }
         }
     }
 

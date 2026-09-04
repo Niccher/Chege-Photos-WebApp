@@ -132,7 +132,34 @@
                     <i class="bi bi-lightning-charge text-warning"></i>
                     <span>Operational Triggers</span>
                 </h5>
-                <p class="text-muted small">Administratively invoke batch jobs on the FastAPI service.</p>
+                <p class="text-muted small">Administratively invoke batch jobs and monitor real-time AI pipeline execution.</p>
+
+                <!-- Live Scan Progress & ETA Tracker -->
+                <div class="p-3 mb-3 border rounded" id="liveScanTrackerCard" style="border-color: var(--border-color) !important; background: rgba(13, 110, 253, 0.03);">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-activity text-primary fs-5" id="scanTrackerIcon"></i>
+                            <div>
+                                <h6 class="mb-0 small fw-bold" id="scanTrackerTitle">Real-Time Scan &amp; Pipeline Monitor</h6>
+                                <span class="text-muted extra-small" id="scanTrackerSubtitle">Tracking InsightFace, YOLOv8, and CLIP execution</span>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge rounded-pill px-2.5 py-1 small" id="badgeScanStatus">Idle</span>
+                            <span class="badge bg-light text-dark border rounded-pill px-2.5 py-1 small d-none" id="badgeScanSpeed"><i class="bi bi-speedometer2 me-1"></i><span id="textScanSpeed">0.0</span> /s</span>
+                            <span class="badge bg-light text-primary border rounded-pill px-2.5 py-1 small d-none" id="badgeScanEta"><i class="bi bi-clock-history me-1"></i>ETA: <span id="textScanEta">--</span></span>
+                        </div>
+                    </div>
+
+                    <div class="progress rounded-pill mb-2" style="height: 10px; background: rgba(0,0,0,0.08);">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="progressBarScan" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center extra-small text-muted">
+                        <span id="scanProgressText">0 / 0 photos processed across pipeline</span>
+                        <span id="scanProgressPercent" class="fw-bold text-primary">0%</span>
+                    </div>
+                </div>
 
                 <div class="d-flex flex-column gap-3 mt-3">
                     <div class="p-3 border rounded d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
@@ -384,6 +411,77 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipeline Diagnostics & Failure Analysis -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-card p-4" style="background: var(--card-bg); color: var(--text-primary);">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-1 d-flex align-items-center gap-2">
+                            <i class="bi bi-shield-exclamation text-danger"></i>
+                            <span>AI Pipeline Diagnostics &amp; Failure Analysis</span>
+                        </h5>
+                        <p class="text-muted small mb-0">Direct probe of photo download health, background error logs, and container execution metrics.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1.5 fw-semibold" id="btnReapStaleJobs" title="Reap scans stuck in processing longer than timeout">
+                            <i class="bi bi-clock-history me-1"></i> Reap Stale Scans
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1.5 fw-semibold" id="btnRetryFailedScans" title="Reset failed scans back to pending and re-queue">
+                            <i class="bi bi-arrow-repeat me-1"></i> Retry All Failed
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1.5 fw-semibold" id="btnRefreshDiagnostics">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Probe Health &amp; Logs
+                        </button>
+                    </div>
+                </div>
+
+                <div id="diagnosticsLoading" class="text-center py-3 text-muted">
+                    <span class="spinner-border spinner-border-sm me-2"></span> Loading diagnostics probe...
+                </div>
+
+                <div id="diagnosticsContent" class="d-none">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border" style="background: var(--input-bg);">
+                                <div class="fw-bold small text-dark mb-1"><i class="bi bi-link-45deg me-1 text-primary"></i> Photo Download Connectivity</div>
+                                <div id="diagPhotoAccessStatus" class="small text-muted mb-1">Checking...</div>
+                                <div class="extra-small text-muted" id="diagPhotoAccessUrl"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border" style="background: var(--input-bg);">
+                                <div class="fw-bold small text-dark mb-1"><i class="bi bi-cpu me-1 text-success"></i> Aggressive Processing &amp; Workers</div>
+                                <div id="diagWorkerInfo" class="small text-muted mb-1">Checking...</div>
+                                <div class="extra-small text-muted">Tune via <code>ML_CONCURRENT_WORKERS</code> env variable in Railway.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold small mb-2"><i class="bi bi-bug text-danger me-1"></i> Recent Photo Processing Errors (<span id="diagErrorCount">0</span>)</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 100px;">Photo ID</th>
+                                    <th>Error Message</th>
+                                    <th style="width: 180px;">Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyDiagErrors">
+                                <tr>
+                                    <td colspan="3" class="text-center py-3 text-success">
+                                        <i class="bi bi-check-circle-fill me-1"></i> No recent errors recorded.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -895,8 +993,71 @@
             });
         });
 
-        // Dynamic Polling for ML Job Progress
+        // Dynamic Polling for ML Job Progress & Real-Time ETA Calculation
         var pollInterval = null;
+        var lastPollTime = null;
+        var lastCompletedSum = null;
+
+        function formatSecondsEta(sec) {
+            if (!sec || isNaN(sec) || sec <= 0 || !isFinite(sec)) return '--';
+            sec = Math.round(sec);
+            if (sec < 60) return sec + 's';
+            var m = Math.floor(sec / 60);
+            var s = sec % 60;
+            if (m < 60) return m + 'm ' + s + 's';
+            var h = Math.floor(m / 60);
+            m = m % 60;
+            return h + 'h ' + m + 'm';
+        }
+
+        function updateScanProgressUI(stats, isProcessing, queueSize) {
+            var total = parseInt(stats.total_photos) || 0;
+            var scannedFaces = parseInt(stats.scanned_faces) || 0;
+            var scannedTags = parseInt(stats.scanned_tags) || 0;
+            var scannedClips = parseInt(stats.scanned_clips) || 0;
+            var totalOps = total * 3;
+            var completedOps = scannedFaces + scannedTags + scannedClips;
+            var remainingOps = Math.max(0, totalOps - completedOps);
+            var pct = totalOps > 0 ? Math.min(100, Math.round((completedOps / totalOps) * 100)) : 100;
+
+            $('#progressBarScan').css('width', pct + '%').attr('aria-valuenow', pct);
+            $('#scanProgressPercent').text(pct + '%');
+            $('#scanProgressText').text(completedOps + ' / ' + totalOps + ' pipeline tasks completed (' + total + ' photos)');
+
+            var now = Date.now();
+            var speed = 0;
+            if (lastPollTime && lastCompletedSum !== null) {
+                var dt = (now - lastPollTime) / 1000;
+                var dp = completedOps - lastCompletedSum;
+                if (dp > 0 && dt > 0) {
+                    speed = dp / dt;
+                }
+            }
+            lastPollTime = now;
+            lastCompletedSum = completedOps;
+
+            if (isProcessing || queueSize > 0 || (remainingOps > 0 && pct < 100)) {
+                $('#badgeScanStatus').removeClass('bg-secondary bg-success').addClass('bg-primary text-white')
+                    .html('<span class="spinner-grow spinner-grow-sm me-1" style="width: 0.55rem; height: 0.55rem;"></span> Processing');
+                
+                if (speed > 0) {
+                    $('#badgeScanSpeed').removeClass('d-none');
+                    $('#textScanSpeed').text(speed.toFixed(1));
+                    var etaSec = remainingOps / speed;
+                    $('#badgeScanEta').removeClass('d-none');
+                    $('#textScanEta').text(formatSecondsEta(etaSec));
+                } else if (queueSize > 0) {
+                    $('#badgeScanSpeed').removeClass('d-none');
+                    $('#textScanSpeed').text('Queued: ' + queueSize);
+                    $('#badgeScanEta').addClass('d-none');
+                }
+            } else {
+                $('#badgeScanStatus').removeClass('bg-primary text-white bg-warning').addClass('bg-success text-white').text('All Scans Complete');
+                $('#badgeScanSpeed').addClass('d-none');
+                $('#badgeScanEta').addClass('d-none');
+            }
+        }
+
         function startStatsPolling() {
             if (pollInterval) return;
             pollInterval = setInterval(function() {
@@ -914,29 +1075,75 @@
                         $('#badgeTotalPersons').text('Persons (Clusters): ' + stats.total_persons);
                         $('#badgeTotalEncodings').text('Total Encodings (Vectors): ' + stats.total_encodings);
 
+                        // Update Live Scan Progress & Speed Tracker
+                        updateScanProgressUI(stats, res.is_processing, res.queue_size);
+
                         // Stop polling when fully processed
                         var total = parseInt(stats.total_photos);
                         var facesDone = parseInt(stats.scanned_faces) >= total;
                         var tagsDone = parseInt(stats.scanned_tags) >= total;
                         var clipsDone = parseInt(stats.scanned_clips) >= total;
                         
-                        if (facesDone && tagsDone && clipsDone) {
+                        if (facesDone && tagsDone && clipsDone && !res.is_processing && (res.queue_size || 0) === 0) {
                             clearInterval(pollInterval);
                             pollInterval = null;
                         }
                     }
                 });
-            }, 5000);
+            }, 4000);
         }
 
         // Start polling on load if work is in progress
-        var initTotal = parseInt('<?= $mlStats['total_photos'] ?>');
-        var initFaces = parseInt('<?= $mlStats['scanned_faces'] ?>');
-        var initTags = parseInt('<?= $mlStats['scanned_tags'] ?>');
-        var initClips = parseInt('<?= $mlStats['scanned_clips'] ?>');
+        var initTotal = parseInt('<?= $mlStats['total_photos'] ?>') || 0;
+        var initFaces = parseInt('<?= $mlStats['scanned_faces'] ?>') || 0;
+        var initTags = parseInt('<?= $mlStats['scanned_tags'] ?>') || 0;
+        var initClips = parseInt('<?= $mlStats['scanned_clips'] ?>') || 0;
+        updateScanProgressUI({
+            total_photos: initTotal,
+            scanned_faces: initFaces,
+            scanned_tags: initTags,
+            scanned_clips: initClips
+        }, false, 0);
+
         if (initFaces < initTotal || initTags < initTotal || initClips < initTotal) {
             startStatsPolling();
         }
+
+        // Reap Stale Scans
+        $('#btnReapStaleJobs').on('click', function() {
+            var btn = $(this).prop('disabled', true);
+            btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Reaping...');
+            $.post(BASE_URL + 'admin/ml/reap-stale', function(res) {
+                btn.prop('disabled', false).html('<i class="bi bi-clock-history me-1"></i> Reap Stale Scans');
+                if (res.status === 'success') {
+                    showToast(res.message || 'Reaped stale scans successfully.', 'success');
+                    startStatsPolling();
+                } else {
+                    showToast('Failed: ' + (res.message || 'Error'), 'danger');
+                }
+            }, 'json').fail(function() {
+                btn.prop('disabled', false).html('<i class="bi bi-clock-history me-1"></i> Reap Stale Scans');
+                showToast('Network error reaping stale scans', 'danger');
+            });
+        });
+
+        // Retry All Failed Scans
+        $('#btnRetryFailedScans').on('click', function() {
+            var btn = $(this).prop('disabled', true);
+            btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Retrying...');
+            $.post(BASE_URL + 'admin/ml/retry-failed', function(res) {
+                btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i> Retry All Failed');
+                if (res.status === 'success') {
+                    showToast(res.message || 'Queued failed scans for retry.', 'success');
+                    startStatsPolling();
+                } else {
+                    showToast('Failed: ' + (res.message || 'Error'), 'danger');
+                }
+            }, 'json').fail(function() {
+                btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat me-1"></i> Retry All Failed');
+                showToast('Network error retrying failed scans', 'danger');
+            });
+        });
 
         // Trigger Rescans with Alert Modal
         $('.btn-rescan').on('click', function() {
@@ -1101,6 +1308,55 @@
                 }
             );
         });
+
+        // ── Deep Diagnostics & Failure Analysis ────────────────────
+        function loadDiagnostics() {
+            $('#diagnosticsLoading').show();
+            $('#diagnosticsContent').addClass('d-none');
+            $.getJSON(BASE_URL + 'admin/ml/diagnostics', function(res) {
+                $('#diagnosticsLoading').hide();
+                $('#diagnosticsContent').removeClass('d-none');
+                if (res.status === 'success') {
+                    // Photo access
+                    var test = res.photo_access_test || {};
+                    if (test.accessible) {
+                        $('#diagPhotoAccessStatus').html('<span class="badge bg-success text-white"><i class="bi bi-check-circle me-1"></i> Reachable (HTTP ' + test.status_code + ')</span> ' + (test.message || ''));
+                    } else {
+                        $('#diagPhotoAccessStatus').html('<span class="badge bg-danger text-white"><i class="bi bi-x-circle me-1"></i> Unreachable</span> ' + (test.message || 'Cannot reach WebApp'));
+                    }
+                    $('#diagPhotoAccessUrl').text('Target: ' + (test.configured_webapp_url || 'Not configured'));
+
+                    // Concurrency
+                    var workers = (res.queue && res.queue.num_workers) ? res.queue.num_workers : 4;
+                    $('#diagWorkerInfo').html('<span class="badge bg-primary text-white">' + workers + ' Concurrent Workers</span> Active in pool');
+
+                    // Errors
+                    var errs = res.recent_errors || [];
+                    $('#diagErrorCount').text(errs.length);
+                    if (errs.length > 0) {
+                        var eHtml = '';
+                        errs.forEach(function(e) {
+                            eHtml += '<tr>' +
+                                '<td><code>#' + (e.photo_id || '-') + '</code></td>' +
+                                '<td class="text-danger font-monospace extra-small text-break">' + (e.error || 'Unknown error') + '</td>' +
+                                '<td class="text-muted extra-small">' + (e.failed_at || '-') + '</td>' +
+                            '</tr>';
+                        });
+                        $('#tbodyDiagErrors').html(eHtml);
+                    } else {
+                        $('#tbodyDiagErrors').html('<tr><td colspan="3" class="text-center py-3 text-success"><i class="bi bi-check-circle-fill me-1"></i> No recent errors recorded. All scans healthy.</td></tr>');
+                    }
+                } else {
+                    $('#tbodyDiagErrors').html('<tr><td colspan="3" class="text-center py-3 text-danger">Diagnostics error: ' + (res.message || 'Failed') + '</td></tr>');
+                }
+            }).fail(function(xhr) {
+                $('#diagnosticsLoading').hide();
+                $('#diagnosticsContent').removeClass('d-none');
+                $('#tbodyDiagErrors').html('<tr><td colspan="3" class="text-center py-3 text-danger">Failed to connect to ML diagnostics endpoint (HTTP ' + xhr.status + ').</td></tr>');
+            });
+        }
+        $('#btnRefreshDiagnostics').on('click', loadDiagnostics);
+        loadDiagnostics();
     });
 </script>
 <?php $this->endSection() ?>

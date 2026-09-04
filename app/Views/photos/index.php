@@ -21,6 +21,16 @@ if (isset($album) && ! empty($album['is_smart'])) {
             <p class="text-white small mb-2 mt-2"><i class="bi bi-stars me-1"></i> Smart album — membership updates automatically when photos match your rules.</p>
             <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editSmartAlbumModal">Edit rules</button>
         <?php endif; ?>
+        <?php if (! empty($isAiCollection)): ?>
+            <div class="d-flex align-items-center gap-2 mt-2">
+                <span class="badge bg-<?= esc($preset['color'] ?? 'primary') ?> rounded-pill px-3 py-1.5 small">
+                    <i class="bi <?= esc($preset['icon'] ?? 'bi-stars') ?> me-1"></i> AI Smart Collection
+                </span>
+                <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 py-1.5" id="btnSaveAiAsAlbum" data-name="<?= esc($preset['name']) ?>" data-description="<?= esc($preset['description']) ?>" data-tags="<?= esc(implode(',', $preset['rules']['ai_tags'] ?? [])) ?>">
+                    <i class="bi bi-plus-circle me-1"></i> Save as Smart Album
+                </button>
+            </div>
+        <?php endif; ?>
     </div>
 <?php endif; ?>
 

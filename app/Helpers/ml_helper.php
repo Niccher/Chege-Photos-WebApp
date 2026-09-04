@@ -133,6 +133,23 @@ if (! function_exists('get_ml_url')) {
     }
 }
 
+if (! function_exists('get_webapp_url')) {
+    /**
+     * Resolves the canonical WebApp base URL for inter-service communication.
+     */
+    function get_webapp_url(): string
+    {
+        $base = rtrim(base_url(), '/');
+        if (empty($base) || $base === 'http://localhost' || $base === 'http://localhost:8080') {
+            $envAppUrl = env('app.baseURL') ?: getenv('APP_BASE_URL') ?: getenv('BASE_URL');
+            if ($envAppUrl) {
+                return rtrim(trim($envAppUrl), '/');
+            }
+        }
+        return $base;
+    }
+}
+
 if (! function_exists('probe_ml_url')) {
     /**
      * Probes candidate ML URLs to find a responsive endpoint.
@@ -142,14 +159,16 @@ if (! function_exists('probe_ml_url')) {
      */
     function probe_ml_url(?string $explicitUrl = null): array
     {
-        $apiKey = get_ml_api_key();
+        $apiKey    = get_ml_api_key();
+        $webappUrl = get_webapp_url();
         $candidates = $explicitUrl ? [rtrim(trim($explicitUrl), '/')] : get_ml_candidate_urls();
 
         $client = service('curlrequest', [
             'connect_timeout' => 4,
             'timeout'         => 6,
             'headers'         => [
-                'X-API-KEY' => $apiKey,
+                'X-API-KEY'    => $apiKey,
+                'X-Webapp-Url' => $webappUrl,
             ],
             'http_errors'     => false,
         ]);
