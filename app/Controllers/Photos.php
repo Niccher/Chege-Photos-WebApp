@@ -316,14 +316,19 @@ class Photos extends BaseController
         $this->clearSidebarCountsCache();
         $this->checkAndDispatchStorageWarning((int) $userId);
 
-        if (!$isVideo && $photoId) {
-            if (function_exists('fastcgi_finish_request')) {
-                $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId])->send();
-                fastcgi_finish_request();
-                ignore_user_abort(true);
+        if (function_exists('fastcgi_finish_request')) {
+            $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId])->send();
+            fastcgi_finish_request();
+            ignore_user_abort(true);
+            $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type']);
+            if (!$isVideo && $photoId) {
                 $this->triggerFaceScan((int) $photoId);
-                return;
             }
+            return;
+        }
+
+        $this->mirrorToGcp($data['path'], $data['thumbnail_path'], $data['mime_type']);
+        if (!$isVideo && $photoId) {
             $this->triggerFaceScanAsync((int) $photoId);
         }
 
@@ -1194,6 +1199,7 @@ class Photos extends BaseController
             if ($photo) {
                 @unlink(FCPATH . $photo['path']);
                 @unlink(FCPATH . $photo['thumbnail_path']);
+                $this->deleteFromGcp($photo['path'], $photo['thumbnail_path']);
                 $photoModel->delete($id, true);
                 $this->clearSidebarCountsCache();
             }
@@ -1250,6 +1256,7 @@ class Photos extends BaseController
                     }
                 }
             }
+            $this->deleteFromGcp($photo['path'] ?? '', $photo['thumbnail_path'] ?? '');
 
             // Hard delete row
             $db->table('tbl_photos')->where('id', $id)->delete();
@@ -1565,6 +1572,8 @@ class Photos extends BaseController
             'updated_at'=> date('Y-m-d H:i:s')
         ]);
 
+        $this->mirrorToGcp($photo['path'], $photo['thumbnail_path']);
+
         return $this->response->setJSON(['status' => 'success', 'message' => 'Changes saved successfully']);
     }
 
@@ -1808,6 +1817,57 @@ class Photos extends BaseController
             'count'    => count($photosOut),
             'photos'   => $photosOut,
         ]);
+    }
+
+    /**
+     * Mirrors media file and its thumbnail to Google Cloud Storage if configured.
+     */
+    protected function mirrorToGcp(string $uploadPath, ?string $thumbPath = null, ?string $mime = null): void
+    {
+        try {
+            $gcp = new \App\Services\GcpStorageService();
+            if (!$gcp->isConfigured()) {
+                return;
+            }
+
+            $cleanUpload = ltrim($uploadPath, '/');
+            $localUpload = FCPATH . $cleanUpload;
+            if (file_exists($localUpload)) {
+                $gcp->uploadFile($localUpload, $cleanUpload, $mime);
+            }
+
+            if ($thumbPath) {
+                $cleanThumb = ltrim($thumbPath, '/');
+                $localThumb = FCPATH . $cleanThumb;
+                if (file_exists($localThumb)) {
+                    $gcp->uploadFile($localThumb, $cleanThumb, 'image/jpeg');
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'GCP media mirroring failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Deletes media file and its thumbnail from Google Cloud Storage if configured.
+     */
+    protected function deleteFromGcp(string $uploadPath, ?string $thumbPath = null): void
+    {
+        try {
+            $gcp = new \App\Services\GcpStorageService();
+            if (!$gcp->isConfigured()) {
+                return;
+            }
+
+            if (!empty($uploadPath)) {
+                $gcp->deleteObject(ltrim($uploadPath, '/'));
+            }
+            if (!empty($thumbPath)) {
+                $gcp->deleteObject(ltrim($thumbPath, '/'));
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'GCP media deletion failed: ' . $e->getMessage());
+        }
     }
 }
 

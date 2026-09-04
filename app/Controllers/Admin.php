@@ -758,6 +758,48 @@ class Admin extends BaseController
         }
     }
 
+    public function triggerMediaSync()
+    {
+        try {
+            ob_start();
+            command('cloud:sync --all');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Media synchronization to GCP completed.',
+                'output'  => $output ?: 'Sync finished.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Media sync failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
+    public function triggerMediaHydrate()
+    {
+        try {
+            ob_start();
+            command('cloud:sync --hydrate');
+            $output = ob_get_clean();
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Media hydration from GCP completed.',
+                'output'  => $output ?: 'Hydration finished.'
+            ]);
+        } catch (\Throwable $e) {
+            if (ob_get_level() > 0) ob_end_clean();
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Media hydration failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
+
     public function wipeSystem()
     {
         helper('audit');

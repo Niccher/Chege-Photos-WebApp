@@ -308,6 +308,163 @@ class GcpStorageService
     }
 
     /**
+     * Checks if an object exists in Google Cloud Storage.
+     */
+    public function hasObject(string $cloudPath, ?string $token = null): bool
+    {
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        $cleanPath = ltrim($cloudPath, '/');
+        try {
+            if ($this->authType === 'hmac') {
+                $res = $this->sendHmacRequest('HEAD', $cleanPath);
+                return ($res['status'] === 200);
+            }
+
+            $token = $token ?: $this->getAccessToken();
+            $url = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket) . '/o/' . urlencode($cleanPath);
+            $res = $this->httpGet($url, $token);
+            return ($res['status'] === 200);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Downloads an object from Google Cloud Storage directly into a local file path.
+     * Uses atomic temporary file writing to avoid partial/corrupted files.
+     */
+    public function downloadFile(string $cloudPath, string $localSavePath, ?string $token = null): bool
+    {
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        $cleanPath = ltrim($cloudPath, '/');
+        $dir = dirname($localSavePath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        $tempFile = $localSavePath . '.tmp.' . bin2hex(random_bytes(4));
+        $fp = @fopen($tempFile, 'w+b');
+        if (!$fp) {
+            log_message('error', "Cannot open temporary file for GCP download: {$tempFile}");
+            return false;
+        }
+
+        try {
+            if ($this->authType === 'hmac') {
+                $verb = 'GET';
+                $date = gmdate('D, d M Y H:i:s T');
+                $url = "{$this->apiBase}/" . urlencode($this->bucket) . '/' . str_replace('%2F', '/', rawurlencode($cleanPath));
+                $canonicalResource = '/' . $this->bucket . '/' . $cleanPath;
+                $stringToSign = "{$verb}\n\n\n{$date}\n{$canonicalResource}";
+                $signature = base64_encode(hash_hmac('sha1', $stringToSign, $this->secretKey, true));
+
+                $headers = [
+                    "Host: storage.googleapis.com",
+                    "Date: {$date}",
+                    "Authorization: AWS {$this->accessKey}:{$signature}"
+                ];
+
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_FILE, $fp);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+                $exec = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                fclose($fp);
+
+                if ($exec && $httpCode >= 200 && $httpCode < 300) {
+                    if (@rename($tempFile, $localSavePath)) {
+                        @chmod($localSavePath, 0666);
+                        return true;
+                    }
+                }
+                @unlink($tempFile);
+                return false;
+            }
+
+            // JSON Service Account mode
+            $token = $token ?: $this->getAccessToken();
+            $url = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket) . '/o/' . urlencode($cleanPath) . '?alt=media';
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_FILE, $fp);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$token}"
+            ]);
+
+            $exec = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            fclose($fp);
+
+            if ($exec && $httpCode >= 200 && $httpCode < 300) {
+                if (@rename($tempFile, $localSavePath)) {
+                    @chmod($localSavePath, 0666);
+                    return true;
+                }
+            }
+            @unlink($tempFile);
+            return false;
+        } catch (\Throwable $e) {
+            if (is_resource($fp)) {
+                fclose($fp);
+            }
+            @unlink($tempFile);
+            log_message('error', "GCP downloadFile error for {$cloudPath}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Fetches raw object binary data into memory.
+     */
+    public function downloadData(string $cloudPath, ?string $token = null): ?string
+    {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        $cleanPath = ltrim($cloudPath, '/');
+        try {
+            if ($this->authType === 'hmac') {
+                $res = $this->sendHmacRequest('GET', $cleanPath);
+                return ($res['status'] >= 200 && $res['status'] < 300) ? $res['raw'] : null;
+            }
+
+            $token = $token ?: $this->getAccessToken();
+            $url = "{$this->apiBase}/storage/v1/b/" . urlencode($this->bucket) . '/o/' . urlencode($cleanPath) . '?alt=media';
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Authorization: Bearer {$token}"
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            return ($httpCode >= 200 && $httpCode < 300) ? $response : null;
+        } catch (\Throwable $e) {
+            log_message('error', "GCP downloadData error for {$cloudPath}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Lists objects under a given cloud prefix.
      */
     public function listObjects(string $prefix = '', ?string $token = null): array

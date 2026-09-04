@@ -212,6 +212,8 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->post('storage/save-gcp', 'Admin::saveGcpSettings');
     $routes->post('storage/test-gcp', 'Admin::testGcpConnection');
     $routes->post('storage/trigger-backup', 'Admin::triggerCloudBackup');
+    $routes->post('storage/sync-media', 'Admin::triggerMediaSync');
+    $routes->post('storage/hydrate-media', 'Admin::triggerMediaHydrate');
 
     // Audits and Devices
     $routes->get('audits', 'Admin::audits');
@@ -234,6 +236,10 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
 
 // Public Sharing Routes
 $routes->match(['get', 'post'], 's/(:any)', 'Photos::viewShared/$1');
+
+// Media Fallback & Hybrid GCP Storage Hydration (Handles ephemeral Railway container restarts)
+$routes->get('uploads/(:any)', 'MediaFallback::serveUpload/$1');
+$routes->get('thumbnails/(:any)', 'MediaFallback::serveThumbnail/$1');
 
 // Shield's auth routes (login, register, magic-link, etc.)
 service('auth')->routes($routes);

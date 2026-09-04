@@ -202,6 +202,12 @@
                         <button type="button" class="btn btn-outline-info px-4 rounded-pill" id="btnTestGcp">
                             <i class="bi bi-speedometer2 me-1"></i> Test Connection &amp; Permissions
                         </button>
+                        <button type="button" class="btn btn-outline-warning px-3 rounded-pill" id="btnSyncMedia">
+                            <i class="bi bi-images me-1"></i> Sync Media to GCP
+                        </button>
+                        <button type="button" class="btn btn-outline-primary px-3 rounded-pill" id="btnHydrateMedia" title="Restore missing local media from GCP bucket">
+                            <i class="bi bi-cloud-arrow-down me-1"></i> Hydrate from GCP
+                        </button>
                         <button type="button" class="btn btn-outline-success px-4 rounded-pill ms-auto" id="btnTriggerBackup">
                             <i class="bi bi-cloud-arrow-up me-1"></i> Backup Database &amp; Sync Now
                         </button>
@@ -517,6 +523,54 @@
                 btn.prop('disabled', false).html(originalHtml);
                 var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
                 showToast('Backup failed: ' + err, 'danger');
+            });
+        });
+
+        // Sync Media to GCP
+        $('#btnSyncMedia').on('click', function() {
+            var btn = $(this);
+            var originalHtml = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Syncing...');
+
+            $.post(BASE_URL + 'admin/storage/sync-media', {}, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success') {
+                    Swal.fire({
+                        title: 'Media Sync Complete!',
+                        html: '<p class="small text-muted">' + res.message + '</p><pre class="bg-light p-2 rounded text-start small font-monospace" style="max-height:200px; overflow-y:auto;">' + (res.output || '') + '</pre>',
+                        icon: 'success'
+                    });
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast('Media sync failed: ' + err, 'danger');
+            });
+        });
+
+        // Hydrate from GCP
+        $('#btnHydrateMedia').on('click', function() {
+            var btn = $(this);
+            var originalHtml = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Hydrating...');
+
+            $.post(BASE_URL + 'admin/storage/hydrate-media', {}, function(res) {
+                btn.prop('disabled', false).html(originalHtml);
+                if (res.status === 'success') {
+                    Swal.fire({
+                        title: 'Container Hydration Complete!',
+                        html: '<p class="small text-muted">' + res.message + '</p><pre class="bg-light p-2 rounded text-start small font-monospace" style="max-height:200px; overflow-y:auto;">' + (res.output || '') + '</pre>',
+                        icon: 'success'
+                    });
+                } else {
+                    showToast(res.message, 'danger');
+                }
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html(originalHtml);
+                var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                showToast('Hydration failed: ' + err, 'danger');
             });
         });
 
