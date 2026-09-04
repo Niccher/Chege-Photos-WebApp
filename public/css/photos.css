@@ -79,28 +79,6 @@ html[data-theme="dark"] {
     --chart-neutral:#30363d;
 }
 
-/* Grey */
-html[data-theme="grey"] {
-    --bg-main:      #2b2b2b;
-    --bg-panel:     #363636;
-    --bg-sidebar:   #2b2b2b;
-    --glass-bg:     rgba(40,40,40,0.92);
-    --glass-border: rgba(255,255,255,0.06);
-    --text-primary: #e8e8e8;
-    --text-muted:   #a0a0a0;
-    --text-inverse: #e8e8e8;
-    --border-color: #484848;
-    --card-bg:      #363636;
-    --accent:       #ff6600;
-    --accent-hover: #e05c00;
-    --accent-text:  #ffffff;
-    --input-bg:     #2b2b2b;
-    --sidebar-active-bg: rgba(255,102,0,0.12);
-    --chart-1:      #ff6600;
-    --chart-2:      #4ade80;
-    --chart-neutral:#484848;
-}
-
 /* Solarized */
 html[data-theme="solarized"] {
     --bg-main:      #fdf6e3;
@@ -122,6 +100,14 @@ html[data-theme="solarized"] {
     --chart-2:      #859900;
     --chart-neutral:#c8bfa8;
 }
+
+/* Solarized — fix Bootstrap text-white overrides that become invisible on warm background */
+html[data-theme="solarized"] .text-white,
+html[data-theme="solarized"] strong.text-white,
+html[data-theme="solarized"] span.text-white { color: var(--text-primary) !important; }
+html[data-theme="solarized"] .progress { background-color: var(--border-color) !important; }
+html[data-theme="solarized"] .btn-close { filter: invert(1); }
+
 
 /* Light (explicit) */
 html[data-theme="light"] {

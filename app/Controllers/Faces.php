@@ -115,12 +115,18 @@ class Faces extends BaseController
         }
         unset($uface);
 
+        // Storage metrics for sidebar bar
+        $totalBytes     = (int)($photoModel->where('user_id', $userId)->selectSum('file_size')->first()['file_size'] ?? 0);
+        $storageMetrics = self::calculateStorageMetrics($totalBytes);
+
         $data = [
             'persons'         => $persons,
             'unassigned'      => $unassigned,
             'unassignedCount' => $unassignedCount,
             'faceModel'       => $faceModel,
             'counts'          => $this->getSidebarCounts(),
+            'storageUsed'     => $storageMetrics['storageUsed'],
+            'storagePercent'  => $storageMetrics['storagePercent'],
         ];
         return view('photos/faces', $data);
     }
@@ -657,45 +663,65 @@ class Faces extends BaseController
     public function apiScanAll(): ResponseInterface
     {
         try {
-            $faceModel = new FaceEncodingModel();
             $photoModel = new \App\Models\PhotoModel();
+            $faceModel  = new FaceEncodingModel();
 
-            $photos = $photoModel
+            // Get IDs of photos that have NO face encoding records yet
+            $allPhotos = $photoModel
                 ->like('mime_type', 'image/', 'after')
                 ->where('deleted_at', null)
-                ->orderBy('id', 'ASC')
+                ->select('id')
                 ->findAll();
 
-            $processed = 0;
-            $skipped = 0;
-            $errors = [];
-
-            foreach ($photos as $photo) {
+            $toQueue = [];
+            foreach ($allPhotos as $photo) {
                 $existing = $faceModel->where('photo_id', $photo['id'])->countAllResults();
-                if ($existing > 0) {
-                    $skipped++;
-                    continue;
+                if ($existing === 0) {
+                    $toQueue[] = (int) $photo['id'];
                 }
+            }
 
-                $result = $this->mlProxy('POST', '/api/v1/faces/encode', [
-                    'form_params' => [
-                        'photo_id'   => $photo['id'],
-                        'async_task' => 1,
-                    ],
+            if (empty($toQueue)) {
+                return $this->response->setJSON([
+                    'status'  => 'success',
+                    'queued'  => 0,
+                    'message' => 'All photos already scanned.',
                 ]);
+            }
 
-                if (isset($result['error'])) {
-                    $errors[] = ['photo_id' => $photo['id'], 'error' => $result['error']];
-                } else {
-                    $processed++;
+            // Fire-and-forget: very short timeout — ML service accepts and queues async
+            $mlUrl    = $this->getMlUrl();
+            $mlKey    = $this->getMlApiKey();
+            $queued   = 0;
+            $client   = service('curlrequest', [
+                'connect_timeout' => 2,
+                'timeout'         => 2,
+                'headers'         => ['X-API-KEY' => $mlKey],
+            ]);
+
+            foreach ($toQueue as $photoId) {
+                try {
+                    $client->post($mlUrl . '/api/v1/faces/encode', [
+                        'form_params' => [
+                            'photo_id'   => $photoId,
+                            'async_task' => 1,
+                        ],
+                    ]);
+                    $queued++;
+                } catch (\Exception $e) {
+                    // Timeout = accepted but ML is processing — count as queued
+                    if (str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'Operation timed out')) {
+                        $queued++;
+                    }
+                    // Network errors: silently skip, user can retry
                 }
             }
 
             return $this->response->setJSON([
-                'status'    => 'success',
-                'processed' => $processed,
-                'skipped'   => $skipped,
-                'errors'    => $errors,
+                'status'  => 'success',
+                'queued'  => $queued,
+                'total'   => count($toQueue),
+                'message' => "Queued {$queued} photos for background face scanning.",
             ]);
         } catch (\Throwable $e) {
             log_message('error', 'apiScanAll crashed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());

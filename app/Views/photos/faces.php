@@ -148,11 +148,14 @@
 $(function() {
     $('#btnRescanAll').on('click', function() {
         const btn = $(this).prop('disabled', true);
-        btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Scanning...');
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Queuing...');
         $.post(BASE_URL + 'api/v1/faces/scan-all', function(res) {
             if (res.status === 'success') {
-                showToast('Scan complete: ' + (res.processed || 0) + ' processed, ' + (res.skipped || 0) + ' skipped');
-                if (res.processed > 0) location.reload();
+                if ((res.queued || 0) > 0) {
+                    showToast('Queued ' + res.queued + ' photos for background face scanning. Check sidebar for progress.', 'success');
+                } else {
+                    showToast(res.message || 'All photos already scanned.', 'success');
+                }
             } else {
                 showToast('Scan failed: ' + (res.message || 'Error'), 'danger');
             }

@@ -12,6 +12,8 @@ class MlSweep extends BaseCommand
     protected $description = 'Sweeps database for unprocessed images and queues them for ML pipeline processing.';
     protected $usage       = 'ml:sweep';
 
+    private const BATCH_SIZE = 100; // photos per iteration
+
     public function run(array $params)
     {
         $startTime  = microtime(true);
@@ -19,6 +21,7 @@ class MlSweep extends BaseCommand
         $photoModel = new \App\Models\PhotoModel();
         helper('ml');
         $mlUrl      = get_ml_url();
+        $mlKey      = get_ml_api_key();
 
         $photos = $photoModel->select('id, scanned_face, scanned_tag, scanned_clip')
             ->groupStart()
@@ -26,8 +29,9 @@ class MlSweep extends BaseCommand
                 ->orWhere('scanned_tag', 0)
                 ->orWhere('scanned_clip', 0)
             ->groupEnd()
-            ->limit(50)
-            ->findAll();
+            ->where('deleted_at', null)
+            ->orderBy('id', 'ASC')
+            ->findAll(); // no limit — process all pending
 
         $total = count($photos);
         if ($total === 0) {
@@ -35,39 +39,50 @@ class MlSweep extends BaseCommand
             return EXIT_SUCCESS;
         }
 
+        $queued = 0;
+        $errors = 0;
+
         try {
+            // Use a very short timeout (fire-and-forget): the ML service queues the job
+            // asynchronously so we only need the request to be accepted, not completed.
             $client = service('curlrequest', [
-                'connect_timeout' => 4,
-                'timeout'         => 8,
+                'connect_timeout' => 2,
+                'timeout'         => 3,  // fire-and-forget — ML handles it async
                 'headers'         => [
-                    'X-API-KEY' => get_ml_api_key(),
+                    'X-API-KEY' => $mlKey,
                 ]
             ]);
 
-            $queued = 0;
             foreach ($photos as $p) {
-                $photoId = (int) $p['id'];
-                $client->post($mlUrl . '/api/v1/faces/encode', [
-                    'headers' => [
-                        'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
-                    ],
-                    'form_params' => [
-                        'photo_id'   => $photoId,
-                        'scan_faces' => $p['scanned_face'] == 0 ? 1 : 0,
-                        'scan_tags'  => $p['scanned_tag'] == 0 ? 1 : 0,
-                        'scan_clip'  => $p['scanned_clip'] == 0 ? 1 : 0,
-                        'async_task' => 1,
-                    ]
-                ]);
-                $queued++;
+                try {
+                    $client->post($mlUrl . '/api/v1/faces/encode', [
+                        'form_params' => [
+                            'photo_id'   => (int) $p['id'],
+                            'scan_faces' => $p['scanned_face'] == 0 ? 1 : 0,
+                            'scan_tags'  => $p['scanned_tag']  == 0 ? 1 : 0,
+                            'scan_clip'  => $p['scanned_clip'] == 0 ? 1 : 0,
+                            'async_task' => 1,
+                        ]
+                    ]);
+                    $queued++;
+                } catch (\Exception $e) {
+                    // Timeout is expected (fire-and-forget) — only count real errors
+                    if (str_contains($e->getMessage(), 'timed out') || str_contains($e->getMessage(), 'Operation timed out')) {
+                        $queued++;  // accepted but timed out waiting — treat as queued
+                    } else {
+                        $errors++;
+                        log_message('warning', "ml:sweep could not queue photo {$p['id']}: " . $e->getMessage());
+                    }
+                }
             }
 
-            $duration = microtime(true) - $startTime;
-            $outputMsg = "Successfully queued {$queued} of {$total} unprocessed photos for background analysis.";
+            $duration  = microtime(true) - $startTime;
+            $outputMsg = "Queued {$queued}/{$total} photos for background ML processing." .
+                         ($errors > 0 ? " ({$errors} errors)" : '');
 
             $db->table('sys_cron_logs')->insert([
                 'job_name'         => 'ml:sweep',
-                'status'           => 'success',
+                'status'           => $errors === $total ? 'failed' : 'success',
                 'output'           => $outputMsg,
                 'duration_seconds' => $duration,
                 'run_at'           => date('Y-m-d H:i:s'),
@@ -75,6 +90,7 @@ class MlSweep extends BaseCommand
 
             CLI::write($outputMsg, 'green');
             return EXIT_SUCCESS;
+
         } catch (\Exception $e) {
             $duration = microtime(true) - $startTime;
             $db->table('sys_cron_logs')->insert([

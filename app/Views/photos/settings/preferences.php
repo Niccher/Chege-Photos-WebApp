@@ -14,7 +14,6 @@
                 'light' => ['name' => 'Light', 'icon' => 'bi-sun'],
                 'dark' => ['name' => 'Dark', 'icon' => 'bi-moon-stars'],
                 'solarized' => ['name' => 'Solarized', 'icon' => 'bi-brightness-high'],
-                'grey' => ['name' => 'Grey', 'icon' => 'bi-circle-half']
             ];
             foreach ($themes as $key => $t):
             ?>

@@ -925,6 +925,9 @@
                         <span class="text-muted"><i class="bi bi-activity me-2"></i>Status:</span>
                         <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsStatusText">Idle (Waiting)</span>
                     </div>
+                    <div class="d-flex justify-content-end mb-1" style="font-size: 0.72rem;">
+                        <span class="badge bg-primary bg-opacity-25 text-primary d-none" id="mlQueueDepthBadge" style="font-size: 0.65rem;">0 in queue</span>
+                    </div>
                     <div class="d-flex justify-content-between mb-1 d-none" id="mlJobsStartRow" style="font-size: 0.75rem;">
                         <span class="text-muted"><i class="bi bi-clock me-2"></i>Started At:</span>
                         <span class="fw-semibold" style="color: var(--text-primary);" id="mlJobsStartedAt">-</span>
@@ -1044,6 +1047,24 @@
                     var pendingTasks = (total - faces) + (total - tags) + (total - clips);
                     var isSweepActive = sessionStorage.getItem('ml_sweep_active') === '1';
 
+                    // Real-time queue depth from ML service (via /api/v1/health probe in mlStats)
+                    var queueSize    = res.queue_size || 0;
+                    var isProcessing = res.is_processing || false;
+
+                    // If ML reports jobs in queue or actively processing, mark sweep active immediately
+                    if (isProcessing || queueSize > 0) {
+                        isSweepActive = true;
+                        sessionStorage.setItem('ml_sweep_active', '1');
+                        sessionStorage.setItem('ml_zero_delta_count', '0');
+                    }
+
+                    // Show ML queue depth badge
+                    if (queueSize > 0) {
+                        $('#mlQueueDepthBadge').text(queueSize + ' in queue').removeClass('d-none');
+                    } else {
+                        $('#mlQueueDepthBadge').addClass('d-none');
+                    }
+
                     // Track delta across polling ticks
                     var prevFaces = parseInt(sessionStorage.getItem('ml_last_poll_faces') || faces);
                     var prevTags  = parseInt(sessionStorage.getItem('ml_last_poll_tags') || tags);
@@ -1057,7 +1078,7 @@
                         isSweepActive = true;
                         sessionStorage.setItem('ml_sweep_active', '1');
                         sessionStorage.setItem('ml_zero_delta_count', '0');
-                    } else if (isSweepActive) {
+                    } else if (isSweepActive && !isProcessing && queueSize === 0) {
                         var zeroCount = parseInt(sessionStorage.getItem('ml_zero_delta_count') || '0') + 1;
                         sessionStorage.setItem('ml_zero_delta_count', zeroCount);
                         // If no progress for 3 consecutive polls (15 seconds), revert to idle
@@ -1067,7 +1088,7 @@
                             sessionStorage.removeItem('ml_zero_delta_count');
                         }
                     }
-                    if (pendingTasks === 0) {
+                    if (pendingTasks === 0 && queueSize === 0 && !isProcessing) {
                         isSweepActive = false;
                         sessionStorage.removeItem('ml_sweep_active');
                         sessionStorage.removeItem('ml_zero_delta_count');
@@ -1077,7 +1098,7 @@
                     var facesActive = isSweepActive && faces < total;
                     var tagsActive = isSweepActive && tags < total;
                     var clipsActive = isSweepActive && clips < total;
-                    var anyActive = facesActive || tagsActive || clipsActive;
+                    var anyActive = facesActive || tagsActive || clipsActive || isProcessing || queueSize > 0;
 
                     // Update Status Badges
                     if (facesActive) {

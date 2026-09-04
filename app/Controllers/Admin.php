@@ -311,6 +311,24 @@ class Admin extends BaseController
             ->get()
             ->getRowArray();
 
+        // Fetch queue depth from ML health endpoint for real-time activity display
+        $queueSize    = 0;
+        $isProcessing = false;
+        if ($mlOnline) {
+            try {
+                $hClient = service('curlrequest', ['connect_timeout' => 3, 'timeout' => 5,
+                    'headers' => ['X-API-KEY' => $this->getMlApiKey()]]);
+                $hResp   = $hClient->get($activeUrl . '/api/v1/health');
+                $hData   = json_decode($hResp->getBody(), true);
+                if (is_array($hData)) {
+                    $queueSize    = (int)($hData['queue_size'] ?? 0);
+                    $isProcessing = (bool)($hData['is_processing'] ?? false);
+                }
+            } catch (\Exception $e) {
+                // non-critical — ignore probe failure
+            }
+        }
+
         return $this->response->setJSON([
             'status'        => 'success',
             'ml_online'     => $mlOnline,
@@ -318,6 +336,8 @@ class Admin extends BaseController
             'latency_ms'    => $latencyMs,
             'error_message' => $errorMessage,
             'last_sweep'    => $lastSweep,
+            'queue_size'    => $queueSize,
+            'is_processing' => $isProcessing,
             'stats'         => [
                 'total_encodings' => $totalEncodings,
                 'total_persons'   => $totalPersons,
@@ -1189,10 +1209,17 @@ class Admin extends BaseController
     public function triggerSweep()
     {
         try {
-            command('ml:sweep');
+            // Run ml:sweep in background so this request returns immediately
+            // without blocking PHP for potentially thousands of photos.
+            $phpBin  = PHP_BINARY ?: 'php';
+            $spark   = ROOTPATH . 'spark';
+            $logFile = WRITEPATH . 'logs/ml-sweep-bg.log';
+            $cmd     = escapeshellarg($phpBin) . ' ' . escapeshellarg($spark) . ' ml:sweep';
+            exec("{$cmd} >> " . escapeshellarg($logFile) . " 2>&1 &");
+
             return $this->response->setJSON([
                 'status'  => 'success',
-                'message' => 'ML sweep executed successfully.'
+                'message' => 'ML sweep dispatched in background.'
             ]);
         } catch (\Throwable $e) {
             return $this->response->setJSON([

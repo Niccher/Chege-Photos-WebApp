@@ -547,7 +547,12 @@ class Settings extends BaseController
         $theme  = $this->request->getPost('theme');
         $userId = auth()->id();
 
-        if (! in_array($theme, ['auto', 'light', 'dark', 'solarized', 'grey'], true)) {
+        // 'grey' was removed — silently map to 'dark' for backwards compatibility
+        if ($theme === 'grey') {
+            $theme = 'dark';
+        }
+
+        if (! in_array($theme, ['auto', 'light', 'dark', 'solarized'], true)) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid theme.']);
         }
 
