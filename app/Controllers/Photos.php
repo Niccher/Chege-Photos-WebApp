@@ -39,8 +39,8 @@ class Photos extends BaseController
         $data = [
             'photos'         => $paginatedPhotos,
             'pager'          => $pager,
-            'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent' => self::calculateStorageMetrics($totalBytes)['storagePercent'],
             'counts'         => $counts,
             'searchQuery'    => $q
         ];
@@ -74,8 +74,8 @@ class Photos extends BaseController
 
         $data = [
             'locations'      => $query->findAll(),
-            'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent' => self::calculateStorageMetrics($totalBytes)['storagePercent'],
             'counts'         => $counts,
             'searchQuery'    => $q
         ];
@@ -209,6 +209,7 @@ class Photos extends BaseController
         }
         $photoId = $photoModel->insert($data);
         $this->clearSidebarCountsCache();
+        $this->checkAndDispatchStorageWarning((int) $userId);
 
         if (!$isVideo && $photoId) {
             if (function_exists('fastcgi_finish_request')) {
@@ -222,6 +223,77 @@ class Photos extends BaseController
         }
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId]);
+    }
+
+    protected function checkAndDispatchStorageWarning(int $userId): void
+    {
+        try {
+            $quotaBytes = (float) (setting('App.storageLimit') ?? 1073741824);
+            if ($quotaBytes <= 0) {
+                return;
+            }
+
+            $photoModel = new \App\Models\PhotoModel();
+            $userTotalBytes = (float) ($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
+            $percent = ($userTotalBytes / $quotaBytes) * 100;
+
+            if ($percent < 85) {
+                return;
+            }
+
+            $userModel = new \App\Models\UserModel();
+            $user = $userModel->find($userId);
+            $recipient = $user->email ?? null;
+            if (!$recipient) {
+                return;
+            }
+
+            $db = \Config\Database::connect();
+            if (!$db->tableExists('sys_email_logs')) {
+                return;
+            }
+
+            // Throttle: check if an alert was sent to this user within the last 7 days
+            $sevenDaysAgo = date('Y-m-d H:i:s', strtotime('-7 days'));
+            $recentAlert = $db->table('sys_email_logs')
+                ->where('recipient', $recipient)
+                ->like('subject', 'Storage Threshold Warning')
+                ->where('sent_at >=', $sevenDaysAgo)
+                ->first();
+
+            if ($recentAlert) {
+                return;
+            }
+
+            $trackingId = 'EVT-' . strtoupper(bin2hex(random_bytes(8)));
+            $subject = 'Storage Threshold Warning Notice (' . round($percent) . '% used) [' . $trackingId . ']';
+
+            $email = $this->getEmailService();
+            $email->setTo($recipient);
+            $email->setSubject($subject);
+            $email->setMailType('html');
+            $email->setMessage(view('emails/storage_warning', [
+                'subject'       => $subject,
+                'trackingId'    => $trackingId,
+                'username'      => $user->username ?? 'User',
+                'used_storage'  => self::formatBytesStatic($userTotalBytes),
+                'total_storage' => self::formatBytesStatic($quotaBytes),
+                'percent_used'  => round($percent, 1),
+            ]));
+
+            if ($email->send()) {
+                $db->table('sys_email_logs')->insert([
+                    'tracking_id' => $trackingId,
+                    'recipient'   => $recipient,
+                    'subject'     => $subject,
+                    'status'      => 'sent',
+                    'debug_log'   => 'Automated quota warning dispatched at ' . round($percent, 1) . '% usage.',
+                    'sent_at'     => date('Y-m-d H:i:s'),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'checkAndDispatchStorageWarning error: ' . $e->getMessage());
+        }
     }
 
     public function backfillExif()
@@ -305,34 +377,60 @@ class Photos extends BaseController
             return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
         }
 
+        $preset = $this->request->getPost('expires_preset');
         $expiresAt = $this->request->getPost('expires_at');
-        if ($expiresAt === '' || $expiresAt === null) {
+        if ($preset) {
+            if ($preset === '24h') {
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+24 hours'));
+            } elseif ($preset === '7d') {
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+7 days'));
+            } elseif ($preset === '30d') {
+                $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days'));
+            } elseif ($preset === 'never') {
+                $expiresAt = null;
+            }
+        } elseif ($expiresAt === '' || $expiresAt === null) {
             $expiresAt = null;
         } else {
             $ts = strtotime($expiresAt);
             $expiresAt = $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
         }
 
+        $password = trim((string) ($this->request->getPost('password') ?? ''));
+        $passwordHash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
+
         // Check for existing link
         $existing = $shareModel->where('photo_id', $id)->first();
         if ($existing) {
             $token = $existing['access_token'];
+            $updateData = [];
             if ($existing['expires_at'] !== $expiresAt) {
-                $shareModel->update($existing['id'], ['expires_at' => $expiresAt]);
+                $updateData['expires_at'] = $expiresAt;
+            }
+            if (!empty($password)) {
+                $updateData['password_hash'] = $passwordHash;
+            }
+            if (!empty($updateData)) {
+                $shareModel->update($existing['id'], $updateData);
             }
         } else {
             // Generate unique secure token
             $token = bin2hex(random_bytes(16));
-            $shareModel->insert([
+            $insertData = [
                 'photo_id'     => $id,
                 'access_token' => $token,
                 'expires_at'   => $expiresAt,
-            ]);
+            ];
+            if (!empty($passwordHash)) {
+                $insertData['password_hash'] = $passwordHash;
+            }
+            $shareModel->insert($insertData);
         }
 
         return $this->response->setJSON([
-            'status' => 'success', 
-            'url'    => base_url("s/{$token}")
+            'status'     => 'success', 
+            'url'        => base_url("s/{$token}"),
+            'expires_at' => $expiresAt
         ]);
     }
 
@@ -430,12 +528,41 @@ class Photos extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound("Link has expired or is invalid.");
         }
 
+        $sessionKey = 'shared_link_authed_' . $token;
+        if (!empty($link['password_hash']) && !session()->get($sessionKey)) {
+            if ($this->request->getMethod() === 'POST' || $this->request->is('post')) {
+                $submittedPassword = (string) ($this->request->getPost('password') ?? '');
+                if (password_verify($submittedPassword, $link['password_hash'])) {
+                    session()->set($sessionKey, true);
+                } else {
+                    return view('photos/view_shared', [
+                        'photo'            => null,
+                        'token'            => $token,
+                        'passwordRequired' => true,
+                        'error'            => 'Incorrect password. Please try again.'
+                    ]);
+                }
+            } else {
+                return view('photos/view_shared', [
+                    'photo'            => null,
+                    'token'            => $token,
+                    'passwordRequired' => true,
+                    'error'            => null
+                ]);
+            }
+        }
+
         $photo = $photoModel->find($link['photo_id']);
         if (!$photo) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound("Shared photo no longer exists.");
         }
 
-        return view('photos/view_shared', ['photo' => $photo]);
+        return view('photos/view_shared', [
+            'photo'            => $photo,
+            'token'            => $token,
+            'passwordRequired' => false,
+            'error'            => null
+        ]);
     }
 
     public function analytics()
@@ -546,8 +673,8 @@ class Photos extends BaseController
         $data = [
             'totalBytes'      => $totalBytes,
             'totalCount'      => $totalCount,
-            'storageUsed'     => $this->formatBytes($totalBytes),
-            'storagePercent'  => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'     => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent'  => self::calculateStorageMetrics($totalBytes)['storagePercent'],
             'imageCount'      => $imageCount,
             'videoCount'      => $videoCount,
             'imageBytes'      => $imageBytes,

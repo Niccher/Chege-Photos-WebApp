@@ -43,7 +43,7 @@ abstract class BaseController extends Controller
         // $this->session = service('session');
     }
 
-    protected function formatBytes($bytes, $precision = 2): string
+    public static function formatBytesStatic($bytes, $precision = 2): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $bytes = max((float) $bytes, 0);
@@ -52,6 +52,35 @@ abstract class BaseController extends Controller
         $bytes /= (1024 ** $pow);
 
         return round($bytes, $precision) . ' ' . $units[(int) $pow];
+    }
+
+    protected function formatBytes($bytes, $precision = 2): string
+    {
+        return self::formatBytesStatic($bytes, $precision);
+    }
+
+    public static function calculateStorageMetrics($totalBytes): array
+    {
+        $quota = setting('App.storageLimit');
+        $quotaBytes = $quota !== null ? (int)$quota : 1073741824;
+        $usedFormatted = self::formatBytesStatic($totalBytes);
+
+        if ($quotaBytes === 0) {
+            return [
+                'storageUsed'           => $usedFormatted,
+                'storagePercent'        => 0,
+                'storageQuotaFormatted' => 'Unlimited',
+                'storageQuotaBytes'     => 0,
+            ];
+        }
+
+        $percent = min(100, round(($totalBytes / $quotaBytes) * 100, 1));
+        return [
+            'storageUsed'           => $usedFormatted,
+            'storagePercent'        => $percent,
+            'storageQuotaFormatted' => self::formatBytesStatic($quotaBytes),
+            'storageQuotaBytes'     => $quotaBytes,
+        ];
     }
 
     /**
@@ -121,5 +150,39 @@ abstract class BaseController extends Controller
         if ($userId) {
             cache()->delete("sidebar_counts_{$userId}");
         }
+    }
+
+    protected function getEmailService(): \CodeIgniter\Email\Email
+    {
+        $config = config('Email');
+
+        $fromEmail  = setting('Email.fromEmail') ?: ($config->fromEmail ?: 'noreply@chege-photos.internal');
+        $fromName   = setting('Email.fromName') ?: ($config->fromName ?: 'Chege Photos');
+        $protocol   = setting('Email.protocol') ?: ($config->protocol ?: 'smtp');
+        $smtpHost   = setting('Email.SMTPHost') ?: $config->SMTPHost;
+        $smtpUser   = setting('Email.SMTPUser') ?: $config->SMTPUser;
+        $smtpPass   = setting('Email.SMTPPass') ?: $config->SMTPPass;
+        $smtpPort   = (int) (setting('Email.SMTPPort') ?: ($config->SMTPPort ?: 587));
+        $smtpCrypto = setting('Email.SMTPCrypto') ?: ($config->SMTPCrypto ?: 'tls');
+
+        $overrides = [
+            'fromEmail'   => $fromEmail,
+            'fromName'    => $fromName,
+            'protocol'    => $protocol,
+            'SMTPHost'    => $smtpHost,
+            'SMTPUser'    => $smtpUser,
+            'SMTPPass'    => $smtpPass,
+            'SMTPPort'    => $smtpPort,
+            'SMTPCrypto'  => $smtpCrypto,
+            'mailType'    => 'html',
+            'wordWrap'    => true,
+            'SMTPTimeout' => 10,
+        ];
+
+        $email = service('email');
+        $email->initialize($overrides);
+        $email->setFrom($fromEmail, $fromName);
+
+        return $email;
     }
 }

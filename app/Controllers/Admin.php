@@ -77,8 +77,8 @@ class Admin extends BaseController
                 'storage' => $this->formatBytes($totalBytes),
             ],
             'mlHealth'       => $mlHealth,
-            'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 10)) * 100), // Admin context shows scale of 10GB for overview
+            'storageUsed'    => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent' => self::calculateStorageMetrics($totalBytes)['storagePercent'],
         ];
 
         return view('admin/home', $data);
@@ -133,7 +133,7 @@ class Admin extends BaseController
                 'dbVersion'         => $dbVersion,
             ],
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/settings', $data);
@@ -268,7 +268,7 @@ class Admin extends BaseController
             ],
             'apiKey'         => setting('ML.apiKey') ?? env('ML_API_KEY') ?? 'my_super_secret_shared_token_key_123!',
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/ml', $data);
@@ -284,8 +284,29 @@ class Admin extends BaseController
         $totalPersons   = $personModel->countAllResults();
         $unassigned     = $faceModel->where('person_id', null)->countAllResults();
 
+        $mlOnline = false;
+        try {
+            $client = service('curlrequest', ['connect_timeout' => 1, 'timeout' => 2]);
+            $healthRes = $client->get($this->getMlUrl() . '/api/v1/health');
+            if ($healthRes->getStatusCode() === 200) {
+                $mlOnline = true;
+            }
+        } catch (\Throwable $t) {
+            $mlOnline = false;
+        }
+
+        $db = \Config\Database::connect();
+        $lastSweep = $db->table('sys_cron_logs')
+            ->where('job_name', 'ml:sweep')
+            ->orderBy('id', 'DESC')
+            ->limit(1)
+            ->get()
+            ->getRowArray();
+
         return $this->response->setJSON([
             'status' => 'success',
+            'ml_online' => $mlOnline,
+            'last_sweep' => $lastSweep,
             'stats' => [
                 'total_encodings' => $totalEncodings,
                 'total_persons'   => $totalPersons,
@@ -587,7 +608,7 @@ class Admin extends BaseController
             ],
             'recentBackups'  => $recentBackups,
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/storage', $data);
@@ -849,7 +870,7 @@ class Admin extends BaseController
             'counts' => $this->getSidebarCounts(),
             'logs'   => $logs,
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/audits', $data);
@@ -881,7 +902,7 @@ class Admin extends BaseController
             'counts' => $this->getSidebarCounts(),
             'devices' => $tokens,
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/devices', $data);
@@ -993,7 +1014,7 @@ class Admin extends BaseController
             'counts'         => $this->getSidebarCounts(),
             'users'          => $formattedUsers,
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/users', $data);
@@ -1102,7 +1123,7 @@ class Admin extends BaseController
         if ($mode === 'all') {
             $db = \Config\Database::connect();
             $col = $type === 'faces' ? 'scanned_face' : ($type === 'tags' ? 'scanned_tag' : 'scanned_clip');
-            $db->table('photos')->update([$col => 0]);
+            $db->table('tbl_photos')->update([$col => 0]);
         }
 
         $client = service('curlrequest', [
@@ -1136,6 +1157,22 @@ class Admin extends BaseController
             'status' => 'success',
             'message' => "Successfully queued {$queued} of {$total} photos for {$type} processing."
         ]);
+    }
+
+    public function triggerSweep()
+    {
+        try {
+            command('ml:sweep');
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'ML sweep executed successfully.'
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'ML sweep failed: ' . $e->getMessage()
+            ])->setStatusCode(500);
+        }
     }
 
     public function updateRole()
@@ -1406,7 +1443,7 @@ class Admin extends BaseController
                 'SMTPCrypto'  => setting('Email.SMTPCrypto') ?? 'ssl',
             ],
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/smtp', $data);
@@ -1429,7 +1466,7 @@ class Admin extends BaseController
             'counts'         => $this->getSidebarCounts(),
             'emailLogs'      => $emailLogs,
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/sent_mails', $data);
@@ -1444,7 +1481,7 @@ class Admin extends BaseController
         $data = [
             'counts'         => $this->getSidebarCounts(),
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/trigger_events', $data);
@@ -1485,9 +1522,43 @@ class Admin extends BaseController
         ]);
     }
 
+    protected function getEmailService(): \CodeIgniter\Email\Email
+    {
+        $config = config('Email');
+
+        $fromEmail  = setting('Email.fromEmail') ?: ($config->fromEmail ?: 'noreply@chege-photos.internal');
+        $fromName   = setting('Email.fromName') ?: ($config->fromName ?: 'Chege Photos');
+        $protocol   = setting('Email.protocol') ?: ($config->protocol ?: 'smtp');
+        $smtpHost   = setting('Email.SMTPHost') ?: $config->SMTPHost;
+        $smtpUser   = setting('Email.SMTPUser') ?: $config->SMTPUser;
+        $smtpPass   = setting('Email.SMTPPass') ?: $config->SMTPPass;
+        $smtpPort   = (int) (setting('Email.SMTPPort') ?: ($config->SMTPPort ?: 587));
+        $smtpCrypto = setting('Email.SMTPCrypto') ?: ($config->SMTPCrypto ?: 'tls');
+
+        $overrides = [
+            'fromEmail'   => $fromEmail,
+            'fromName'    => $fromName,
+            'protocol'    => $protocol,
+            'SMTPHost'    => $smtpHost,
+            'SMTPUser'    => $smtpUser,
+            'SMTPPass'    => $smtpPass,
+            'SMTPPort'    => $smtpPort,
+            'SMTPCrypto'  => $smtpCrypto,
+            'mailType'    => 'html',
+            'wordWrap'    => true,
+            'SMTPTimeout' => 10,
+        ];
+
+        $email = service('email');
+        $email->initialize($overrides);
+        $email->setFrom($fromEmail, $fromName);
+
+        return $email;
+    }
+
     public function testEmail()
     {
-        $email = service('email');
+        $email = $this->getEmailService();
         $adminEmail = auth()->user()->email;
         $trackingId = 'CP-' . strtoupper(bin2hex(random_bytes(8)));
         $db = \Config\Database::connect();
@@ -1600,7 +1671,7 @@ class Admin extends BaseController
             return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid event type selected.'])->setStatusCode(400);
         }
 
-        $email = service('email');
+        $email = $this->getEmailService();
         $trackingId = 'EVT-' . strtoupper(bin2hex(random_bytes(8)));
         $db = \Config\Database::connect();
 
@@ -1886,7 +1957,7 @@ class Admin extends BaseController
             'serverTime'     => date('Y-m-d H:i:s'),
             'serverTimezone' => date_default_timezone_get(),
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/crons', $data);
@@ -2021,7 +2092,7 @@ class Admin extends BaseController
             'counts'         => $this->getSidebarCounts(),
             'mlHealth'       => $this->getMlHealth(),
             'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
 
         return view('admin/health', $data);
@@ -2056,26 +2127,36 @@ class Admin extends BaseController
                     ]);
                 }
 
-            case 'phpmyadmin':
+            case 'smtp':
                 try {
-                    $client = service('curlrequest', [
-                        'connect_timeout' => 2,
-                        'timeout'         => 3,
-                    ]);
+                    $config = config('Email');
+                    $host = setting('Email.SMTPHost') ?: ($config->SMTPHost ?: 'localhost');
+                    $port = (int) (setting('Email.SMTPPort') ?: ($config->SMTPPort ?: 587));
+                    $timeout = 4;
                     $start = microtime(true);
-                    $response = $client->get('http://shared-phpmyadmin:80');
+
+                    $errno = 0;
+                    $errstr = '';
+                    $connection = @fsockopen($host, $port, $errno, $errstr, $timeout);
                     $elapsed = round((microtime(true) - $start) * 1000, 2);
-                    if ($response->getStatusCode() === 200 || $response->getStatusCode() === 302) {
+
+                    if (is_resource($connection)) {
+                        $banner = fgets($connection, 512);
+                        fclose($connection);
                         return $this->response->setJSON([
                             'status'  => 'success',
-                            'message' => "phpMyAdmin console is online & reachable in {$elapsed}ms."
+                            'message' => "SMTP transport '{$host}:{$port}' reachable in {$elapsed}ms. " . trim($banner ?: 'Socket handshake ready.')
                         ]);
                     }
-                    throw new \Exception("Status code: " . $response->getStatusCode());
-                } catch (\Exception $e) {
+
                     return $this->response->setJSON([
                         'status'  => 'error',
-                        'message' => 'phpMyAdmin console check failed: ' . $e->getMessage()
+                        'message' => "SMTP transport '{$host}:{$port}' connection failed: [{$errno}] {$errstr}"
+                    ]);
+                } catch (\Throwable $e) {
+                    return $this->response->setJSON([
+                        'status'  => 'error',
+                        'message' => 'SMTP transport diagnostic check failed: ' . $e->getMessage()
                     ]);
                 }
 

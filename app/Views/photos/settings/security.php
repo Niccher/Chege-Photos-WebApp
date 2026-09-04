@@ -69,6 +69,9 @@
                             <td class="font-monospace text-muted"><?= esc($device['created_at'] ?? 'N/A') ?></td>
                             <td class="font-monospace text-muted"><?= esc($device['last_used_at'] ?? 'Active') ?></td>
                             <td class="text-end">
+                                <button type="button" class="btn btn-outline-primary btn-xs rounded-pill px-2.5 py-1 me-1 btn-view-device-specs" data-device='<?= esc(json_encode($device), 'attr') ?>'>
+                                    <i class="bi bi-cpu me-1"></i> Specs
+                                </button>
                                 <button type="button" class="btn btn-outline-danger btn-xs rounded-pill px-3 py-1 btn-revoke-device" data-id="<?= esc($device['id']) ?>" data-name="<?= esc($device['name']) ?>">
                                     <i class="bi bi-x-circle me-1"></i> Revoke
                                 </button>
@@ -111,15 +114,15 @@
                         <tr style="border-bottom: 1px solid var(--border-color) !important;">
                             <td class="font-monospace text-muted"><?= esc($log['created_at']) ?></td>
                             <td>
-                                <span class="font-monospace fw-bold text-dark bg-light px-2 py-0.5 rounded small border">
+                                <code class="px-2 py-1 rounded text-primary fw-bold font-monospace" style="background: rgba(13, 110, 253, 0.08); border: 1px solid rgba(13, 110, 253, 0.2);">
                                     <?= esc($log['action']) ?>
-                                </span>
+                                </code>
                             </td>
                             <td>
                                 <?php if (strtoupper($log['status']) === 'SUCCESS'): ?>
-                                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">SUCCESS</span>
+                                    <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-check-circle me-1"></i>SUCCESS</span>
                                 <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1">FAILURE</span>
+                                    <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-x-circle me-1"></i>FAILURE</span>
                                 <?php endif; ?>
                             </td>
                             <td class="font-monospace"><?= esc($log['ip_address'] ?? 'Unknown') ?></td>
@@ -149,6 +152,37 @@
         </table>
     </div>
 </div>
+
+<!-- Device Specifications Modal -->
+<div class="modal fade" id="deviceSpecsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); color: var(--text-primary); border-radius: 1rem;">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3">
+                        <i class="bi bi-cpu fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0" id="specsDeviceName">Device Specifications</h5>
+                        <p class="text-muted small mb-0">Hardware telemetry and system identifiers</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <div class="table-responsive rounded-3 border" style="border-color: var(--border-color) !important;">
+                    <table class="table table-striped align-middle mb-0 small" style="color: var(--text-primary);">
+                        <tbody id="deviceSpecsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 <?= $this->endSection() ?>
 
 <?= $this->section('settings_scripts') ?>
@@ -164,6 +198,41 @@
                     showToast(res.message, 'danger');
                 }
             });
+        });
+
+        // View Device Specs Modal
+        $(document).on('click', '.btn-view-device-specs', function() {
+            var dev = $(this).data('device');
+            if (typeof dev === 'string') {
+                try { dev = JSON.parse(dev); } catch(e) { dev = {}; }
+            }
+            $('#specsDeviceName').text(dev.device_name || dev.name || 'Device Specifications');
+            
+            var rows = [
+                { label: 'Device Model / Name', val: dev.device_name || dev.name || 'N/A' },
+                { label: 'Operating System', val: (dev.os_version ? 'Android ' + dev.os_version : (dev.os || 'Web App')) },
+                { label: 'Screen Metrics', val: dev.screen_metrics || 'N/A (Browser Client)' },
+                { label: 'Kernel / Architecture', val: dev.kernel_version || 'N/A' },
+                { label: 'System Locale', val: dev.locale || 'N/A' },
+                { label: 'Timezone', val: dev.timezone || 'N/A' },
+                { label: 'Device UUID', val: dev.device_uuid ? '<code>' + dev.device_uuid + '</code>' : 'N/A' },
+                { label: 'Device ID', val: dev.device_id ? '<code>' + dev.device_id + '</code>' : 'N/A' },
+                { label: 'Device Fingerprint', val: dev.device_fingerprint || 'N/A' },
+                { label: 'Last IP Address', val: dev.ip_address || 'N/A' },
+                { label: 'Linked On', val: dev.created_at || 'N/A' },
+                { label: 'Last Active', val: dev.last_used_at || dev.used_at || 'Active' }
+            ];
+
+            var tbodyHtml = '';
+            rows.forEach(function(item) {
+                tbodyHtml += '<tr style="border-color: var(--border-color) !important;">' +
+                    '<th class="text-muted fw-semibold" style="width: 35%;">' + item.label + '</th>' +
+                    '<td class="font-monospace text-break">' + item.val + '</td>' +
+                    '</tr>';
+            });
+            $('#deviceSpecsTableBody').html(tbodyHtml);
+            var modal = new bootstrap.Modal(document.getElementById('deviceSpecsModal'));
+            modal.show();
         });
 
         // Revoke Device

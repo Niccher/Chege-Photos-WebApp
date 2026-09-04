@@ -55,15 +55,15 @@
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="font-monospace fw-bold text-dark bg-light px-2 py-1 rounded small border">
+                                            <code class="px-2 py-1 rounded text-primary fw-bold font-monospace" style="background: rgba(13, 110, 253, 0.08); border: 1px solid rgba(13, 110, 253, 0.2);">
                                                 <?= esc($log['action']) ?>
-                                            </span>
+                                            </code>
                                         </td>
                                         <td>
                                             <?php if (strtoupper($log['status']) === 'SUCCESS'): ?>
-                                                <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">SUCCESS</span>
+                                                <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-check-circle me-1"></i>SUCCESS</span>
                                             <?php else: ?>
-                                                <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1">FAILURE</span>
+                                                <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-x-circle me-1"></i>FAILURE</span>
                                             <?php endif; ?>
                                         </td>
                                         <td class="font-monospace"><?= esc($log['ip_address'] ?? 'Unknown') ?></td>

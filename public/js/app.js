@@ -452,8 +452,12 @@ $(document).ready(function () {
     $('#btnShareLink, #btnApplyExpiry').on('click', function () {
         if (!currentPhotoId) return;
 
-        const expiresAt = $('#linkExpiryInput').val() || '';
-        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, { expires_at: expiresAt }, function (res) {
+        const expiresPreset = $('#linkExpiryPreset').val() || '';
+        const password = $('#linkPasswordInput').val() || '';
+        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, {
+            expires_preset: expiresPreset,
+            password: password
+        }, function (res) {
             if (res.status === 'success') {
                 $('#sharedUrlText').text(res.url);
                 $('#shareLinkPopup').removeClass('d-none').hide().fadeIn(200);

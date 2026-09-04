@@ -18,11 +18,14 @@ class Settings extends BaseController
         $userId = auth()->id();
         $user = auth()->user();
 
+        $userBytes = (new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
         ];
 
         return view('photos/settings/profile', $data);
@@ -43,27 +46,39 @@ class Settings extends BaseController
             foreach ($authTokens as $t) {
                 $key = $t['device_name'] . ' (token)';
                 $deviceMap[$key] = $t;
+                $deviceMap[$t['device_name']] = $t;
             }
 
             foreach ($rawAccessTokens as $at) {
                 $mapped = $deviceMap[$at->name] ?? null;
                 $activeAccessTokens[] = [
-                    'id'             => $at->id,
-                    'name'           => $at->name,
-                    'scopes'         => $at->scopes,
-                    'last_used_at'   => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i') : null,
-                    'created_at'     => $at->created_at ? $at->created_at->format('Y-m-d H:i') : null,
-                    'os_version'     => $mapped['os_version'] ?? null,
-                    'device_id'      => $mapped['device_id'] ?? null,
+                    'id'                 => $at->id,
+                    'name'               => $at->name,
+                    'scopes'             => $at->scopes,
+                    'last_used_at'       => $at->last_used_at ? $at->last_used_at->format('Y-m-d H:i') : null,
+                    'created_at'         => $at->created_at ? $at->created_at->format('Y-m-d H:i') : null,
+                    'device_name'        => $mapped['device_name'] ?? $at->name,
+                    'device_id'          => $mapped['device_id'] ?? null,
+                    'device_uuid'        => $mapped['device_uuid'] ?? null,
+                    'os_version'         => $mapped['os_version'] ?? null,
+                    'screen_metrics'     => $mapped['screen_metrics'] ?? null,
+                    'locale'             => $mapped['locale'] ?? null,
+                    'timezone'           => $mapped['timezone'] ?? null,
+                    'kernel_version'     => $mapped['kernel_version'] ?? null,
+                    'device_fingerprint' => $mapped['device_fingerprint'] ?? null,
+                    'ip_address'         => $mapped['ip_address'] ?? null,
                 ];
             }
         }
 
+        $userBytes = (new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
             'activeDevices'  => $activeAccessTokens,
             'logs'           => $db->table('sys_security_logs')
                 ->where('user_id', $userId)
@@ -81,11 +96,14 @@ class Settings extends BaseController
         $userId = auth()->id();
         $user = auth()->user();
 
+        $userBytes = (new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
             'theme'          => setting('App.theme', "user:{$userId}") ?? 'auto',
             'density'        => setting('App.gridDensity', "user:{$userId}") ?? 'standard',
             'videoAutoplay'  => (bool) (setting('App.videoAutoplay', "user:{$userId}") ?? true),
@@ -118,11 +136,14 @@ class Settings extends BaseController
         $userId = auth()->id();
         $user = auth()->user();
 
+        $userBytes = (new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (((new \App\Models\PhotoModel())->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
             'notifications'  => [
                 'notifyMemoryDigest'   => (bool) (setting('User.notifyMemoryDigest', "user:{$userId}") ?? true),
                 'notifyQuotaAlert'     => (bool) (setting('User.notifyQuotaAlert', "user:{$userId}") ?? true),
@@ -158,17 +179,19 @@ class Settings extends BaseController
             ->first()['size'] ?? 0;
         $photoBytes = $totalBytes - $videoBytes;
 
+        $storageMetrics = self::calculateStorageMetrics($totalBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes($totalBytes),
-            'storagePercent' => min(100, ($totalBytes / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
             'storage' => [
                 'total'   => $totalBytes,
                 'photos'  => $photoBytes,
                 'videos'  => $videoBytes,
-                'percent' => min(100, ($totalBytes / (setting('App.storageLimit') ?: (1024 * 1024 * 1024))) * 100),
-                'limit'   => $this->formatBytes(setting('App.storageLimit') ?: (1024 * 1024 * 1024)),
+                'percent' => $storageMetrics['storagePercent'],
+                'limit'   => $storageMetrics['storageQuotaFormatted'],
             ],
         ];
 
@@ -204,11 +227,14 @@ class Settings extends BaseController
             ->select('pr.id')
             ->countAllResults();
 
+        $userBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
             'mlStats' => [
                 'detected_faces'  => $detectedFaces,
                 'total_images'    => $totalImages,
@@ -320,11 +346,14 @@ class Settings extends BaseController
         $user = auth()->user();
         $photoModel = new \App\Models\PhotoModel();
 
+        $userBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
         ];
 
         return view('photos/settings/export', $data);
@@ -336,11 +365,14 @@ class Settings extends BaseController
         $user = auth()->user();
         $photoModel = new \App\Models\PhotoModel();
 
+        $userBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
         ];
 
         return view('photos/settings/access_tokens', $data);
@@ -352,11 +384,14 @@ class Settings extends BaseController
         $user = auth()->user();
         $photoModel = new \App\Models\PhotoModel();
 
+        $userBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
+        $storageMetrics = self::calculateStorageMetrics($userBytes);
+
         $data = [
             'user'           => $user,
             'counts'         => $this->getSidebarCounts(),
-            'storageUsed'    => $this->formatBytes($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0),
-            'storagePercent' => min(100, (($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0) / (1024 * 1024 * 1024 * 1)) * 100),
+            'storageUsed'    => $storageMetrics['storageUsed'],
+            'storagePercent' => $storageMetrics['storagePercent'],
         ];
 
         return view('photos/settings/danger', $data);

@@ -63,9 +63,9 @@
                                 <td class="small text-muted"><?= esc($log['subject']) ?></td>
                                 <td>
                                     <?php if ($log['status'] === 'sent'): ?>
-                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1 small">Delivered</span>
+                                        <span class="badge bg-success text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-check-circle me-1"></i>Delivered</span>
                                     <?php else: ?>
-                                        <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-1 small">Failed</span>
+                                        <span class="badge bg-danger text-white rounded-pill px-3 py-1 fw-semibold"><i class="bi bi-x-circle me-1"></i>Failed</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="small text-muted"><?= esc($log['sent_at']) ?></td>

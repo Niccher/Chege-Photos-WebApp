@@ -2,12 +2,22 @@
 
 <?= $this->section('content') ?>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <style>
     #map {
         height: calc(100vh - 120px);
         width: 100%;
         border-radius: 12px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+        background-color: rgba(66, 133, 244, 0.4);
+    }
+    .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+        background-color: rgba(66, 133, 244, 0.85);
+        color: #fff;
+        font-weight: 600;
     }
 </style>
 
@@ -17,7 +27,7 @@
         <p class="text-muted small mb-0">Discover your photos on a map</p>
     </div>
     <div class="btn-group" role="group">
-        <button type="button" class="btn btn-outline-secondary active" id="btnMarkers">Markers</button>
+        <button type="button" class="btn btn-outline-secondary active" id="btnMarkers">Clustered</button>
         <button type="button" class="btn btn-outline-secondary" id="btnHeatmap">Heatmap</button>
     </div>
 </div>
@@ -25,6 +35,7 @@
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
 <script>
@@ -36,7 +47,12 @@
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        const markerGroup = L.layerGroup().addTo(map);
+        const markerGroup = L.markerClusterGroup({
+            chunkedLoading: true,
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false
+        }).addTo(map);
         const heatPoints = [];
         let bounds = L.latLngBounds();
 

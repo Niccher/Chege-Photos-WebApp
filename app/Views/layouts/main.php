@@ -432,8 +432,11 @@
                 </div>
                 <div class="progress" style="height: 6px; background-color: var(--border-color);">
                     <div class="progress-bar <?= ($storagePercent ?? 0) > 90 ? 'bg-danger' : '' ?>" role="progressbar" style="width: <?= $storagePercent ?? 0 ?>%; background-color: var(--accent-color);" aria-valuenow="<?= $storagePercent ?? 0 ?>" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <p class="small mt-2 mb-0" style="font-size: 0.7rem; color: var(--text-muted);"><?= $storageUsed ?? '0 B' ?> of 1 GB used</p>
+                <?php
+                    $quotaBytes = (int)(setting('App.storageLimit') ?? 1073741824);
+                    $quotaFormatted = ($quotaBytes === 0) ? 'Unlimited' : \App\Controllers\BaseController::formatBytesStatic($quotaBytes);
+                ?>
+                <p class="small mt-2 mb-0" style="font-size: 0.7rem; color: var(--text-muted);"><?= $storageUsed ?? '0 B' ?> of <?= $quotaFormatted ?> used</p>
             </div>
         </div>
     </nav>
@@ -542,15 +545,34 @@
             </div>
             
             <!-- Link Copy Tooltip (Pseudo) -->
-            <div id="shareLinkPopup" class="position-absolute top-10 start-50 translate-middle-x bg-white text-dark rounded shadow px-3 py-2 d-none" style="z-index: 1060; margin-top: 60px;">
-                <div class="d-flex align-items-center gap-2">
-                    <span class="small fw-bold" id="sharedUrlText"></span>
+            <div id="shareLinkPopup" class="position-absolute top-10 start-50 translate-middle-x bg-white text-dark rounded shadow-lg p-3 d-none" style="z-index: 1060; margin-top: 60px; min-width: 320px;">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                    <span class="small fw-bold text-truncate" id="sharedUrlText" style="max-width: 200px;"></span>
                     <button class="btn btn-primary btn-sm rounded-pill px-3" id="btnCopyLink">Copy</button>
                 </div>
-                <div class="d-flex align-items-center gap-2 mt-2">
-                    <label class="small text-muted text-nowrap" for="linkExpiryInput">Expires</label>
-                    <input type="datetime-local" id="linkExpiryInput" class="form-control form-control-sm" style="min-width: 180px;">
-                    <button class="btn btn-outline-dark btn-sm rounded-pill px-3" id="btnApplyExpiry">Apply</button>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-4">
+                        <label class="small text-muted mb-0" for="linkExpiryPreset">Expires</label>
+                    </div>
+                    <div class="col-8">
+                        <select id="linkExpiryPreset" class="form-select form-select-sm">
+                            <option value="">Never</option>
+                            <option value="24h">24 Hours</option>
+                            <option value="7d">7 Days</option>
+                            <option value="30d">30 Days</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-4">
+                        <label class="small text-muted mb-0" for="linkPasswordInput">Password</label>
+                    </div>
+                    <div class="col-8">
+                        <input type="password" id="linkPasswordInput" class="form-control form-control-sm" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-dark btn-sm rounded-pill px-3" id="btnApplyExpiry">Update Link</button>
                 </div>
             </div>
             <div class="modal-body p-0 d-flex align-items-center justify-content-center flex-grow-1 overflow-hidden" id="lightboxImageContainer">
@@ -911,6 +933,13 @@
                         <span class="fw-semibold text-danger" id="mlJobsEta">-</span>
                     </div>
                 </div>
+
+                <div class="mt-3 text-center">
+                    <button type="button" class="btn btn-sm btn-primary w-100 py-2 fw-semibold" id="btnRunMlSweep">
+                        <i class="bi bi-play-fill me-1"></i>Run ML Sweep Now
+                    </button>
+                    <div class="small text-muted mt-1" style="font-size: 0.72rem;" id="mlEngineStatusSubtext">Checks and queues unprocessed photos for analysis</div>
+                </div>
             </div>
         </div>
     </div>
@@ -980,41 +1009,101 @@
                     $('#barNavScannedTags').css('width', tPct + '%');
                     $('#barNavScannedClips').css('width', cPct + '%');
 
+                    // Check if ML microservice is online
+                    if (!res.ml_online) {
+                        $('#statusBadgeFaces, #statusBadgeTags, #statusBadgeClips')
+                            .text('Offline')
+                            .attr('class', 'badge bg-danger');
+                        $('#mlJobsStatusText')
+                            .text('ML Engine Offline')
+                            .removeClass('text-primary text-muted')
+                            .addClass('text-danger fw-bold');
+                        $('#mlEngineStatusSubtext')
+                            .text('ML service unreachable on port 9051/8000')
+                            .addClass('text-danger')
+                            .removeClass('text-muted');
+                        $('#btnRunMlSweep').prop('disabled', true).addClass('btn-secondary').removeClass('btn-primary');
+                        $('#mlJobsStartRow, #mlJobsSpeedRow, #mlJobsEtaRow').addClass('d-none');
+                        $('#mlJobsActiveBadge').addClass('d-none');
+                        $('#btnNavMlJobs i').removeClass('text-primary');
+                        return;
+                    }
+
+                    $('#btnRunMlSweep').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary');
+                    $('#mlEngineStatusSubtext').text('ML Engine online. Ready to sweep.').removeClass('text-danger').addClass('text-muted');
+
+                    var pendingTasks = (total - faces) + (total - tags) + (total - clips);
+                    var isSweepActive = sessionStorage.getItem('ml_sweep_active') === '1';
+
+                    // Track delta across polling ticks
+                    var prevFaces = parseInt(sessionStorage.getItem('ml_last_poll_faces') || faces);
+                    var prevTags  = parseInt(sessionStorage.getItem('ml_last_poll_tags') || tags);
+                    var prevClips = parseInt(sessionStorage.getItem('ml_last_poll_clips') || clips);
+                    var deltaNow = (faces - prevFaces) + (tags - prevTags) + (clips - prevClips);
+                    sessionStorage.setItem('ml_last_poll_faces', faces);
+                    sessionStorage.setItem('ml_last_poll_tags', tags);
+                    sessionStorage.setItem('ml_last_poll_clips', clips);
+
+                    if (deltaNow > 0) {
+                        isSweepActive = true;
+                        sessionStorage.setItem('ml_sweep_active', '1');
+                        sessionStorage.setItem('ml_zero_delta_count', '0');
+                    } else if (isSweepActive) {
+                        var zeroCount = parseInt(sessionStorage.getItem('ml_zero_delta_count') || '0') + 1;
+                        sessionStorage.setItem('ml_zero_delta_count', zeroCount);
+                        // If no progress for 3 consecutive polls (15 seconds), revert to idle
+                        if (zeroCount >= 3) {
+                            isSweepActive = false;
+                            sessionStorage.removeItem('ml_sweep_active');
+                            sessionStorage.removeItem('ml_zero_delta_count');
+                        }
+                    }
+                    if (pendingTasks === 0) {
+                        isSweepActive = false;
+                        sessionStorage.removeItem('ml_sweep_active');
+                        sessionStorage.removeItem('ml_zero_delta_count');
+                    }
+
                     // Determine Active tasks
-                    var facesActive = faces < total;
-                    var tagsActive = tags < total;
-                    var clipsActive = clips < total;
+                    var facesActive = isSweepActive && faces < total;
+                    var tagsActive = isSweepActive && tags < total;
+                    var clipsActive = isSweepActive && clips < total;
                     var anyActive = facesActive || tagsActive || clipsActive;
 
                     // Update Status Badges
                     if (facesActive) {
                         $('#statusBadgeFaces').text('Processing...').attr('class', 'badge bg-primary progress-bar-animated');
+                    } else if (faces === total) {
+                        $('#statusBadgeFaces').text('Done').attr('class', 'badge bg-success');
                     } else {
-                        $('#statusBadgeFaces').text('Idle').attr('class', 'badge bg-secondary');
+                        $('#statusBadgeFaces').text('Idle (' + (total - faces) + ' pending)').attr('class', 'badge bg-secondary');
                     }
 
                     if (tagsActive) {
                         $('#statusBadgeTags').text('Processing...').attr('class', 'badge bg-success progress-bar-animated');
+                    } else if (tags === total) {
+                        $('#statusBadgeTags').text('Done').attr('class', 'badge bg-success');
                     } else {
-                        $('#statusBadgeTags').text('Idle').attr('class', 'badge bg-secondary');
+                        $('#statusBadgeTags').text('Idle (' + (total - tags) + ' pending)').attr('class', 'badge bg-secondary');
                     }
 
                     if (clipsActive) {
                         $('#statusBadgeClips').text('Processing...').attr('class', 'badge bg-info text-dark progress-bar-animated');
+                    } else if (clips === total) {
+                        $('#statusBadgeClips').text('Done').attr('class', 'badge bg-success');
                     } else {
-                        $('#statusBadgeClips').text('Idle').attr('class', 'badge bg-secondary');
+                        $('#statusBadgeClips').text('Idle (' + (total - clips) + ' pending)').attr('class', 'badge bg-secondary');
                     }
 
                     // Track & calculate speed and ETA metrics
                     if (anyActive) {
-                        $('#mlJobsStatusText').text('Processing sequential pipeline...').removeClass('text-white-50 text-muted').addClass('text-primary fw-bold');
+                        $('#mlJobsStatusText').text('Processing sequential pipeline...').removeClass('text-white-50 text-muted text-danger').addClass('text-primary fw-bold');
                         
                         var now = Date.now();
                         var startTime = sessionStorage.getItem('ml_jobs_start_time');
                         if (!startTime) {
                             startTime = now;
                             sessionStorage.setItem('ml_jobs_start_time', startTime);
-                            // Store initial values to compute delta
                             sessionStorage.setItem('ml_jobs_init_faces', faces);
                             sessionStorage.setItem('ml_jobs_init_tags', tags);
                             sessionStorage.setItem('ml_jobs_init_clips', clips);
@@ -1027,7 +1116,6 @@
                         
                         var processedDelta = (faces - initFaces) + (tags - initTags) + (clips - initClips);
                         
-                        // Render Started At
                         var startDate = new Date(parseInt(startTime));
                         $('#mlJobsStartedAt').text(startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'}));
                         $('#mlJobsStartRow').removeClass('d-none');
@@ -1037,9 +1125,7 @@
                             $('#mlJobsSpeed').text(secPerImg.toFixed(1) + 's / photo');
                             $('#mlJobsSpeedRow').removeClass('d-none');
                             
-                            // ETA
-                            var remainingPhotos = (total - faces) + (total - tags) + (total - clips);
-                            var etaSeconds = remainingPhotos * secPerImg;
+                            var etaSeconds = pendingTasks * secPerImg;
                             if (etaSeconds > 0) {
                                 $('#mlJobsEta').text(formatElapsedTime(etaSeconds * 1000));
                                 $('#mlJobsEtaRow').removeClass('d-none');
@@ -1052,8 +1138,8 @@
                             $('#mlJobsEtaRow').addClass('d-none');
                         }
                     } else {
-                        // Reset all to Idle
-                        $('#mlJobsStatusText').text('Idle (Waiting)').removeClass('text-primary fw-bold text-white-50').addClass('text-muted');
+                        var idleMsg = pendingTasks > 0 ? 'Idle (' + pendingTasks + ' pending tasks)' : 'All ' + total + ' Photos Analyzed';
+                        $('#mlJobsStatusText').text(idleMsg).removeClass('text-primary fw-bold text-white-50 text-danger').addClass('text-muted');
                         $('#mlJobsStartRow, #mlJobsSpeedRow, #mlJobsEtaRow').addClass('d-none');
                         sessionStorage.removeItem('ml_jobs_start_time');
                         sessionStorage.removeItem('ml_jobs_init_faces');
@@ -1068,14 +1154,36 @@
                     } else {
                         $('#mlJobsActiveBadge').addClass('d-none');
                         $('#btnNavMlJobs i').removeClass('text-primary');
-                        if (navPollInterval) {
-                            clearInterval(navPollInterval);
-                            navPollInterval = null;
-                        }
                     }
                 }
             });
         }
+
+        $('#btnRunMlSweep').on('click', function() {
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Triggering sweep...');
+            $.post(BASE_URL + 'admin/ml/sweep', function(res) {
+                if (res.status === 'success') {
+                    sessionStorage.setItem('ml_sweep_active', '1');
+                    sessionStorage.setItem('ml_jobs_start_time', Date.now());
+                    updateNavMlStats();
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'ML Sweep started',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                } else {
+                    Swal.fire('Error', res.message || 'Sweep trigger failed', 'error');
+                }
+            }).fail(function(xhr) {
+                Swal.fire('Error', xhr.responseJSON ? xhr.responseJSON.message : 'Sweep failed to start', 'error');
+            }).always(function() {
+                $btn.prop('disabled', false).html('<i class="bi bi-play-fill me-1"></i>Run ML Sweep Now');
+            });
+        });
         
         updateNavMlStats();
         navPollInterval = setInterval(updateNavMlStats, 5000);

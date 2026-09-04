@@ -12,7 +12,7 @@ class SharedLinkModel extends Model
     protected $returnType       = 'array';
     protected $useSoftDeletes   = false;
     protected $protectFields    = true;
-    protected $allowedFields    = ['photo_id', 'access_token', 'created_at', 'expires_at'];
+    protected $allowedFields    = ['photo_id', 'access_token', 'password_hash', 'created_at', 'expires_at'];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;

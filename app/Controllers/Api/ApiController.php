@@ -53,10 +53,60 @@ class ApiController extends BaseController
                 ])->setStatusCode(401);
             }
 
-            $photos = $photoModel->where('user_id', $userId)
-                                ->where('is_archived', false)
-                                ->orderBy('taken_at', 'DESC')
-                                ->findAll();
+            $q = trim($this->request->getGet('q') ?? '');
+            $query = $photoModel->where('user_id', $userId)
+                                ->where('is_archived', false);
+
+            if ($q !== '') {
+                $db = \Config\Database::connect();
+                $matchedPhotoIds = $db->table('photo_tags')
+                                      ->select('photo_id')
+                                      ->like('tag', $q)
+                                      ->get()
+                                      ->getResultArray();
+                $photoIds = array_column($matchedPhotoIds, 'photo_id');
+
+                // Query FastAPI ML service for CLIP semantic search
+                try {
+                    $client = service('curlrequest', [
+                        'connect_timeout' => 2,
+                        'timeout'         => 6,
+                        'headers'         => [
+                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        ]
+                    ]);
+
+                    $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
+                    $url = (env('ML_URL') ?: $mlDefault) . '/api/v1/search/semantic?' . http_build_query([
+                        'query'   => $q,
+                        'limit'   => 100,
+                        'user_id' => $userId
+                    ]);
+
+                    $response = $client->get($url);
+                    if ($response->getStatusCode() === 200) {
+                        $body = json_decode($response->getBody(), true);
+                        if (!empty($body['results'])) {
+                            $semanticPhotoIds = array_column($body['results'], 'photo_id');
+                            $photoIds = array_merge($photoIds, $semanticPhotoIds);
+                            $photoIds = array_values(array_unique($photoIds));
+                        }
+                    }
+                } catch (\Throwable $t) {
+                    log_message('error', 'API CLIP semantic search call failed: ' . $t->getMessage());
+                }
+
+                $query->groupStart()
+                      ->like('filename', $q)
+                      ->orLike('exif_data', $q)
+                      ->orLike('taken_at', $q);
+                if (!empty($photoIds)) {
+                    $query->orWhereIn('id', $photoIds);
+                }
+                $query->groupEnd();
+            }
+
+            $photos = $query->orderBy('taken_at', 'DESC')->findAll();
 
             $photos = array_map([$this, 'formatPhotoForApi'], $photos);
 
@@ -491,6 +541,7 @@ class ApiController extends BaseController
         $p['longitude']   = isset($p['longitude']) ? (string) $p['longitude'] : null;
         $p['is_favorite'] = (string) ($p['is_favorite'] ?? '0');
         $p['is_archived'] = (string) ($p['is_archived'] ?? '0');
+        $p['file_hash']   = isset($p['file_hash']) ? (string) $p['file_hash'] : null;
         if (array_key_exists('deleted_at', $p)) {
             $p['is_deleted'] = $p['deleted_at'] ? '1' : '0';
         } else {

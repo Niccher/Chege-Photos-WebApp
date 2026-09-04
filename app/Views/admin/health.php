@@ -36,21 +36,21 @@
             </div>
         </div>
 
-        <!-- phpMyAdmin Card -->
+        <!-- Outbound Mail / SMTP Card -->
         <div class="col-md-6 col-lg-4">
-            <div class="card border-0 shadow-sm rounded-card p-4 h-100 service-card" id="card-phpmyadmin" style="background: var(--card-bg); color: var(--text-primary);">
+            <div class="card border-0 shadow-sm rounded-card p-4 h-100 service-card" id="card-smtp" style="background: var(--card-bg); color: var(--text-primary);">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div class="p-3 bg-info bg-opacity-10 rounded text-info">
-                        <i class="bi bi-shield-check fs-4"></i>
+                        <i class="bi bi-envelope-at fs-4"></i>
                     </div>
                     <span class="badge bg-secondary status-badge rounded-pill">PENDING TEST</span>
                 </div>
-                <h6 class="fw-bold mb-1">phpMyAdmin Console</h6>
-                <p class="text-muted small mb-3">Web-based administration tool for quick direct manipulation, backup creation, and inspection of database records.</p>
+                <h6 class="fw-bold mb-1">Outbound Mail / SMTP</h6>
+                <p class="text-muted small mb-3">SMTP mail transport server verifying socket connectivity, TLS/SSL handshake, and dispatch readiness.</p>
                 <div class="console-box rounded p-3 mb-3 bg-light bg-opacity-50 small border font-monospace text-muted" style="min-height: 80px; max-height: 120px; overflow-y: auto;">
-                    Click test to verify web portal response.
+                    Click test to verify SMTP server socket response.
                 </div>
-                <button class="btn btn-outline-primary btn-sm w-100 rounded-pill mt-auto btn-test-service" data-service="phpmyadmin">
+                <button class="btn btn-outline-primary btn-sm w-100 rounded-pill mt-auto btn-test-service" data-service="smtp">
                     <i class="bi bi-play-circle me-1"></i> Test Service
                 </button>
             </div>
@@ -184,7 +184,7 @@
         });
 
         $('#btnRunAllDiagnostics').on('click', function() {
-            var services = ['mysql', 'phpmyadmin', 'ml', 'qdrant', 'clip', 'yolo'];
+            var services = ['mysql', 'smtp', 'ml', 'qdrant', 'clip', 'yolo'];
             services.forEach(function(s) {
                 testService(s, '#card-' + s);
             });

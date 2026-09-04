@@ -103,6 +103,35 @@
                 <tr><td colspan="5" class="text-center text-muted py-4">Loading active devices...</td></tr>
             </tbody>
         </table>
+    <!-- Device Specifications Modal -->
+    <div class="modal fade" id="tokenDeviceSpecsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); color: var(--text-primary); border-radius: 1rem;">
+                <div class="modal-header border-0 pb-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3">
+                            <i class="bi bi-cpu fs-4"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold mb-0" id="tokenSpecsDeviceName">Device Specifications</h5>
+                            <p class="text-muted small mb-0">Hardware telemetry and system identifiers</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="table-responsive rounded-3 border" style="border-color: var(--border-color) !important;">
+                        <table class="table table-striped align-middle mb-0 small" style="color: var(--text-primary);">
+                            <tbody id="tokenDeviceSpecsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 <?= $this->endSection() ?>
@@ -160,11 +189,12 @@
             $('#tokensTableBody').html(html);
 
             // Populate active devices
+            window._cachedActiveDevices = res.active_devices || [];
             var devHtml = '';
             if (!res.active_devices || res.active_devices.length === 0) {
                 devHtml = '<tr><td colspan="5" class="text-center text-muted py-4">No active linked devices found.</td></tr>';
             } else {
-                res.active_devices.forEach(function(d) {
+                res.active_devices.forEach(function(d, idx) {
                     var scopesList = '';
                     if (d.scopes && Array.isArray(d.scopes)) {
                         d.scopes.forEach(function(s) {
@@ -173,30 +203,54 @@
                     }
                     var lastActive = d.last_used_at ? new Date(d.last_used_at).toLocaleString() : 'Just now';
                     var firstLinked = d.created_at ? new Date(d.created_at).toLocaleString() : '—';
-                    var revokeDeviceBtn = '<button class="btn btn-sm btn-outline-danger" onclick="revokeDevice(' + d.id + ')" title="Log out / Revoke device"><i class="bi bi-box-arrow-right me-1"></i> Log Out</button>';
-                    var extraInfo = '';
-                    if (d.device_uuid) {
-                        extraInfo += '<br><small class="text-muted">UUID: <code>' + d.device_uuid + '</code></small>';
-                    }
-                    if (d.os_version || d.screen_metrics) {
-                        extraInfo += '<br><small class="text-muted">OS: ' + (d.os_version || 'N/A') + ' | Screen: ' + (d.screen_metrics || 'N/A') + '</small>';
-                    }
-                    if (d.locale || d.timezone) {
-                        extraInfo += '<br><small class="text-muted">Locale: ' + (d.locale || 'N/A') + ' (' + (d.timezone || 'N/A') + ')</small>';
-                    }
+                    
+                    var actions = '<div class="btn-group">' +
+                        '<button class="btn btn-sm btn-outline-primary btn-specs-device" data-index="' + idx + '" title="View Device Specs"><i class="bi bi-cpu me-1"></i> Specs</button>' +
+                        '<button class="btn btn-sm btn-outline-danger" onclick="revokeDevice(' + d.id + ')" title="Log out / Revoke device"><i class="bi bi-box-arrow-right me-1"></i> Log Out</button>' +
+                        '</div>';
                     
                     devHtml += '<tr>' +
-                        '<td><span class="fw-bold"><i class="bi bi-phone me-1"></i>' + d.name + '</span>' + extraInfo + '</td>' +
+                        '<td><div class="fw-bold"><i class="bi bi-phone text-success me-1"></i>' + d.name + '</div><span class="badge bg-secondary text-white font-monospace mt-1">' + (d.os_version ? 'Android ' + d.os_version : 'Web App') + '</span></td>' +
                         '<td>' + (scopesList || '<span class="badge bg-secondary">none</span>') + '</td>' +
                         '<td class="small">' + firstLinked + '</td>' +
                         '<td class="small">' + lastActive + '</td>' +
-                        '<td>' + revokeDeviceBtn + '</td>' +
+                        '<td>' + actions + '</td>' +
                         '</tr>';
                 });
             }
             $('#devicesTableBody').html(devHtml);
         });
     }
+
+    $(document).on('click', '.btn-specs-device', function() {
+        var idx = $(this).data('index');
+        var d = (window._cachedActiveDevices || [])[idx] || {};
+        $('#tokenSpecsDeviceName').text(d.name || 'Device Specifications');
+        
+        var rows = [
+            { label: 'Device Model / Name', val: d.name || 'N/A' },
+            { label: 'Operating System', val: (d.os_version ? 'Android ' + d.os_version : 'Web App') },
+            { label: 'Screen Metrics', val: d.screen_metrics || 'N/A (Browser Client)' },
+            { label: 'Kernel / Architecture', val: d.kernel_version || 'N/A' },
+            { label: 'System Locale', val: d.locale || 'N/A' },
+            { label: 'Timezone', val: d.timezone || 'N/A' },
+            { label: 'Device UUID', val: d.device_uuid ? '<code>' + d.device_uuid + '</code>' : 'N/A' },
+            { label: 'Device ID', val: d.device_id ? '<code>' + d.device_id + '</code>' : 'N/A' },
+            { label: 'Linked On', val: d.created_at ? new Date(d.created_at).toLocaleString() : 'N/A' },
+            { label: 'Last Active', val: d.last_used_at ? new Date(d.last_used_at).toLocaleString() : 'Active' }
+        ];
+
+        var tbodyHtml = '';
+        rows.forEach(function(item) {
+            tbodyHtml += '<tr style="border-color: var(--border-color) !important;">' +
+                '<th class="text-muted fw-semibold" style="width: 35%;">' + item.label + '</th>' +
+                '<td class="font-monospace text-break">' + item.val + '</td>' +
+                '</tr>';
+        });
+        $('#tokenDeviceSpecsTableBody').html(tbodyHtml);
+        var modal = new bootstrap.Modal(document.getElementById('tokenDeviceSpecsModal'));
+        modal.show();
+    });
 
     function revokeToken(id) {
         if (!confirm('Revoke this pairing token? This will prevent it from being used to pair new devices.')) return;

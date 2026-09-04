@@ -182,6 +182,7 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->post('ml/save', 'Admin::saveMlSettings');
     $routes->post('ml/reset', 'Admin::resetMl');
     $routes->post('ml/cluster', 'Admin::triggerCluster');
+    $routes->post('ml/sweep', 'Admin::triggerSweep');
     $routes->post('ml/rescan', 'Admin::rescan');
     $routes->post('ml/regenerate-key', 'Admin::regenerateApiKey');
     $routes->post('ml/autotune', 'Admin::autotuneMl');
@@ -211,7 +212,7 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
 });
 
 // Public Sharing Routes
-$routes->get('s/(:any)', 'Photos::viewShared/$1');
+$routes->match(['get', 'post'], 's/(:any)', 'Photos::viewShared/$1');
 
 // Shield's auth routes (login, register, magic-link, etc.)
 service('auth')->routes($routes);

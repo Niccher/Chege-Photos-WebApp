@@ -52,8 +52,13 @@
                                             <?php 
                                             $groups = explode(', ', $user['groups']);
                                             foreach ($groups as $grp) {
-                                                $class = $grp === 'superadmin' ? 'bg-danger' : ($grp === 'admin' ? 'bg-warning' : 'bg-primary');
-                                                echo '<span class="badge ' . $class . ' bg-opacity-25 text-' . str_replace('bg-', '', $class) . ' rounded-pill px-3 py-1 me-1 fw-bold">' . esc($grp) . '</span>';
+                                                if ($grp === 'superadmin') {
+                                                    echo '<span class="badge bg-danger text-white rounded-pill px-3 py-1 me-1 fw-semibold"><i class="bi bi-shield-shaded me-1"></i>superadmin</span>';
+                                                } elseif ($grp === 'admin') {
+                                                    echo '<span class="badge bg-warning text-dark rounded-pill px-3 py-1 me-1 fw-semibold"><i class="bi bi-shield-check me-1"></i>admin</span>';
+                                                } else {
+                                                    echo '<span class="badge bg-primary text-white rounded-pill px-3 py-1 me-1 fw-semibold"><i class="bi bi-person me-1"></i>' . esc($grp) . '</span>';
+                                                }
                                             }
                                             ?>
                                         </td>
