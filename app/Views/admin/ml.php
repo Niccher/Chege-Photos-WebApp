@@ -170,11 +170,16 @@
                 <div class="d-flex flex-column gap-2 small">
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">FastAPI Service:</span>
-                        <?php if ($mlHealth['online']): ?>
-                            <span class="badge bg-success text-white rounded-pill px-3 py-1">ONLINE</span>
-                        <?php else: ?>
-                            <span class="badge bg-danger text-white rounded-pill px-3 py-1">OFFLINE</span>
-                        <?php endif; ?>
+                        <div>
+                            <?php if ($mlHealth['online']): ?>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-1">ONLINE</span>
+                                <?php if (!empty($mlHealth['latency_ms'])): ?>
+                                    <span class="badge bg-light text-muted border rounded-pill ms-1 extra-small"><?= esc($mlHealth['latency_ms']) ?>ms</span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="badge bg-danger text-white rounded-pill px-3 py-1">OFFLINE</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">MySQL connection:</span>
@@ -217,6 +222,33 @@
                         <?php endif; ?>
                     </div>
                 </div>
+            </div>
+
+            <!-- ML Service Endpoint Connection & Dynamic Prober -->
+            <div class="card border-0 shadow-sm rounded-card p-4 mb-4" style="background: var(--card-bg); color: var(--text-primary);">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-diagram-2 text-primary me-2"></i>ML Service Endpoint</h6>
+                    <span class="badge bg-secondary rounded-pill small" id="badgeMlUrlSource"><?= esc($mlUrlSource ?? 'Auto-detected') ?></span>
+                </div>
+                <p class="text-muted small mb-3">Target endpoint for InsightFace, YOLOv8, and CLIP microservice. Leave empty to use automatic Railway private DNS discovery.</p>
+                
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Service Endpoint URL:</label>
+                    <div class="input-group">
+                        <input type="text" id="inputMlUrl" name="mlUrl" form="formAdminMl" class="form-control font-monospace small bg-light border-0 py-2" placeholder="e.g. http://ml-chege-photos.railway.internal:8000" value="<?= esc($mlUrlSetting ?? '') ?>">
+                        <button type="button" class="btn btn-primary btn-sm px-3" id="btnTestMlEndpoint" title="Test Connection">
+                            <i class="bi bi-broadcast me-1"></i> Test
+                        </button>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <span class="text-muted extra-small">Active: <code id="activeMlUrlText"><?= esc($activeMlUrl ?? 'http://ml-chege-photos:8000') ?></code></span>
+                        <?php if (!empty($mlUrlSetting)): ?>
+                            <button type="button" class="btn btn-link text-danger p-0 extra-small text-decoration-none" id="btnClearMlUrl">Reset to Auto</button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div id="mlTestFeedback" class="alert d-none small py-2 px-3 mb-0 rounded" role="alert"></div>
             </div>
 
             <!-- ML Security & API Key Management -->
@@ -550,6 +582,46 @@
                 activeActionCallback();
                 activeActionCallback = null;
             }
+        });
+
+        // Test ML Endpoint button
+        $('#btnTestMlEndpoint').on('click', function() {
+            var btn = $(this);
+            var urlToTest = $('#inputMlUrl').val().trim();
+            var feedback = $('#mlTestFeedback');
+
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Testing...');
+            feedback.removeClass('d-none alert-success alert-danger alert-warning')
+                    .addClass('alert-info')
+                    .html('<span class="spinner-border spinner-border-sm me-1"></span> Pinging ML endpoint...');
+
+            $.post(BASE_URL + 'admin/ml/test-connection', { url: urlToTest }, function(res) {
+                btn.prop('disabled', false).html('<i class="bi bi-broadcast me-1"></i> Test');
+                feedback.removeClass('alert-info alert-danger alert-warning')
+                        .addClass('alert-success')
+                        .html('<div class="fw-bold mb-1"><i class="bi bi-check-circle-fill me-1"></i> ' + res.message + '</div>' +
+                              '<div class="extra-small text-dark">DB: ' + (res.details && res.details.db_connected ? 'Connected' : 'Disconnected') +
+                              ' | Qdrant: ' + (res.details && res.details.qdrant_connected ? 'Connected' : 'Disconnected') +
+                              ' | Models: ' + (res.details && res.details.models_loaded ? 'Loaded' : 'Unloaded') + '</div>');
+                $('#activeMlUrlText').text(res.url);
+                showToast('ML Service is online (' + res.latency_ms + 'ms)', 'success');
+            }).fail(function(xhr) {
+                btn.prop('disabled', false).html('<i class="bi bi-broadcast me-1"></i> Test');
+                var err = xhr.responseJSON ? xhr.responseJSON.message : ('HTTP ' + xhr.status + ' error');
+                var attempted = (xhr.responseJSON && xhr.responseJSON.attempted) ? ('<div class="extra-small text-muted mt-1">Candidates probed: ' + xhr.responseJSON.attempted.join(', ') + '</div>') : '';
+                feedback.removeClass('alert-info alert-success alert-warning')
+                        .addClass('alert-danger')
+                        .html('<div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i> Connection Error</div>' +
+                              '<div>' + err + '</div>' + attempted +
+                              '<div class="extra-small text-muted mt-2"><strong>Railway Tip:</strong> In Railway dashboard, ensure your ML service is running and verify whether its private domain is <code>ml-chege-photos.railway.internal:8000</code> or generate a public domain and enter it here.</div>');
+                showToast('Failed to reach ML service', 'danger');
+            });
+        });
+
+        // Reset to auto button
+        $('#btnClearMlUrl').on('click', function() {
+            $('#inputMlUrl').val('');
+            $('#formAdminMl').trigger('submit');
         });
 
         // Copy API key to clipboard

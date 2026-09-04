@@ -618,13 +618,12 @@ class Settings extends BaseController
         // Clear ML face data for this user
         if (! empty($ids)) {
             try {
-                $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
-                $mlUrl = env('ML_URL') ?: $mlDefault;
+                $mlUrl = $this->getMlUrl();
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
                 $client->post($mlUrl . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => [
                         'Content-Type' => 'application/json',
-                        'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        'X-API-KEY'    => $this->getMlApiKey()
                     ],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);
@@ -705,13 +704,12 @@ class Settings extends BaseController
         // Clear ML face data for this user
         if (! empty($ids)) {
             try {
-                $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
-                $mlUrl = env('ML_URL') ?: $mlDefault;
+                $mlUrl = $this->getMlUrl();
                 $client = service('curlrequest', ['connect_timeout' => 10, 'timeout' => 60]);
                 $client->post($mlUrl . '/api/v1/faces/delete-by-photo-ids', [
                     'headers' => [
                         'Content-Type' => 'application/json',
-                        'X-API-KEY'    => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                        'X-API-KEY'    => $this->getMlApiKey()
                     ],
                     'body'    => json_encode(['photo_ids' => $ids]),
                 ]);

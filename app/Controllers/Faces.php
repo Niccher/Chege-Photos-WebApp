@@ -17,10 +17,10 @@ class Faces extends BaseController
             'connect_timeout' => 30,
             'timeout'        => 120,
             'headers'        => [
-                'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                'X-API-KEY' => $this->getMlApiKey()
             ]
         ]);
-        $baseUrl = env('ML_URL') ?: (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID') ? 'http://ml-chege-photos.railway.internal:8000' : self::ML_BASE);
+        $baseUrl = $this->getMlUrl();
         $url = $baseUrl . $path;
 
         try {

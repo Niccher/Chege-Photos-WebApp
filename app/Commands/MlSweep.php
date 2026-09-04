@@ -17,8 +17,8 @@ class MlSweep extends BaseCommand
         $startTime  = microtime(true);
         $db         = \Config\Database::connect();
         $photoModel = new \App\Models\PhotoModel();
-        $mlDefault  = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
-        $mlUrl      = env('ML_URL', $mlDefault);
+        helper('ml');
+        $mlUrl      = get_ml_url();
 
         $photos = $photoModel->select('id, scanned_face, scanned_tag, scanned_clip')
             ->groupStart()
@@ -37,10 +37,10 @@ class MlSweep extends BaseCommand
 
         try {
             $client = service('curlrequest', [
-                'connect_timeout' => 2,
-                'timeout'         => 5,
+                'connect_timeout' => 4,
+                'timeout'         => 8,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => get_ml_api_key(),
                 ]
             ]);
 

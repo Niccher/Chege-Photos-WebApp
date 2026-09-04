@@ -1018,8 +1018,11 @@
                             .text('ML Engine Offline')
                             .removeClass('text-primary text-muted')
                             .addClass('text-danger fw-bold');
+                        var offlineMsg = res.error_message 
+                            ? ('Unreachable: ' + res.error_message) 
+                            : ('ML service unreachable at ' + (res.ml_url || 'port 8000'));
                         $('#mlEngineStatusSubtext')
-                            .text('ML service unreachable on port 9051/8000')
+                            .html(offlineMsg + ' &bull; <a href="' + BASE_URL + 'admin/ml" class="text-danger fw-bold text-decoration-underline">Configure in Admin</a>')
                             .addClass('text-danger')
                             .removeClass('text-muted');
                         $('#btnRunMlSweep').prop('disabled', true).addClass('btn-secondary').removeClass('btn-primary');
@@ -1030,7 +1033,8 @@
                     }
 
                     $('#btnRunMlSweep').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary');
-                    $('#mlEngineStatusSubtext').text('ML Engine online. Ready to sweep.').removeClass('text-danger').addClass('text-muted');
+                    var onlineMsg = 'ML Engine online' + (res.latency_ms ? ' (' + res.latency_ms + 'ms)' : '') + '. Ready to sweep.';
+                    $('#mlEngineStatusSubtext').text(onlineMsg).removeClass('text-danger').addClass('text-muted');
 
                     var pendingTasks = (total - faces) + (total - tags) + (total - clips);
                     var isSweepActive = sessionStorage.getItem('ml_sweep_active') === '1';

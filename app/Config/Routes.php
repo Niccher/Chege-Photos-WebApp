@@ -189,6 +189,7 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->post('ml/simulate', 'Admin::simulateClustering');
     $routes->get('ml/models-inventory', 'Admin::modelsInventory');
     $routes->post('ml/models-download', 'Admin::downloadModel');
+    $routes->post('ml/test-connection', 'Admin::testMlConnection');
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');

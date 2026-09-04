@@ -16,15 +16,15 @@ class MlCluster extends BaseCommand
     {
         $startTime = microtime(true);
         $db        = \Config\Database::connect();
-        $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
-        $mlUrl     = env('ML_URL', $mlDefault);
+        helper('ml');
+        $mlUrl     = get_ml_url();
 
         try {
             $client = service('curlrequest', [
                 'connect_timeout' => 5,
                 'timeout'         => 180,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => get_ml_api_key(),
                 ]
             ]);
 

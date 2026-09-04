@@ -69,15 +69,14 @@ class ApiController extends BaseController
                 // Query FastAPI ML service for CLIP semantic search
                 try {
                     $client = service('curlrequest', [
-                        'connect_timeout' => 2,
-                        'timeout'         => 6,
+                        'connect_timeout' => 4,
+                        'timeout'         => 8,
                         'headers'         => [
-                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                            'X-API-KEY' => $this->getMlApiKey()
                         ]
                     ]);
 
-                    $mlDefault = (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'http://ml-chege-photos.railway.internal:8000' : 'http://ml-chege-photos:8000';
-                    $url = (env('ML_URL') ?: $mlDefault) . '/api/v1/search/semantic?' . http_build_query([
+                    $url = $this->getMlUrl() . '/api/v1/search/semantic?' . http_build_query([
                         'query'   => $q,
                         'limit'   => 100,
                         'user_id' => $userId

@@ -185,4 +185,16 @@ abstract class BaseController extends Controller
 
         return $email;
     }
+
+    protected function getMlUrl(): string
+    {
+        helper('ml');
+        return get_ml_url();
+    }
+
+    protected function getMlApiKey(): string
+    {
+        helper('ml');
+        return get_ml_api_key();
+    }
 }

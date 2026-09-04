@@ -10,20 +10,9 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class Admin extends BaseController
 {
-    private const DEFAULT_ML_URL = 'http://ml-chege-photos:8000';
-
-    private function getMlUrl(): string
+    protected function getMlUrl(): string
     {
-        if ($url = env('ML_URL') ?: (setting('ML.url') ?: getenv('ML_URL'))) {
-            return rtrim($url, '/');
-        }
-
-        // Auto-detect Railway internal networking environment
-        if (getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) {
-            return 'http://ml-chege-photos.railway.internal:8000';
-        }
-
-        return self::DEFAULT_ML_URL;
+        return get_ml_url();
     }
 
     private function getQdrantUrl(): string
@@ -266,7 +255,10 @@ class Admin extends BaseController
                 'clipModelName'     => setting('ML.clipModelName') ?? 'openai/clip-vit-base-patch32',
                 'objectDetThresh'   => setting('ML.objectDetThresh') ?? 0.5,
             ],
-            'apiKey'         => setting('ML.apiKey') ?? env('ML_API_KEY') ?? 'my_super_secret_shared_token_key_123!',
+            'apiKey'         => $this->getMlApiKey(),
+            'mlUrlSetting'   => setting('ML.url') ?: '',
+            'activeMlUrl'    => $this->getMlUrl(),
+            'mlUrlSource'    => setting('ML.url') ? 'Custom Setting' : (env('ML_URL') ? 'Environment Variable (ML_URL)' : ((getenv('RAILWAY_ENVIRONMENT') || getenv('RAILWAY_PROJECT_ID')) ? 'Auto-detected (Railway Private)' : 'Default (Local)')),
             'storageUsed'    => $this->formatBytes($totalBytes),
             'storagePercent' => min(100, self::calculateStorageMetrics($totalBytes)['storagePercent']),
         ];
@@ -285,14 +277,30 @@ class Admin extends BaseController
         $unassigned     = $faceModel->where('person_id', null)->countAllResults();
 
         $mlOnline = false;
-        try {
-            $client = service('curlrequest', ['connect_timeout' => 1, 'timeout' => 2]);
-            $healthRes = $client->get($this->getMlUrl() . '/api/v1/health');
-            if ($healthRes->getStatusCode() === 200) {
-                $mlOnline = true;
+        $activeUrl = $this->getMlUrl();
+        $errorMessage = null;
+        $latencyMs = null;
+
+        // Probe active ML URL
+        $probe = probe_ml_url($activeUrl);
+        if ($probe['online']) {
+            $mlOnline  = true;
+            $activeUrl = $probe['url'];
+            $latencyMs = $probe['latency_ms'];
+        } else {
+            // If primary failed and no locked custom setting, probe candidates
+            if (! setting('ML.url')) {
+                $candidateProbe = probe_ml_url();
+                if ($candidateProbe['online']) {
+                    $mlOnline  = true;
+                    $activeUrl = $candidateProbe['url'];
+                    $latencyMs = $candidateProbe['latency_ms'];
+                } else {
+                    $errorMessage = $candidateProbe['error'];
+                }
+            } else {
+                $errorMessage = $probe['error'];
             }
-        } catch (\Throwable $t) {
-            $mlOnline = false;
         }
 
         $db = \Config\Database::connect();
@@ -304,10 +312,13 @@ class Admin extends BaseController
             ->getRowArray();
 
         return $this->response->setJSON([
-            'status' => 'success',
-            'ml_online' => $mlOnline,
-            'last_sweep' => $lastSweep,
-            'stats' => [
+            'status'        => 'success',
+            'ml_online'     => $mlOnline,
+            'ml_url'        => $activeUrl,
+            'latency_ms'    => $latencyMs,
+            'error_message' => $errorMessage,
+            'last_sweep'    => $lastSweep,
+            'stats'         => [
                 'total_encodings' => $totalEncodings,
                 'total_persons'   => $totalPersons,
                 'unassigned'      => $unassigned,
@@ -368,6 +379,21 @@ class Admin extends BaseController
             }
         }
 
+        $mlUrl = trim($this->request->getPost('mlUrl') ?? '');
+        if ($mlUrl !== '') {
+            $mlUrl = rtrim($mlUrl, '/');
+            if (! filter_var($mlUrl, FILTER_VALIDATE_URL)) {
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => 'The provided ML Service URL is invalid. It must start with http:// or https://'
+                ])->setStatusCode(400);
+            }
+            setting()->set('ML.url', $mlUrl);
+        } else {
+            setting()->forget('ML.url');
+        }
+        cache()->delete('active_ml_url');
+
         setting()->set('ML.faceModelPack', $faceModelPack);
         setting()->set('ML.faceDetThresh', (float) $faceDetThresh);
         setting()->set('ML.includeSensitive', $includeSensitive);
@@ -378,6 +404,7 @@ class Admin extends BaseController
 
         helper('audit');
         log_security_action('ML_SETTINGS_CHANGE', 'SUCCESS', [
+            'mlUrl'             => $mlUrl ?: 'auto',
             'faceModelPack'     => $faceModelPack,
             'faceDetThresh'     => $faceDetThresh,
             'includeSensitive'  => $includeSensitive,
@@ -393,7 +420,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 60,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -430,7 +457,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 60,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -464,7 +491,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 60,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -498,7 +525,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 30,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -531,7 +558,7 @@ class Admin extends BaseController
                 'connect_timeout' => 10,
                 'timeout'         => 300,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -1027,7 +1054,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 30,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -1060,7 +1087,7 @@ class Admin extends BaseController
                 'connect_timeout' => 5,
                 'timeout'         => 30,
                 'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                    'X-API-KEY' => $this->getMlApiKey()
                 ]
             ]);
 
@@ -1130,7 +1157,7 @@ class Admin extends BaseController
             'connect_timeout' => 2,
             'timeout'         => 5,
             'headers'         => [
-                'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                'X-API-KEY' => $this->getMlApiKey()
             ]
         ]);
 
@@ -2044,42 +2071,82 @@ class Admin extends BaseController
 
     private function getMlHealth(): array
     {
-        try {
-            $client = service('curlrequest', [
-                'connect_timeout' => 2,
-                'timeout'         => 3,
-                'headers'         => [
-                    'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
-                ]
-            ]);
+        $probe = probe_ml_url($this->getMlUrl());
+        if ($probe['online']) {
+            $body = $probe['data'] ?? [];
+            return [
+                'online'     => true,
+                'url'        => $probe['url'],
+                'latency_ms' => $probe['latency_ms'],
+                'status'     => $body['status'] ?? 'degraded',
+                'db'         => $body['db_connected'] ?? false,
+                'qdrant'     => $body['qdrant_connected'] ?? false,
+                'models'     => $body['models_loaded'] ?? false,
+                'clip'       => $body['clip_loaded'] ?? false,
+                'yolo'       => $body['yolo_loaded'] ?? false,
+                'error'      => null,
+            ];
+        }
 
-            $response = $client->get($this->getMlUrl() . '/api/v1/health');
-
-            if ($response->getStatusCode() === 200) {
-                $body = json_decode($response->getBody(), true);
+        // Try candidate discovery if no locked custom setting
+        if (! setting('ML.url')) {
+            $candidateProbe = probe_ml_url();
+            if ($candidateProbe['online']) {
+                $body = $candidateProbe['data'] ?? [];
                 return [
-                    'online'  => true,
-                    'status'  => $body['status'] ?? 'degraded',
-                    'db'      => $body['db_connected'] ?? false,
-                    'qdrant'  => $body['qdrant_connected'] ?? false,
-                    'models'  => $body['models_loaded'] ?? false,
-                    'clip'    => $body['clip_loaded'] ?? false,
-                    'yolo'    => $body['yolo_loaded'] ?? false,
+                    'online'     => true,
+                    'url'        => $candidateProbe['url'],
+                    'latency_ms' => $candidateProbe['latency_ms'],
+                    'status'     => $body['status'] ?? 'degraded',
+                    'db'         => $body['db_connected'] ?? false,
+                    'qdrant'     => $body['qdrant_connected'] ?? false,
+                    'models'     => $body['models_loaded'] ?? false,
+                    'clip'       => $body['clip_loaded'] ?? false,
+                    'yolo'       => $body['yolo_loaded'] ?? false,
+                    'error'      => null,
                 ];
             }
-        } catch (\Exception $e) {
-            // Degrade gracefully
+            $lastErr = $candidateProbe['error'];
+        } else {
+            $lastErr = $probe['error'];
         }
 
         return [
-            'online'  => false,
-            'status'  => 'offline',
-            'db'      => false,
-            'qdrant'  => false,
-            'models'  => false,
-            'clip'    => false,
-            'yolo'    => false,
+            'online'     => false,
+            'url'        => $this->getMlUrl(),
+            'latency_ms' => null,
+            'status'     => 'offline',
+            'db'         => false,
+            'qdrant'     => false,
+            'models'     => false,
+            'clip'       => false,
+            'yolo'       => false,
+            'error'      => $lastErr,
         ];
+    }
+
+    public function testMlConnection()
+    {
+        $testUrl = trim($this->request->getPost('url') ?? '');
+        $probe = probe_ml_url($testUrl ?: null);
+
+        if ($probe['online']) {
+            return $this->response->setJSON([
+                'status'     => 'success',
+                'message'    => "Successfully connected to ML microservice at {$probe['url']} in {$probe['latency_ms']}ms.",
+                'details'    => $probe['data'],
+                'url'        => $probe['url'],
+                'latency_ms' => $probe['latency_ms'],
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'status'     => 'error',
+            'message'    => "Failed to connect to ML microservice at " . ($testUrl ?: $this->getMlUrl()) . ": " . ($probe['error'] ?? 'Connection refused'),
+            'url'        => $probe['url'],
+            'attempted'  => $probe['attempted'] ?? [],
+            'error'      => $probe['error'],
+        ])->setStatusCode(502);
     }
 
     public function health()
@@ -2161,32 +2228,18 @@ class Admin extends BaseController
                 }
 
             case 'ml':
-                try {
-                    $client = service('curlrequest', [
-                        'connect_timeout' => 2,
-                        'timeout'         => 3,
-                        'headers'         => [
-                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
-                        ]
-                    ]);
-                    $start = microtime(true);
-                    $mlUrl = $this->getMlUrl();
-                    $response = $client->get($mlUrl . '/api/v1/health');
-                    $elapsed = round((microtime(true) - $start) * 1000, 2);
-                    if ($response->getStatusCode() === 200) {
-                        $body = json_decode($response->getBody(), true);
-                        return $this->response->setJSON([
-                            'status'  => 'success',
-                            'message' => "FastAPI ML service is online & responding in {$elapsed}ms (status: " . ($body['status'] ?? 'unknown') . ")."
-                        ]);
-                    }
-                    throw new \Exception("Status code: " . $response->getStatusCode());
-                } catch (\Exception $e) {
+                $probe = probe_ml_url();
+                if ($probe['online']) {
+                    $body = $probe['data'] ?? [];
                     return $this->response->setJSON([
-                        'status'  => 'error',
-                        'message' => 'ML service check failed: ' . $e->getMessage()
+                        'status'  => 'success',
+                        'message' => "FastAPI ML service is online at {$probe['url']} & responding in {$probe['latency_ms']}ms (status: " . ($body['status'] ?? 'healthy') . ")."
                     ]);
                 }
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => "ML service check failed at {$probe['url']}: " . ($probe['error'] ?? 'Connection refused')
+                ]);
 
             case 'qdrant':
                 $client = service('curlrequest', [
@@ -2234,7 +2287,7 @@ class Admin extends BaseController
                         'connect_timeout' => 2,
                         'timeout'         => 3,
                         'headers'         => [
-                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                            'X-API-KEY' => $this->getMlApiKey()
                         ]
                     ]);
                     $response = $client->get($this->getMlUrl() . '/api/v1/health');
@@ -2266,7 +2319,7 @@ class Admin extends BaseController
                         'connect_timeout' => 2,
                         'timeout'         => 3,
                         'headers'         => [
-                            'X-API-KEY' => env('ML_API_KEY') ?: 'my_super_secret_shared_token_key_123!'
+                            'X-API-KEY' => $this->getMlApiKey()
                         ]
                     ]);
                     $response = $client->get($this->getMlUrl() . '/api/v1/health');
