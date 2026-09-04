@@ -2444,4 +2444,180 @@ class Admin extends BaseController
         if ($diff < 86400) return round($diff / 3600) . 'h ago';
         return date('M j, H:i', $ts);
     }
+
+    public function telemetry()
+    {
+        $data = [
+            'counts' => $this->getSidebarCounts(),
+            'title'  => 'Container Telemetry & Health'
+        ];
+        return view('admin/telemetry', $data);
+    }
+
+    public function telemetryStats()
+    {
+        // 1. WebApp Container
+        $cgroupMemCurrent = null;
+        $cgroupMemMax = null;
+        if (file_exists('/sys/fs/cgroup/memory.current')) {
+            $cgroupMemCurrent = (int) trim(@file_get_contents('/sys/fs/cgroup/memory.current'));
+        }
+        if (file_exists('/sys/fs/cgroup/memory.max')) {
+            $rawMax = trim(@file_get_contents('/sys/fs/cgroup/memory.max'));
+            if ($rawMax !== 'max') {
+                $cgroupMemMax = (int) $rawMax;
+            }
+        }
+        $phpMemBytes = memory_get_usage(true);
+        $phpPeakBytes = memory_get_peak_usage(true);
+        $diskFree = @disk_free_space('.') ?: 0;
+        $diskTotal = @disk_total_space('.') ?: 1;
+        $loadAvg = function_exists('sys_getloadavg') ? @sys_getloadavg() : [0, 0, 0];
+
+        $webLimitMb = $cgroupMemMax ? round($cgroupMemMax / 1024 / 1024, 1) : 512.0;
+        $webUsedMb = $cgroupMemCurrent ? round($cgroupMemCurrent / 1024 / 1024, 1) : round($phpMemBytes / 1024 / 1024, 1);
+        $webPct = $webLimitMb > 0 ? round(($webUsedMb / $webLimitMb) * 100, 1) : 0;
+
+        $webStats = [
+            'name'         => 'WebApp (PHP-FPM / Nginx)',
+            'status'       => 'online',
+            'used_mb'      => $webUsedMb,
+            'limit_mb'     => $webLimitMb,
+            'percent'      => min($webPct, 100),
+            'php_rss_mb'   => round($phpMemBytes / 1024 / 1024, 1),
+            'php_peak_mb'  => round($phpPeakBytes / 1024 / 1024, 1),
+            'disk_used_gb' => round(($diskTotal - $diskFree) / 1024 / 1024 / 1024, 2),
+            'disk_total_gb'=> round($diskTotal / 1024 / 1024 / 1024, 2),
+            'load_avg_1m'  => round($loadAvg[0] ?? 0, 2)
+        ];
+
+        // 2. ML Service Telemetry
+        $mlStats = [
+            'name'     => 'ML Service (FastAPI / PyTorch)',
+            'status'   => 'offline',
+            'used_mb'  => 0,
+            'limit_mb' => 512,
+            'percent'  => 0,
+            'cpu_pct'  => 0,
+            'uptime_s' => 0,
+            'models'   => []
+        ];
+        try {
+            $client = service('curlrequest', [
+                'connect_timeout' => 3,
+                'timeout'         => 4,
+                'headers'         => ['X-API-KEY' => $this->getMlApiKey()]
+            ]);
+            $res = $client->get($this->getMlUrl() . '/api/v1/system/metrics');
+            if ($res->getStatusCode() === 200) {
+                $body = json_decode($res->getBody(), true);
+                if (!empty($body['memory'])) {
+                    $mlStats['status']   = 'online';
+                    $mlStats['used_mb']  = (float) ($body['memory']['rss_mb'] ?? 0);
+                    $mlStats['limit_mb'] = (float) ($body['memory']['system_total_mb'] ?: 512);
+                    $mlStats['percent']  = $mlStats['limit_mb'] > 0 ? round(($mlStats['used_mb'] / $mlStats['limit_mb']) * 100, 1) : 0;
+                    $mlStats['cpu_pct']  = (float) ($body['cpu_percent'] ?? 0);
+                    $mlStats['uptime_s'] = (float) ($body['uptime_seconds'] ?? 0);
+                    $mlStats['models']   = $body['models'] ?? [];
+                }
+            }
+        } catch (\Throwable $t) {
+            $mlHealth = $this->getMlHealth();
+            if ($mlHealth['connected']) {
+                $mlStats['status'] = 'degraded';
+                $mlStats['details'] = 'Metrics endpoint unreachable, but health probe is OK';
+            }
+        }
+
+        // 3. Qdrant Telemetry
+        $qdrantStats = [
+            'name'        => 'Qdrant (Vector Database)',
+            'status'      => 'offline',
+            'collections' => 0,
+            'vectors'     => 0,
+            'used_mb'     => 0,
+            'limit_mb'    => 512,
+            'percent'     => 0
+        ];
+        try {
+            $client = service('curlrequest', ['connect_timeout' => 2, 'timeout' => 3]);
+            $qRes = $client->get($this->getQdrantUrl() . '/telemetry?anonymize=false');
+            if ($qRes->getStatusCode() === 200) {
+                $qBody = json_decode($qRes->getBody(), true);
+                $qdrantStats['status'] = 'online';
+                $collections = $qBody['result']['collections'] ?? [];
+                $qdrantStats['collections'] = count($collections);
+                $vectors = 0;
+                foreach ($collections as $col) {
+                    $vectors += ($col['vectors'] ?? 0);
+                }
+                $qdrantStats['vectors'] = $vectors;
+                $mem = $qBody['result']['memory'] ?? [];
+                if (!empty($mem['resident_memory_bytes'])) {
+                    $qdrantStats['used_mb'] = round($mem['resident_memory_bytes'] / 1024 / 1024, 1);
+                    $qdrantStats['percent'] = round(($qdrantStats['used_mb'] / $qdrantStats['limit_mb']) * 100, 1);
+                }
+            }
+        } catch (\Throwable $t) {
+            try {
+                $client = service('curlrequest', ['connect_timeout' => 2, 'timeout' => 2]);
+                $cRes = $client->get($this->getQdrantUrl() . '/collections');
+                if ($cRes->getStatusCode() === 200) {
+                    $qdrantStats['status'] = 'online';
+                }
+            } catch (\Throwable $t2) {}
+        }
+
+        // 4. MySQL Database Telemetry
+        $dbStats = [
+            'name'       => 'MySQL Database',
+            'status'     => 'online',
+            'used_mb'    => 0,
+            'limit_mb'   => 512,
+            'percent'    => 0,
+            'threads'    => 0,
+            'db_size_mb' => 0
+        ];
+        try {
+            $db = \Config\Database::connect();
+            $poolRows = $db->query("SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_bytes_data'")->getResultArray();
+            $poolBytes = (int) ($poolRows[0]['Value'] ?? 0);
+            $poolTotalRows = $db->query("SHOW GLOBAL VARIABLES LIKE 'innodb_buffer_pool_size'")->getResultArray();
+            $poolTotalBytes = (int) ($poolTotalRows[0]['Value'] ?? 134217728);
+            
+            $dbStats['used_mb']  = round($poolBytes / 1024 / 1024, 1);
+            $dbStats['limit_mb'] = round($poolTotalBytes / 1024 / 1024, 1);
+            $dbStats['percent']  = $dbStats['limit_mb'] > 0 ? round(($dbStats['used_mb'] / $dbStats['limit_mb']) * 100, 1) : 0;
+
+            $threadRows = $db->query("SHOW GLOBAL STATUS LIKE 'Threads_connected'")->getResultArray();
+            $dbStats['threads'] = (int) ($threadRows[0]['Value'] ?? 1);
+
+            $sizeRow = $db->query("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS db_mb FROM information_schema.TABLES WHERE table_schema = DATABASE()")->getRowArray();
+            $dbStats['db_size_mb'] = (float) ($sizeRow['db_mb'] ?? 0);
+        } catch (\Throwable $t) {
+            $dbStats['status'] = 'offline';
+        }
+
+        $oomWarning = false;
+        $oomServices = [];
+        foreach ([$webStats, $mlStats, $qdrantStats, $dbStats] as $s) {
+            if ($s['percent'] >= 85) {
+                $oomWarning = true;
+                $oomServices[] = $s['name'] . ' (' . $s['percent'] . '%)';
+            }
+        }
+
+        return $this->response->setJSON([
+            'status'       => 'success',
+            'timestamp'    => date('Y-m-d H:i:s'),
+            'oom_warning'  => $oomWarning,
+            'oom_services' => $oomServices,
+            'services'     => [
+                'webapp' => $webStats,
+                'ml'     => $mlStats,
+                'qdrant' => $qdrantStats,
+                'mysql'  => $dbStats
+            ]
+        ]);
+    }
 }

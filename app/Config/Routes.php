@@ -210,6 +210,10 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     // Health Diagnostics Dashboard
     $routes->get('health', 'Admin::health');
     $routes->post('health/test', 'Admin::testService');
+
+    // Container Telemetry Dashboard
+    $routes->get('telemetry', 'Admin::telemetry');
+    $routes->get('telemetry/stats', 'Admin::telemetryStats');
 });
 
 // Public Sharing Routes

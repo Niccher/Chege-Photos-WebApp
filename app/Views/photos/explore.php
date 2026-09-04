@@ -32,6 +32,27 @@
     </div>
 </div>
 
+<?php if (empty($locations)): ?>
+    <div class="alert alert-dark border-secondary p-4 rounded-3 text-center mb-4 shadow-sm" style="background: rgba(255,255,255,0.03);">
+        <i class="bi bi-geo-alt-slash text-warning" style="font-size: 2.5rem;"></i>
+        <h5 class="fw-bold mt-2">No Geotagged Photos Found</h5>
+        <p class="text-muted small mb-3 mx-auto" style="max-width: 600px;">
+            None of your <?= esc($totalPhotos ?? '0') ?> photos contain GPS latitude and longitude metadata.
+            Most smartphone cameras have location tagging disabled by default, and photos downloaded from WhatsApp, Telegram, or messaging apps strip EXIF GPS coordinates for privacy.
+        </p>
+        <div class="d-inline-flex flex-wrap gap-2 justify-content-center">
+            <span class="badge bg-secondary bg-opacity-25 text-light border border-secondary px-3 py-2"><i class="bi bi-camera me-1"></i>To enable GPS: Camera App &rarr; Settings &rarr; Turn ON "Save Location / GPS Tag"</span>
+            <span class="badge bg-secondary bg-opacity-25 text-light border border-secondary px-3 py-2"><i class="bi bi-shield-check me-1"></i>Android: Grant "Location" permission to Camera</span>
+        </div>
+    </div>
+<?php else: ?>
+    <div class="mb-3">
+        <span class="badge bg-primary bg-opacity-25 text-primary border border-primary px-3 py-2">
+            <i class="bi bi-geo-alt-fill me-1"></i> Showing <?= count($locations) ?> geotagged photos out of <?= esc($totalPhotos ?? count($locations)) ?> total
+        </span>
+    </div>
+<?php endif; ?>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

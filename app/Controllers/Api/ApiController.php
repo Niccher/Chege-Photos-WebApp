@@ -105,7 +105,50 @@ class ApiController extends BaseController
                 $query->groupEnd();
             }
 
-            $photos = $query->orderBy('taken_at', 'DESC')->findAll();
+            $sort = $this->request->getGet('sort') ?? 'date_desc';
+            switch ($sort) {
+                case 'date_asc':
+                    $query->orderBy('taken_at', 'ASC');
+                    break;
+                case 'upload_desc':
+                    $query->orderBy('created_at', 'DESC');
+                    break;
+                case 'upload_asc':
+                    $query->orderBy('created_at', 'ASC');
+                    break;
+                case 'size_desc':
+                    $query->orderBy('size', 'DESC');
+                    break;
+                case 'size_asc':
+                    $query->orderBy('size', 'ASC');
+                    break;
+                case 'resolution_desc':
+                    $query->orderBy('(width * height)', 'DESC');
+                    break;
+                case 'resolution_asc':
+                    $query->orderBy('(width * height)', 'ASC');
+                    break;
+                case 'name_asc':
+                    $query->orderBy('filename', 'ASC');
+                    break;
+                case 'name_desc':
+                    $query->orderBy('filename', 'DESC');
+                    break;
+                case 'geotagged':
+                    $query->orderBy('(latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 AND longitude != 0)', 'DESC')
+                          ->orderBy('taken_at', 'DESC');
+                    break;
+                case 'favorites':
+                    $query->orderBy('is_favorite', 'DESC')
+                          ->orderBy('taken_at', 'DESC');
+                    break;
+                case 'date_desc':
+                default:
+                    $query->orderBy('taken_at', 'DESC');
+                    break;
+            }
+
+            $photos = $query->findAll();
 
             $photos = array_map([$this, 'formatPhotoForApi'], $photos);
 

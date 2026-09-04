@@ -306,6 +306,11 @@
                         <span><i class="bi bi-heart-pulse"></i> Diagnostics</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--ml <?= (uri_string() === 'admin/telemetry') ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('admin/telemetry') ?>">
+                        <span><i class="bi bi-speedometer2"></i> Telemetry & RAM</span>
+                    </a>
+                </li>
                 
                 <li class="sidebar-section-title">Navigation</li>
                 <li class="nav-item">

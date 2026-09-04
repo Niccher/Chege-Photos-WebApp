@@ -103,8 +103,9 @@
                     </table>
                 </div>
             </div>
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+            <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnCopyAdminDeviceSpecs"><i class="bi bi-clipboard me-1"></i>Copy Telemetry</button>
+                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -121,31 +122,43 @@
         $('#adminSpecsDeviceTitle').text((dev.device_name || 'Device') + ' (' + (dev.username || 'Unknown') + ')');
 
         var rows = [
-            { label: 'Device Model', val: dev.device_name || 'N/A' },
-            { label: 'Owner Account', val: '<i class="bi bi-person-circle text-primary me-1"></i><strong>' + (dev.username || 'Unknown') + '</strong> (ID: ' + (dev.user_id || 'N/A') + ')' },
-            { label: 'OS & API Level', val: 'Android ' + (dev.os_version || 'N/A') },
-            { label: 'Display & Density', val: dev.screen_metrics || 'N/A' },
-            { label: 'Kernel Version', val: dev.kernel_version || 'N/A' },
-            { label: 'System Locale', val: dev.locale || 'N/A' },
-            { label: 'System Timezone', val: dev.timezone || 'N/A' },
-            { label: 'Device UUID', val: dev.device_uuid ? '<code>' + dev.device_uuid + '</code>' : 'N/A' },
-            { label: 'Device ID', val: dev.device_id ? '<code>' + dev.device_id + '</code>' : 'N/A' },
-            { label: 'Build Fingerprint', val: dev.device_fingerprint || 'N/A' },
-            { label: 'Photos Uploaded', val: '<strong class="text-success">' + (dev.image_count || 0) + '</strong> assets' },
-            { label: 'First Paired On', val: dev.created_at || 'N/A' },
-            { label: 'Last Active Session', val: dev.used_at || 'Active' }
+            { icon: 'bi-phone text-primary', label: 'Device Model', val: dev.device_name || 'N/A' },
+            { icon: 'bi-person-circle text-info', label: 'Owner Account', val: '<i class="bi bi-person-circle text-primary me-1"></i><strong>' + (dev.username || 'Unknown') + '</strong> (ID: ' + (dev.user_id || 'N/A') + ')' },
+            { icon: 'bi-android2 text-success', label: 'OS & API Level', val: 'Android ' + (dev.os_version || 'N/A') },
+            { icon: 'bi-aspect-ratio text-info', label: 'Display & Density', val: dev.screen_metrics || 'N/A' },
+            { icon: 'bi-cpu text-warning', label: 'Kernel Version', val: dev.kernel_version || 'N/A' },
+            { icon: 'bi-translate text-secondary', label: 'System Locale', val: dev.locale || 'N/A' },
+            { icon: 'bi-clock-history text-secondary', label: 'System Timezone', val: dev.timezone || 'N/A' },
+            { icon: 'bi-fingerprint text-danger', label: 'Device UUID', val: dev.device_uuid ? '<code>' + dev.device_uuid + '</code>' : 'N/A' },
+            { icon: 'bi-fingerprint text-danger', label: 'Device ID', val: dev.device_id ? '<code>' + dev.device_id + '</code>' : 'N/A' },
+            { icon: 'bi-shield-check text-warning', label: 'Build Fingerprint', val: dev.device_fingerprint || 'N/A' },
+            { icon: 'bi-images text-success', label: 'Photos Uploaded', val: '<strong class="text-success">' + (dev.image_count || 0) + '</strong> assets' },
+            { icon: 'bi-calendar-plus text-primary', label: 'First Paired On', val: dev.created_at || 'N/A' },
+            { icon: 'bi-activity text-success', label: 'Last Active Session', val: dev.used_at || 'Active' }
         ];
 
         var tbodyHtml = '';
         rows.forEach(function(item) {
             tbodyHtml += '<tr style="border-color: var(--border-color) !important;">' +
-                '<th class="text-muted fw-semibold" style="width: 35%;">' + item.label + '</th>' +
+                '<th class="text-muted fw-semibold" style="width: 35%;"><i class="bi ' + item.icon + ' me-2"></i>' + item.label + '</th>' +
                 '<td class="font-monospace text-break">' + item.val + '</td>' +
                 '</tr>';
         });
         $('#adminDeviceSpecsTableBody').html(tbodyHtml);
         var modal = new bootstrap.Modal(document.getElementById('adminDeviceSpecsModal'));
         modal.show();
+    });
+
+    $(document).on('click', '#btnCopyAdminDeviceSpecs', function () {
+        var text = '';
+        $('#adminDeviceSpecsTableBody tr').each(function () {
+            var label = $(this).find('th').text().trim();
+            var val = $(this).find('td').text().trim();
+            text += label + ': ' + val + '\n';
+        });
+        navigator.clipboard.writeText(text).then(function () {
+            showToast('Device telemetry copied to clipboard!', 'success');
+        });
     });
 </script>
 <?= $this->endSection() ?>

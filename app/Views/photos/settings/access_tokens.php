@@ -127,8 +127,9 @@
                         </table>
                     </div>
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnCopyTokenDeviceSpecs"><i class="bi bi-clipboard me-1"></i>Copy Telemetry</button>
+                    <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -228,28 +229,40 @@
         $('#tokenSpecsDeviceName').text(d.name || 'Device Specifications');
         
         var rows = [
-            { label: 'Device Model / Name', val: d.name || 'N/A' },
-            { label: 'Operating System', val: (d.os_version ? 'Android ' + d.os_version : 'Web App') },
-            { label: 'Screen Metrics', val: d.screen_metrics || 'N/A (Browser Client)' },
-            { label: 'Kernel / Architecture', val: d.kernel_version || 'N/A' },
-            { label: 'System Locale', val: d.locale || 'N/A' },
-            { label: 'Timezone', val: d.timezone || 'N/A' },
-            { label: 'Device UUID', val: d.device_uuid ? '<code>' + d.device_uuid + '</code>' : 'N/A' },
-            { label: 'Device ID', val: d.device_id ? '<code>' + d.device_id + '</code>' : 'N/A' },
-            { label: 'Linked On', val: d.created_at ? new Date(d.created_at).toLocaleString() : 'N/A' },
-            { label: 'Last Active', val: d.last_used_at ? new Date(d.last_used_at).toLocaleString() : 'Active' }
+            { icon: 'bi-phone text-primary', label: 'Device Model / Name', val: d.name || 'N/A' },
+            { icon: 'bi-android2 text-success', label: 'Operating System', val: (d.os_version ? 'Android ' + d.os_version : 'Web App') },
+            { icon: 'bi-aspect-ratio text-info', label: 'Screen Metrics', val: d.screen_metrics || 'N/A (Browser Client)' },
+            { icon: 'bi-cpu text-warning', label: 'Kernel / Architecture', val: d.kernel_version || 'N/A' },
+            { icon: 'bi-translate text-secondary', label: 'System Locale', val: d.locale || 'N/A' },
+            { icon: 'bi-clock-history text-secondary', label: 'Timezone', val: d.timezone || 'N/A' },
+            { icon: 'bi-fingerprint text-danger', label: 'Device UUID', val: d.device_uuid ? '<code>' + d.device_uuid + '</code>' : 'N/A' },
+            { icon: 'bi-fingerprint text-danger', label: 'Device ID', val: d.device_id ? '<code>' + d.device_id + '</code>' : 'N/A' },
+            { icon: 'bi-calendar-plus text-primary', label: 'Linked On', val: d.created_at ? new Date(d.created_at).toLocaleString() : 'N/A' },
+            { icon: 'bi-activity text-success', label: 'Last Active', val: d.last_used_at ? new Date(d.last_used_at).toLocaleString() : 'Active' }
         ];
 
         var tbodyHtml = '';
         rows.forEach(function(item) {
             tbodyHtml += '<tr style="border-color: var(--border-color) !important;">' +
-                '<th class="text-muted fw-semibold" style="width: 35%;">' + item.label + '</th>' +
+                '<th class="text-muted fw-semibold" style="width: 35%;"><i class="bi ' + item.icon + ' me-2"></i>' + item.label + '</th>' +
                 '<td class="font-monospace text-break">' + item.val + '</td>' +
                 '</tr>';
         });
         $('#tokenDeviceSpecsTableBody').html(tbodyHtml);
         var modal = new bootstrap.Modal(document.getElementById('tokenDeviceSpecsModal'));
         modal.show();
+    });
+
+    $(document).on('click', '#btnCopyTokenDeviceSpecs', function () {
+        var text = '';
+        $('#tokenDeviceSpecsTableBody tr').each(function () {
+            var label = $(this).find('th').text().trim();
+            var val = $(this).find('td').text().trim();
+            text += label + ': ' + val + '\n';
+        });
+        navigator.clipboard.writeText(text).then(function () {
+            showToast('Device telemetry copied to clipboard!', 'success');
+        });
     });
 
     function revokeToken(id) {

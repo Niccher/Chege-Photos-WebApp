@@ -64,9 +64,15 @@ $(document).ready(function () {
         currentPage++;
         $('#infiniteScrollSentinel .spinner-border').removeClass('d-none');
 
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort') || localStorage.getItem('gallery_sort') || 'date_desc';
         const q = $('#searchInput').val();
+        let queryParams = '?page=' + currentPage;
+        if (q) queryParams += '&q=' + encodeURIComponent(q);
+        if (currentSort) queryParams += '&sort=' + encodeURIComponent(currentSort);
+
         $.ajax({
-            url: window.location.pathname + '?page=' + currentPage + (q ? '&q=' + q : ''),
+            url: window.location.pathname + queryParams,
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             success: function (res) {
                 if (res.photos && res.photos.length > 0) {
@@ -90,19 +96,18 @@ $(document).ready(function () {
     }
 
     function appendPhotos(photos) {
-        const $mainContent = $('main.main-content');
         const baseUrl = $('base').attr('href') || window.location.origin + '/';
+        const isBadgesEnabled = localStorage.getItem('gallery_meta_badges') === 'true';
         
         photos.forEach(photo => {
-            const date = new Date(photo.taken_at);
-            const monthYear = date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            const groupHeader = photo.groupHeader || (new Date(photo.taken_at).toLocaleString('en-US', { month: 'long', year: 'numeric' }));
             
-            if (monthYear !== lastDateGroup) {
-                lastDateGroup = monthYear;
+            if (groupHeader !== lastDateGroup) {
+                lastDateGroup = groupHeader;
                 const headerHtml = `
                     <div class="d-flex align-items-center gap-3 mb-3 mt-5 px-2">
-                        <h5 class="mb-0 fw-bold text-white opacity-75 timeline-header">${monthYear}</h5>
-                        <div class="flex-grow-1 border-bottom border-secondary opacity-25"></div>
+                        <h5 class="mb-0 fw-bold opacity-75 timeline-header" style="color: var(--text-primary);">${groupHeader}</h5>
+                        <div class="flex-grow-1 border-bottom border-secondary opacity-25" style="border-color: var(--border-color) !important;"></div>
                     </div>
                     <div class="photo-grid"></div>`;
                 $('#infiniteScrollSentinel').before(headerHtml);
@@ -114,6 +119,11 @@ $(document).ready(function () {
             const locationStr = (photo.latitude && photo.longitude &&
                                  parseFloat(photo.latitude) !== 0 && parseFloat(photo.longitude) !== 0)
                                  ? photo.latitude + ',' + photo.longitude : '';
+            const mpStr = (photo.width && photo.height) ? (Math.round((photo.width * photo.height) / 100000) / 10) + ' MP' : 'Video';
+            const sizeMb = (photo.size / 1024 / 1024).toFixed(1) + ' MB';
+            const hasGpsIcon = locationStr ? '<i class="bi bi-geo-alt-fill text-info" title="Geotagged"></i>' : '';
+            const badgeClass = isBadgesEnabled ? 'd-flex' : 'd-none';
+
             const photoHtml = `
                 <div class="photo-item" 
                      draggable="true"
@@ -122,7 +132,7 @@ $(document).ready(function () {
                      data-filename="${photo.filename}"
                      data-size="${(photo.size / 1024 / 1024).toFixed(2)} MB"
                      data-dimensions="${photo.width ? photo.width + ' x ' + photo.height : 'Video'}"
-                     data-date="${date.toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
+                     data-date="${new Date(photo.taken_at).toLocaleString('en-US', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}"
                      data-favorite="${isFav}"
                      data-type="${photo.mime_type.startsWith('video/') ? 'video' : 'image'}"
                      data-exif-b64="${exifB64}"
@@ -138,9 +148,64 @@ $(document).ready(function () {
                            <div class="position-absolute bottom-0 end-0 p-1 m-1 bg-dark bg-opacity-75 text-white rounded small" style="pointer-events: none;"><i class="bi bi-play-btn me-1"></i>Video</div>`
                         : `<img src="${baseUrl + photo.thumbnail_path}" alt="${photo.filename}" loading="lazy">`
                     }
+                    <div class="photo-meta-badge position-absolute bottom-0 start-0 end-0 p-1 px-2 ${badgeClass} justify-content-between align-items-center text-white small" style="background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%); font-size: 0.72rem; z-index: 4; pointer-events: none;">
+                        <span class="text-truncate me-1 font-monospace">${mpStr} • ${sizeMb}</span>
+                        ${hasGpsIcon}
+                    </div>
                 </div>`;
             $targetGrid.append(photoHtml);
         });
+    }
+
+    // --- Gallery Sort & Display Toggles ---
+    $(document).on('click', '.sort-opt', function (e) {
+        e.preventDefault();
+        const selectedSort = $(this).data('sort');
+        localStorage.setItem('gallery_sort', selectedSort);
+        const url = new URL(window.location.href);
+        url.searchParams.set('sort', selectedSort);
+        url.searchParams.delete('page');
+        window.location.href = url.href;
+    });
+
+    function applyMetaBadges(enabled) {
+        if (enabled) {
+            $('.photo-meta-badge').removeClass('d-none').addClass('d-flex');
+            $('#btnToggleMetaBadges').addClass('btn-primary active text-white').removeClass('btn-outline-secondary');
+        } else {
+            $('.photo-meta-badge').addClass('d-none').removeClass('d-flex');
+            $('#btnToggleMetaBadges').removeClass('btn-primary active text-white').addClass('btn-outline-secondary');
+        }
+        localStorage.setItem('gallery_meta_badges', enabled ? 'true' : 'false');
+    }
+
+    $(document).on('click', '#btnToggleMetaBadges', function () {
+        const currentlyEnabled = localStorage.getItem('gallery_meta_badges') === 'true';
+        applyMetaBadges(!currentlyEnabled);
+    });
+
+    // Initialize badges state on load
+    if (localStorage.getItem('gallery_meta_badges') === 'true') {
+        applyMetaBadges(true);
+    }
+
+    // Grid Density Switcher
+    $(document).on('click', '#btnGridStandard', function () {
+        $('#btnGridStandard').addClass('active');
+        $('#btnGridCompact').removeClass('active');
+        $('.photo-grid').css('grid-template-columns', '');
+        localStorage.setItem('gallery_density', 'standard');
+    });
+
+    $(document).on('click', '#btnGridCompact', function () {
+        $('#btnGridCompact').addClass('active');
+        $('#btnGridStandard').removeClass('active');
+        $('.photo-grid').css('grid-template-columns', 'repeat(auto-fill, minmax(130px, 1fr))');
+        localStorage.setItem('gallery_density', 'compact');
+    });
+
+    if (localStorage.getItem('gallery_density') === 'compact') {
+        $('#btnGridCompact').click();
     }
 
     // ── EXIF helpers — defined at module level so they're always available ──────

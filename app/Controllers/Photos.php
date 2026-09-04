@@ -21,8 +21,51 @@ class Photos extends BaseController
 
         // 2. Build the main query afresh
         $query = $photoModel->where('user_id', $userId)
-                            ->where('is_archived', false)
-                            ->orderBy('taken_at', 'DESC');
+                            ->where('is_archived', false);
+
+        $sort = $this->request->getGet('sort') ?? 'date_desc';
+        switch ($sort) {
+            case 'date_asc':
+                $query->orderBy('taken_at', 'ASC');
+                break;
+            case 'upload_desc':
+                $query->orderBy('created_at', 'DESC');
+                break;
+            case 'upload_asc':
+                $query->orderBy('created_at', 'ASC');
+                break;
+            case 'size_desc':
+                $query->orderBy('size', 'DESC');
+                break;
+            case 'size_asc':
+                $query->orderBy('size', 'ASC');
+                break;
+            case 'resolution_desc':
+                $query->orderBy('(width * height)', 'DESC');
+                break;
+            case 'resolution_asc':
+                $query->orderBy('(width * height)', 'ASC');
+                break;
+            case 'name_asc':
+                $query->orderBy('filename', 'ASC');
+                break;
+            case 'name_desc':
+                $query->orderBy('filename', 'DESC');
+                break;
+            case 'geotagged':
+                $query->orderBy('(latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 AND longitude != 0)', 'DESC')
+                      ->orderBy('taken_at', 'DESC');
+                break;
+            case 'favorites':
+                $query->orderBy('is_favorite', 'DESC')
+                      ->orderBy('taken_at', 'DESC');
+                break;
+            case 'date_desc':
+            default:
+                $sort = 'date_desc';
+                $query->orderBy('taken_at', 'DESC');
+                break;
+        }
 
         $q = $this->request->getGet('q');
         $query = $this->applySearchQuery($query, $q);
@@ -42,18 +85,76 @@ class Photos extends BaseController
             'storageUsed'    => self::calculateStorageMetrics($totalBytes)['storageUsed'],
             'storagePercent' => self::calculateStorageMetrics($totalBytes)['storagePercent'],
             'counts'         => $counts,
-            'searchQuery'    => $q
+            'searchQuery'    => $q,
+            'currentSort'    => $sort
         ];
         
         if ($this->request->isAJAX()) {
+            $formattedPhotos = array_map(function($p) use ($sort) {
+                $p['groupHeader'] = self::getPhotoGroupHeader($p, $sort);
+                return $p;
+            }, $data['photos']);
+
             return $this->response->setJSON([
-                'photos' => $data['photos'],
-                'hasMore' => $pager->hasMore()
+                'photos'  => $formattedPhotos,
+                'hasMore' => $pager->hasMore(),
+                'sort'    => $sort
             ]);
         }
         
         return view('photos/index', $data);
     }
+
+    /**
+     * Compute section header dynamically based on the active sort order.
+     */
+    public static function getPhotoGroupHeader(array $photo, string $sort): string
+    {
+        switch ($sort) {
+            case 'size_desc':
+            case 'size_asc':
+                $mb = ($photo['size'] ?? 0) / 1024 / 1024;
+                if ($mb >= 15) return 'Heavyweights (> 15 MB)';
+                if ($mb >= 5)  return 'High Resolution (5 MB – 15 MB)';
+                if ($mb >= 1)  return 'Standard (1 MB – 5 MB)';
+                return 'Compressed (< 1 MB)';
+
+            case 'resolution_desc':
+            case 'resolution_asc':
+                $w = (int) ($photo['width'] ?? 0);
+                $h = (int) ($photo['height'] ?? 0);
+                $mp = ($w * $h) / 1000000;
+                if ($mp >= 8) return 'Ultra HD / 4K+ (≥ 8 MP)';
+                if ($mp >= 2) return 'Full HD 1080p (2 MP – 8 MP)';
+                if ($mp > 0)  return 'Standard (< 2 MP)';
+                return 'Unknown Resolution';
+
+            case 'name_asc':
+            case 'name_desc':
+                $name = trim($photo['filename'] ?? '');
+                $first = strtoupper(substr($name, 0, 1));
+                return ctype_alpha($first) ? $first : '#';
+
+            case 'upload_desc':
+            case 'upload_asc':
+                $time = !empty($photo['created_at']) ? strtotime($photo['created_at']) : 0;
+                return $time > 0 ? date('F Y', $time) : 'Unknown Upload Date';
+
+            case 'geotagged':
+                $hasGps = !empty($photo['latitude']) && !empty($photo['longitude']) && (abs((float)$photo['latitude']) > 0.0001 || abs((float)$photo['longitude']) > 0.0001);
+                return $hasGps ? 'Geotagged Photos (With GPS)' : 'No Location Data';
+
+            case 'favorites':
+                return !empty($photo['is_favorite']) ? 'Starred Favorites' : 'All Photos';
+
+            case 'date_asc':
+            case 'date_desc':
+            default:
+                $time = !empty($photo['taken_at']) ? strtotime($photo['taken_at']) : 0;
+                return $time > 0 ? date('F Y', $time) : 'Unknown Date';
+        }
+    }
+
     public function explore()
     {
         $photoModel = new \App\Models\PhotoModel();
@@ -62,6 +163,7 @@ class Photos extends BaseController
         // 1. Metrics first
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
         $counts = $this->getSidebarCounts();
+        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
         
         // 2. Main query
         $query = $photoModel->where('user_id', $userId)
@@ -71,13 +173,16 @@ class Photos extends BaseController
 
         $q = $this->request->getGet('q');
         $query = $this->applySearchQuery($query, $q);
+        $locations = $query->findAll();
 
         $data = [
-            'locations'      => $query->findAll(),
-            'storageUsed'    => self::calculateStorageMetrics($totalBytes)['storageUsed'],
-            'storagePercent' => self::calculateStorageMetrics($totalBytes)['storagePercent'],
-            'counts'         => $counts,
-            'searchQuery'    => $q
+            'locations'       => $locations,
+            'totalPhotos'     => $totalPhotos,
+            'geotaggedPhotos' => count($locations),
+            'storageUsed'     => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent'  => self::calculateStorageMetrics($totalBytes)['storagePercent'],
+            'counts'          => $counts,
+            'searchQuery'     => $q
         ];
 
         return view('photos/explore', $data);
@@ -780,28 +885,50 @@ class Photos extends BaseController
         
         $counts = $this->getSidebarCounts();
         
-        // Define milestones
-        $today = date('m-d');
-        $thisYear = date('Y');
-        $sixMonthsDate = date('Y-m-d', strtotime('-6 months'));
-        
-        // Fetch photos taken on this day in past years
+        // Define multi-tier milestones
+        $dayRange = [];
+        for ($offset = -3; $offset <= 3; $offset++) {
+            $dayRange[] = date('m-d', strtotime("$offset days"));
+        }
+        $thisYear = (int) date('Y');
+        $currentMonth = (int) date('m');
+
+        // Tier 1: Photos taken within +/- 3 days of today in past years
         $pastYearsPhotos = $photoModel->where('user_id', $userId)
                                       ->where('is_archived', false)
-                                      ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
+                                      ->whereIn("DATE_FORMAT(taken_at, '%m-%d')", $dayRange)
                                       ->where("YEAR(taken_at) <", $thisYear)
                                       ->orderBy('taken_at', 'DESC')
-                                      ->findAll();
-                                      
-        // Fetch photos from exactly 6 months ago
+                                      ->findAll(100);
+
+        // Tier 2: Photos taken in the current month in previous years
+        $thisMonthPhotos = $photoModel->where('user_id', $userId)
+                                      ->where('is_archived', false)
+                                      ->where("MONTH(taken_at) =", $currentMonth)
+                                      ->where("YEAR(taken_at) <", $thisYear)
+                                      ->orderBy('taken_at', 'DESC')
+                                      ->findAll(50);
+
+        // Tier 3: Starred favorites highlight
+        $favoritePhotos = $photoModel->where('user_id', $userId)
+                                     ->where('is_archived', false)
+                                     ->where('is_favorite', true)
+                                     ->orderBy('taken_at', 'DESC')
+                                     ->findAll(30);
+
+        // Tier 4: Recent highlights from 1 to 6 months ago
         $sixMonthsPhotos = $photoModel->where('user_id', $userId)
                                       ->where('is_archived', false)
-                                      ->where("DATE(taken_at) =", $sixMonthsDate)
+                                      ->where("taken_at >=", date('Y-m-d H:i:s', strtotime('-6 months')))
+                                      ->where("taken_at <=", date('Y-m-d H:i:s', strtotime('-1 month')))
+                                      ->orderBy('is_favorite', 'DESC')
                                       ->orderBy('taken_at', 'DESC')
-                                      ->findAll();
+                                      ->findAll(30);
 
         $data = [
             'pastYearsPhotos' => $pastYearsPhotos,
+            'thisMonthPhotos' => $thisMonthPhotos,
+            'favoritePhotos'  => $favoritePhotos,
             'sixMonthsPhotos' => $sixMonthsPhotos,
             'counts'          => $counts
         ];
