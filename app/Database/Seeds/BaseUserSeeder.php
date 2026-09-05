@@ -18,7 +18,7 @@ abstract class BaseUserSeeder extends Seeder
     protected string $emailEnv        = 'ADMIN_EMAIL';
     protected string $passwordEnv     = 'ADMIN_PASSWORD';
     protected string $usernameEnv     = 'ADMIN_USERNAME';
-    protected string $emailDefault    = 'admin@eavesdroid.com';
+    protected string $emailDefault    = 'admin@example.com';
     protected string $passwordDefault = 'Admin@2024!';
     protected string $usernameDefault = 'admin';
 

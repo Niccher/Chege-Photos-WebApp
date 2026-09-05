@@ -11,7 +11,7 @@ Self-hosted personal photo and video management platform featuring automated ML 
 
 | Piece | URL / How to open | Port | Dev Login (Default) |
 |---|---|---|---|
-| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | `superadmin@eavesdroid.com` / `SuperAdmin@2024!` |
+| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | `admin@example.com` / `SuperAdmin@2024!` |
 | **phpMyAdmin** | [http://localhost:9000](http://localhost:9000) | `9000` | `root` / `root_password` |
 | **REST Health Check**| `GET http://localhost:9005/api/v1/health` | `9005` | Returns `200 OK` |
 | **Android Client** | Companion APK | — | Point server to `http://10.0.2.2:9005` (emulator) |

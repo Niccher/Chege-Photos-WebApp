@@ -52,7 +52,7 @@ Open your browser and test the following access points:
 
 | Service | URL | Default Credentials | Verification Check |
 |---|---|---|---|
-| **Web Application** | [http://localhost:9005](http://localhost:9005) | `superadmin@eavesdroid.com` / `SuperAdmin@2024!` | Login redirects to `/admin/home` or photo grid. |
+| **Web Application** | [http://localhost:9005](http://localhost:9005) | `admin@example.com` / `SuperAdmin@2024!` | Login redirects to `/admin/home` or photo grid. |
 | **phpMyAdmin** | [http://localhost:9000](http://localhost:9000) | `root` / `root_password` | Database `db_chege_photos` contains 24 tables. |
 | **REST Health Probe** | `http://localhost:9005/api/v1/health` | Public / Token | Returns JSON status `success`. |
 

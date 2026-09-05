@@ -48,6 +48,9 @@ gcp-key.json
 # Local SQLite databases
 /writable/*.db
 
+# Agent and AI assistant configurations & skills
+.agents/
+
 # IDE, OS, and Temporary files
 .idea/
 .vscode/

@@ -117,7 +117,7 @@ cp .env.example .env
                 <pre class="code-block">cd Chege-Photos-WebApp
 docker compose up --build -d</pre>
                 <p class="mt-2 mb-0" style="color:var(--text-muted);font-size:0.85rem;">Migrations run automatically on first start. The internal Cron daemon is also initialized to run background task schedules (via CodeIgniter's <code>cron:run</code> master runner every minute).</p>
-                <p class="mt-1 mb-0" style="color:var(--text-muted);font-size:0.85rem;"><strong>Default Superuser:</strong> A default administrative account is seeded: user <code>superadmin</code> / email <code>superadmin@eavesdroid.com</code> / password <code>SuperAdmin@2024!</code>.</p>
+                <p class="mt-1 mb-0" style="color:var(--text-muted);font-size:0.85rem;"><strong>Default Superuser:</strong> A default administrative account is seeded: user <code>superadmin</code> / email <code>superadmin@example.com</code> / password <code>SuperAdmin@2024!</code>.</p>
             </div>
         </div>
         <div class="col-md-5">
