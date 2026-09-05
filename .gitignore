@@ -1,6 +1,14 @@
 # CodeIgniter 4 standard ignores
+# Environment files
 .env
+.env.*
+!.env.example
+!.env.docker
+
+# Composer dependencies
 /vendor/
+
+# Writable directory contents
 /writable/cache/*
 /writable/debugbar/*
 /writable/logs/*
@@ -22,21 +30,34 @@
 !/public/uploads/.gitkeep
 !/public/thumbnails/.gitkeep
 
-# IDE, OS and development files
+# Credentials, private keys, and cloud certificates
+*-credentials.json
+*credentials*.json
+gcp-key.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Test, linter, and build caches
+.phpunit.result.cache
+.phpunit.cache/
+.php-cs-fixer.cache
+.phpcs-cache
+
+# Local SQLite databases
+/writable/*.db
+
+# IDE, OS, and Temporary files
 .idea/
 .vscode/
 *.swp
+*.swo
 *.bak
+*.tmp
+*.temp
+*~
 .DS_Store
 Thumbs.db
 node_modules/
-
-# Ignore writable logs and debugbar
-writable/logs/*
-!writable/logs/index.html
-writable/debugbar/*
-!writable/debugbar/index.html
 =*
-
-# Ignore local sqlite databases
-/writable/*.db
