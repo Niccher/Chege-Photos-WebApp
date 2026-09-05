@@ -118,10 +118,12 @@ abstract class BaseController extends Controller
         $memoriesCount = $photoModel->where('user_id', $userId)
             ->where('is_archived', false)
             ->groupStart()
-            ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
-            ->where('YEAR(taken_at) <', $thisYear)
+                ->groupStart()
+                    ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
+                    ->where('YEAR(taken_at) <', $thisYear)
+                ->groupEnd()
+                ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
             ->groupEnd()
-            ->orWhere('DATE(taken_at) =', $sixMonthsAgo)
             ->countAllResults();
 
         $albumModel  = new \App\Models\AlbumModel();

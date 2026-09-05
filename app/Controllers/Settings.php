@@ -266,12 +266,12 @@ class Settings extends BaseController
         $userId = auth()->id();
         $db = \Config\Database::connect();
 
-        // 1. Exact duplicates by sha256
+        // 1. Exact duplicates by file_hash (SHA-256)
         $dupRows = $db->query("
-            SELECT sha256, COUNT(*) as cnt, SUM(size) as total_bytes, MIN(size) as single_size
+            SELECT file_hash, COUNT(*) as cnt, SUM(size) as total_bytes, MIN(size) as single_size
             FROM tbl_photos
-            WHERE user_id = ? AND deleted_at IS NULL AND sha256 IS NOT NULL AND sha256 != ''
-            GROUP BY sha256
+            WHERE user_id = ? AND deleted_at IS NULL AND file_hash IS NOT NULL AND file_hash != ''
+            GROUP BY file_hash
             HAVING cnt > 1
         ", [$userId])->getResultArray();
 
@@ -285,7 +285,7 @@ class Settings extends BaseController
 
         // 2. Large videos > 100 MB
         $videoRows = $db->query("
-            SELECT id, size, title, mime_type
+            SELECT id, size, filename, mime_type
             FROM tbl_photos
             WHERE user_id = ? AND deleted_at IS NULL AND mime_type LIKE 'video/%' AND size > ?
         ", [$userId, 100 * 1024 * 1024])->getResultArray();
@@ -308,12 +308,12 @@ class Settings extends BaseController
         $photoModel = new \App\Models\PhotoModel();
         $db = \Config\Database::connect();
 
-        // Find duplicate groups
+        // Find duplicate groups by file_hash (SHA-256)
         $dupHashes = $db->query("
-            SELECT sha256
+            SELECT file_hash
             FROM tbl_photos
-            WHERE user_id = ? AND deleted_at IS NULL AND sha256 IS NOT NULL AND sha256 != ''
-            GROUP BY sha256
+            WHERE user_id = ? AND deleted_at IS NULL AND file_hash IS NOT NULL AND file_hash != ''
+            GROUP BY file_hash
             HAVING COUNT(*) > 1
         ", [$userId])->getResultArray();
 
@@ -322,7 +322,7 @@ class Settings extends BaseController
 
         foreach ($dupHashes as $item) {
             $photos = $photoModel->where('user_id', $userId)
-                ->where('sha256', $item['sha256'])
+                ->where('file_hash', $item['file_hash'])
                 ->orderBy('created_at', 'ASC')
                 ->findAll();
 

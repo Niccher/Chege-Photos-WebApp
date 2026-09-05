@@ -255,10 +255,106 @@ class GcpStorageService
             return ['success' => false, 'error' => "Local file not found: {$localPath}"];
         }
 
-        $content = file_get_contents($localPath);
+        $fileSize = filesize($localPath);
         $mime = $mimeType ?: mime_content_type($localPath) ?: 'application/octet-stream';
 
+        // For files larger than 20MB, use streaming file handles to prevent PHP memory exhaustion
+        if ($fileSize > 20 * 1024 * 1024) {
+            return $this->uploadFileStreamed($localPath, $cloudPath, $mime, $fileSize);
+        }
+
+        $content = file_get_contents($localPath);
         return $this->uploadRawData($content, $cloudPath, $mime);
+    }
+
+    /**
+     * Streams large files to Google Cloud Storage with constant low memory usage.
+     */
+    public function uploadFileStreamed(string $localPath, string $cloudPath, string $mimeType, int $fileSize): array
+    {
+        try {
+            $fp = fopen($localPath, 'rb');
+            if (!$fp) {
+                return ['success' => false, 'error' => "Cannot open local file for reading: {$localPath}"];
+            }
+
+            if ($this->authType === 'hmac') {
+                $verb = 'PUT';
+                $date = gmdate('D, d M Y H:i:s T');
+                $cleanPath = ltrim($cloudPath, '/');
+                $url = "{$this->apiBase}/" . urlencode($this->bucket) . '/' . str_replace('%2F', '/', rawurlencode($cleanPath));
+
+                $canonicalResource = '/' . $this->bucket . '/' . $cleanPath;
+                $stringToSign = "{$verb}\n\n{$mimeType}\n{$date}\n{$canonicalResource}";
+                $signature = base64_encode(hash_hmac('sha1', $stringToSign, $this->secretKey, true));
+
+                $headers = [
+                    "Host: storage.googleapis.com",
+                    "Date: {$date}",
+                    "Authorization: AWS {$this->accessKey}:{$signature}",
+                    "Content-Type: {$mimeType}",
+                    "Content-Length: {$fileSize}",
+                ];
+
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_PUT, true);
+                curl_setopt($ch, CURLOPT_INFILE, $fp);
+                curl_setopt($ch, CURLOPT_INFILESIZE, $fileSize);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $err = curl_error($ch);
+                curl_close($ch);
+                fclose($fp);
+
+                if ($httpCode >= 200 && $httpCode < 300) {
+                    return ['success' => true, 'data' => []];
+                }
+                return ['success' => false, 'error' => "HTTP {$httpCode}: " . ($err ?: substr((string)$response, 0, 200))];
+            }
+
+            // JSON Service Account mode
+            $token = $this->getAccessToken();
+            $url = "{$this->apiBase}/upload/storage/v1/b/" . urlencode($this->bucket) . '/o?uploadType=media&name=' . urlencode($cloudPath);
+
+            $headers = [
+                "Authorization: Bearer {$token}",
+                "Content-Type: {$mimeType}",
+                "Content-Length: {$fileSize}",
+            ];
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_INFILE, $fp);
+            curl_setopt($ch, CURLOPT_INFILESIZE, $fileSize);
+            curl_setopt($ch, CURLOPT_UPLOAD, true);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err = curl_error($ch);
+            curl_close($ch);
+            fclose($fp);
+
+            if ($httpCode >= 200 && $httpCode < 300) {
+                return ['success' => true, 'data' => json_decode((string)$response, true)];
+            }
+
+            $bodyJson = json_decode((string)$response, true);
+            $errMsg = $bodyJson['error']['message'] ?? ($err ?: "HTTP {$httpCode}");
+            return ['success' => false, 'error' => $errMsg];
+        } catch (\Throwable $e) {
+            if (isset($fp) && is_resource($fp)) {
+                fclose($fp);
+            }
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

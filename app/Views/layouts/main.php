@@ -590,7 +590,7 @@
                     <button class="btn btn-dark btn-sm rounded-pill px-3" id="btnApplyExpiry">Update Link</button>
                 </div>
             </div>
-            <div class="modal-body p-0 d-flex align-items-center justify-content-center flex-grow-1 overflow-hidden" id="lightboxImageContainer">
+            <div class="modal-body p-0 d-flex align-items-center justify-content-center flex-grow-1 overflow-hidden" id="lightboxImageContainer" style="padding-top: 72px !important; padding-bottom: 24px !important; padding-left: 16px !important; padding-right: 16px !important; box-sizing: border-box; height: 100%;">
             </div>
 
             <!-- Navigation Arrows -->

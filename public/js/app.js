@@ -402,9 +402,9 @@ $(document).ready(function () {
 
         $lightboxImageContainer.empty();
         if (dataType === 'video') {
-            $lightboxImageContainer.append(`<video src="${fullUrl}" class="img-fluid" style="max-height: 100vh; max-width: 100%;" controls autoplay></video>`);
+            $lightboxImageContainer.append(`<video src="${fullUrl}" class="img-fluid" style="max-height: 100%; max-width: 100%; object-fit: contain;" controls autoplay></video>`);
         } else {
-            $lightboxImageContainer.append(`<img src="${fullUrl}" class="img-fluid" style="max-height: 100vh; max-width: 100%; object-fit: contain;">`);
+            $lightboxImageContainer.append(`<img src="${fullUrl}" id="lightboxImage" class="img-fluid" style="max-height: 100%; max-width: 100%; object-fit: contain;">`);
         }
 
         // Show/hide nav arrows based on position

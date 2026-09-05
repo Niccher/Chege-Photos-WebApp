@@ -4,6 +4,13 @@ namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Libraries\SmartAlbumRules;
+use App\Models\AlbumModel;
+use App\Models\FaceEncodingModel;
+use App\Models\PhotoModel;
+use App\Models\PhotoShareModel;
+use App\Models\PhotoTagModel;
+use App\Models\SharedLinkModel;
+use App\Models\UserModel;
 use CodeIgniter\HTTP\ResponseInterface;
 use ZipArchive;
 
@@ -159,30 +166,142 @@ class Photos extends BaseController
     {
         $photoModel = new \App\Models\PhotoModel();
         $userId = auth()->id();
+        $db = \Config\Database::connect();
 
-        // 1. Metrics first
+        // 1. General Metrics
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
         $counts = $this->getSidebarCounts();
         $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
-        
-        // 2. Main query
-        $query = $photoModel->where('user_id', $userId)
-                            ->where('latitude IS NOT NULL')
-                            ->where('longitude IS NOT NULL')
-                            ->where('is_archived', false);
 
+        // 2. Hub 1: People & Pets (Top recognized faces)
+        $personModel = new \App\Models\PersonModel();
+        $topPersons = $personModel->getPersonsWithFaceCountForUser($userId);
+        if (!empty($topPersons)) {
+            $personIds = array_column($topPersons, 'id');
+            $personFaces = $db->table('tbl_face_encodings fe')
+                ->select('fe.person_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, p.path, p.thumbnail_path')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->whereIn('fe.person_id', $personIds)
+                ->where('p.user_id', $userId)
+                ->orderBy('fe.id', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            $personFaceMap = [];
+            foreach ($personFaces as $pf) {
+                $pid = (int) $pf['person_id'];
+                if (!isset($personFaceMap[$pid])) {
+                    $personFaceMap[$pid] = $pf;
+                }
+            }
+
+            foreach ($topPersons as &$pr) {
+                $pid = (int) $pr['id'];
+                $pf = $personFaceMap[$pid] ?? null;
+                $pr['thumb_url'] = $pf ? (!empty($pf['thumbnail_path']) ? base_url($pf['thumbnail_path']) : base_url($pf['path'])) : null;
+            }
+            usort($topPersons, fn($a, $b) => ($b['face_count'] ?? 0) <=> ($a['face_count'] ?? 0));
+            $topPersons = array_slice($topPersons, 0, 10);
+        }
+
+        // 3. Hub 2: Places (Geotagged photos for Leaflet map + location clusters)
         $q = $this->request->getGet('q');
-        $query = $this->applySearchQuery($query, $q);
-        $locations = $query->findAll();
+        $geoQuery = $photoModel->where('user_id', $userId)
+                               ->where('latitude IS NOT NULL')
+                               ->where('longitude IS NOT NULL')
+                               ->where('is_archived', false);
+        if ($q) {
+            $geoQuery = $this->applySearchQuery($geoQuery, $q);
+        }
+        $locations = $geoQuery->findAll();
+
+        // Group nearby coordinates into rough location clusters (~11km / 0.1 degree)
+        $placeClusters = [];
+        foreach ($locations as $loc) {
+            $clusterKey = round((float)$loc['latitude'], 1) . ',' . round((float)$loc['longitude'], 1);
+            if (!isset($placeClusters[$clusterKey])) {
+                $placeClusters[$clusterKey] = [
+                    'key'       => $clusterKey,
+                    'lat'       => (float) $loc['latitude'],
+                    'lng'       => (float) $loc['longitude'],
+                    'count'     => 0,
+                    'cover_url' => !empty($loc['thumbnail_path']) ? base_url($loc['thumbnail_path']) : base_url($loc['path']),
+                    'sample_id' => $loc['id'],
+                ];
+            }
+            $placeClusters[$clusterKey]['count']++;
+        }
+        usort($placeClusters, fn($a, $b) => $b['count'] <=> $a['count']);
+        $placeClusters = array_slice($placeClusters, 0, 6);
+
+        // 4. Hub 3: Things & Scenes (Aggregated AI tags from YOLO and objects)
+        $tagRows = $db->table('tbl_photo_tags pt')
+            ->select('pt.tag, COUNT(DISTINCT pt.photo_id) as photo_count, MIN(p.id) as sample_photo_id, p.thumbnail_path, p.path')
+            ->join('tbl_photos p', 'p.id = pt.photo_id')
+            ->where('p.user_id', $userId)
+            ->where('p.is_archived', false)
+            ->where('pt.confidence >=', 0.4)
+            ->groupBy('pt.tag')
+            ->having('photo_count >=', 1)
+            ->orderBy('photo_count', 'DESC')
+            ->limit(12)
+            ->get()
+            ->getResultArray();
+
+        $thingsCategories = [];
+        foreach ($tagRows as $tr) {
+            $thingsCategories[] = [
+                'tag'       => $tr['tag'],
+                'name'      => ucfirst(str_replace('_', ' ', $tr['tag'])),
+                'count'     => (int) $tr['photo_count'],
+                'cover_url' => !empty($tr['thumbnail_path']) ? base_url($tr['thumbnail_path']) : base_url($tr['path']),
+            ];
+        }
+
+        // 5. Hub 4: Media Types
+        $mediaTypes = [
+            'videos' => [
+                'name'  => 'Videos',
+                'icon'  => 'bi-camera-video',
+                'color' => '#e63946',
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->like('mime_type', 'video/', 'after')->countAllResults(),
+                'filter'=> 'video',
+            ],
+            'favorites' => [
+                'name'  => 'Favorites',
+                'icon'  => 'bi-heart-fill',
+                'color' => '#d62828',
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_favorite', true)->countAllResults(),
+                'filter'=> 'favorite',
+            ],
+            'panoramas' => [
+                'name'  => 'Panoramas',
+                'icon'  => 'bi-aspect-ratio',
+                'color' => '#457b9d',
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('(width / height) >=', 2.0)->countAllResults(),
+                'filter'=> 'panorama',
+            ],
+            'people' => [
+                'name'  => 'People Photos',
+                'icon'  => 'bi-people-fill',
+                'color' => '#2a9d8f',
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('scanned_face', 1)->countAllResults(),
+                'filter'=> 'people',
+            ],
+        ];
 
         $data = [
-            'locations'       => $locations,
-            'totalPhotos'     => $totalPhotos,
-            'geotaggedPhotos' => count($locations),
-            'storageUsed'     => self::calculateStorageMetrics($totalBytes)['storageUsed'],
-            'storagePercent'  => self::calculateStorageMetrics($totalBytes)['storagePercent'],
-            'counts'          => $counts,
-            'searchQuery'     => $q
+            'locations'        => $locations,
+            'placeClusters'    => $placeClusters,
+            'topPersons'       => $topPersons,
+            'thingsCategories' => $thingsCategories,
+            'mediaTypes'       => $mediaTypes,
+            'totalPhotos'      => $totalPhotos,
+            'geotaggedPhotos'  => count($locations),
+            'storageUsed'      => self::calculateStorageMetrics($totalBytes)['storageUsed'],
+            'storagePercent'   => self::calculateStorageMetrics($totalBytes)['storagePercent'],
+            'counts'           => $counts,
+            'searchQuery'      => $q,
         ];
 
         return view('photos/explore', $data);
@@ -227,22 +346,27 @@ class Photos extends BaseController
         $mimeType = $file->getMimeType();
         $size = $file->getSize();
         $tempPath = $file->getTempName();
-        $fileHash = hash_file('sha256', $tempPath);
 
         $photoModel = new \App\Models\PhotoModel();
-        
-        // Check for duplicates
-        $existing = $photoModel->where('file_hash', $fileHash)->where('user_id', auth()->id())->first();
-        if ($existing) {
-            return $this->response->setJSON([
-                'status'  => 'success', 
-                'message' => 'File already exists.', 
-                'id'      => $existing['id'],
-                'is_duplicate' => true
-            ]);
-        }
-
         $userId = auth()->id() ?: 1;
+
+        // For large media (> 100MB), defer SHA-256 calculation to background to avoid upload freezes/timeouts
+        $isLargeMedia = ($size > 100 * 1024 * 1024);
+        $fileHash = null;
+
+        if (! $isLargeMedia) {
+            $fileHash = hash_file('sha256', $tempPath);
+            // Check for duplicates
+            $existing = $photoModel->where('file_hash', $fileHash)->where('user_id', $userId)->first();
+            if ($existing) {
+                return $this->response->setJSON([
+                    'status'  => 'success', 
+                    'message' => 'File already exists.', 
+                    'id'      => $existing['id'],
+                    'is_duplicate' => true
+                ]);
+            }
+        }
 
         // Enforce user storage quota
         $quotaBytes = (float) (setting('App.storageLimit') ?? 1073741824);
@@ -319,6 +443,15 @@ class Photos extends BaseController
         $this->clearSidebarCountsCache();
         $this->checkAndDispatchStorageWarning((int) $userId);
 
+        if ($isLargeMedia) {
+            $this->dispatchBackgroundMediaProcessing((int) $photoId);
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Uploaded successfully (large media queued for background processing).',
+                'id'      => (int) $photoId,
+            ]);
+        }
+
         if (function_exists('fastcgi_finish_request')) {
             $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId])->send();
             fastcgi_finish_request();
@@ -336,6 +469,23 @@ class Photos extends BaseController
         }
 
         return $this->response->setJSON(['status' => 'success', 'message' => 'Uploaded successfully.', 'id' => (int) $photoId]);
+    }
+
+    /**
+     * Dispatches asynchronous CLI processing for media (SHA-256 calculation, GCP mirroring).
+     */
+    protected function dispatchBackgroundMediaProcessing(int $photoId): void
+    {
+        try {
+            $spark = escapeshellarg(ROOTPATH . 'spark');
+            $idArg = escapeshellarg("--id={$photoId}");
+            $cmd   = "php {$spark} media:process-pending {$idArg} > /dev/null 2>&1 &";
+            if (function_exists('exec')) {
+                @exec($cmd);
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Failed to dispatch media:process-pending: ' . $e->getMessage());
+        }
     }
 
     protected function checkAndDispatchStorageWarning(int $userId): void
@@ -890,55 +1040,173 @@ class Photos extends BaseController
     {
         $photoModel = new \App\Models\PhotoModel();
         $userId = auth()->id();
-        
         $counts = $this->getSidebarCounts();
-        
-        // Define multi-tier milestones
+
+        // 1. Time Machine Date Selection (default to today)
+        $rawDate = $this->request->getGet('date');
+        $validTime = ($rawDate && strtotime($rawDate)) ? strtotime($rawDate) : time();
+        $selectedDate   = date('Y-m-d', $validTime);
+        $targetMonthDay = date('m-d', $validTime);
+        $targetMonth    = (int) date('m', $validTime);
+        $targetYear     = (int) date('Y', $validTime);
+        $isToday        = ($selectedDate === date('Y-m-d'));
+
+        // +/- 3 days range around selected date
         $dayRange = [];
         for ($offset = -3; $offset <= 3; $offset++) {
-            $dayRange[] = date('m-d', strtotime("$offset days"));
+            $dayRange[] = date('m-d', strtotime("$offset days", $validTime));
         }
-        $thisYear = (int) date('Y');
-        $currentMonth = (int) date('m');
 
-        // Tier 1: Photos taken within +/- 3 days of today in past years
-        $pastYearsPhotos = $photoModel->where('user_id', $userId)
-                                      ->where('is_archived', false)
-                                      ->whereIn("DATE_FORMAT(taken_at, '%m-%d')", $dayRange)
-                                      ->where("YEAR(taken_at) <", $thisYear)
-                                      ->orderBy('taken_at', 'DESC')
-                                      ->findAll(100);
+        // 2. Privacy filter: exclude unnamed/hidden background stranger photos if set
+        $excludeHidden = (bool) (setting('ML.excludeHiddenMemories', "user:{$userId}") ?? true);
+        $excludedPhotoIds = [];
+        if ($excludeHidden) {
+            $db = \Config\Database::connect();
+            $unnamedOnlyRows = $db->query("
+                SELECT fe.photo_id
+                FROM tbl_face_encodings fe
+                JOIN tbl_photos ph ON ph.id = fe.photo_id
+                LEFT JOIN tbl_people p ON p.id = fe.person_id
+                WHERE ph.user_id = ?
+                GROUP BY fe.photo_id
+                HAVING COUNT(fe.id) > 0 AND SUM(CASE WHEN p.name IS NOT NULL AND p.name != '' THEN 1 ELSE 0 END) = 0
+            ", [$userId])->getResultArray();
+            $excludedPhotoIds = array_column($unnamedOnlyRows, 'photo_id');
+        }
 
-        // Tier 2: Photos taken in the current month in previous years
-        $thisMonthPhotos = $photoModel->where('user_id', $userId)
-                                      ->where('is_archived', false)
-                                      ->where("MONTH(taken_at) =", $currentMonth)
-                                      ->where("YEAR(taken_at) <", $thisYear)
-                                      ->orderBy('taken_at', 'DESC')
-                                      ->findAll(50);
+        $seenIds = [];
 
-        // Tier 3: Starred favorites highlight
-        $favoritePhotos = $photoModel->where('user_id', $userId)
-                                     ->where('is_archived', false)
-                                     ->where('is_favorite', true)
-                                     ->orderBy('taken_at', 'DESC')
-                                     ->findAll(30);
+        // Helper query builder
+        $baseQuery = function() use ($photoModel, $userId, $excludedPhotoIds) {
+            $q = $photoModel->where('user_id', $userId)->where('is_archived', false);
+            if (!empty($excludedPhotoIds)) {
+                $q->whereNotIn('id', $excludedPhotoIds);
+            }
+            return $q;
+        };
 
-        // Tier 4: Recent highlights from 1 to 6 months ago
-        $sixMonthsPhotos = $photoModel->where('user_id', $userId)
-                                      ->where('is_archived', false)
-                                      ->where("taken_at >=", date('Y-m-d H:i:s', strtotime('-6 months')))
-                                      ->where("taken_at <=", date('Y-m-d H:i:s', strtotime('-1 month')))
-                                      ->orderBy('is_favorite', 'DESC')
-                                      ->orderBy('taken_at', 'DESC')
-                                      ->findAll(30);
+        // Tier 1: Photos taken within +/- 3 days of target date in past years
+        $pastYearsQuery = $baseQuery()
+            ->whereIn("DATE_FORMAT(taken_at, '%m-%d')", $dayRange)
+            ->where("YEAR(taken_at) <", $targetYear)
+            ->orderBy('taken_at', 'DESC');
+        $pastYearsPhotos = $pastYearsQuery->findAll(100);
+
+        foreach ($pastYearsPhotos as $p) {
+            $seenIds[] = (int) $p['id'];
+        }
+
+        // Tier 2: Flashback to this month in past years (excluding seen)
+        $monthQuery = $baseQuery()
+            ->where("MONTH(taken_at) =", $targetMonth)
+            ->where("YEAR(taken_at) <", $targetYear);
+        if (!empty($seenIds)) {
+            $monthQuery->whereNotIn('id', $seenIds);
+        }
+        $thisMonthPhotos = $monthQuery->orderBy('is_favorite', 'DESC')
+            ->orderBy('taken_at', 'DESC')
+            ->findAll(40);
+
+        foreach ($thisMonthPhotos as $p) {
+            $seenIds[] = (int) $p['id'];
+        }
+
+        // Tier 3: Starred Favorites (excluding seen)
+        $favQuery = $baseQuery()->where('is_favorite', true);
+        if (!empty($seenIds)) {
+            $favQuery->whereNotIn('id', $seenIds);
+        }
+        $favoritePhotos = $favQuery->orderBy('taken_at', 'DESC')->findAll(30);
+
+        foreach ($favoritePhotos as $p) {
+            $seenIds[] = (int) $p['id'];
+        }
+
+        // Tier 4: Recent Highlights (1 to 6 months ago, excluding seen)
+        $sixMoQuery = $baseQuery()
+            ->where("taken_at >=", date('Y-m-d H:i:s', strtotime('-6 months', $validTime)))
+            ->where("taken_at <=", date('Y-m-d H:i:s', strtotime('-1 month', $validTime)));
+        if (!empty($seenIds)) {
+            $sixMoQuery->whereNotIn('id', $seenIds);
+        }
+        $sixMonthsPhotos = $sixMoQuery->orderBy('is_favorite', 'DESC')
+            ->orderBy('taken_at', 'DESC')
+            ->findAll(30);
+
+        // 3. Build Story Reels for top carousel
+        $stories = [];
+
+        // Group past years by individual year
+        $byYear = [];
+        foreach ($pastYearsPhotos as $photo) {
+            $y = date('Y', strtotime($photo['taken_at']));
+            $byYear[$y][] = $photo;
+        }
+
+        foreach ($byYear as $year => $photos) {
+            $yearsAgo = $targetYear - (int) $year;
+            $label = $yearsAgo === 1 ? '1 Year Ago' : "{$yearsAgo} Years Ago";
+            $hero = $photos[0];
+            $stories[] = [
+                'id'         => 'year_' . $year,
+                'title'      => $label,
+                'subtitle'   => date('F j, Y', strtotime($hero['taken_at'])),
+                'cover_url'  => $hero['thumbnail_path'] ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                'count'      => count($photos),
+                'photo_ids'  => array_column($photos, 'id'),
+                'photos'     => $photos,
+            ];
+        }
+
+        if (!empty($thisMonthPhotos)) {
+            $hero = $thisMonthPhotos[0];
+            $monthName = date('F', $validTime);
+            $stories[] = [
+                'id'        => 'month_flashback',
+                'title'     => "{$monthName} Flashback",
+                'subtitle'  => 'From previous years',
+                'cover_url' => $hero['thumbnail_path'] ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                'count'     => count($thisMonthPhotos),
+                'photo_ids' => array_column($thisMonthPhotos, 'id'),
+                'photos'    => $thisMonthPhotos,
+            ];
+        }
+
+        if (!empty($favoritePhotos)) {
+            $hero = $favoritePhotos[0];
+            $stories[] = [
+                'id'        => 'favorites_highlight',
+                'title'     => 'Treasured Stars',
+                'subtitle'  => 'Your all-time favorites',
+                'cover_url' => $hero['thumbnail_path'] ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                'count'     => count($favoritePhotos),
+                'photo_ids' => array_column($favoritePhotos, 'id'),
+                'photos'    => $favoritePhotos,
+            ];
+        }
+
+        if (!empty($sixMonthsPhotos)) {
+            $hero = $sixMonthsPhotos[0];
+            $stories[] = [
+                'id'        => 'recent_moments',
+                'title'     => 'Recent Highlights',
+                'subtitle'  => 'A few months ago',
+                'cover_url' => $hero['thumbnail_path'] ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                'count'     => count($sixMonthsPhotos),
+                'photo_ids' => array_column($sixMonthsPhotos, 'id'),
+                'photos'    => $sixMonthsPhotos,
+            ];
+        }
 
         $data = [
+            'stories'         => $stories,
             'pastYearsPhotos' => $pastYearsPhotos,
             'thisMonthPhotos' => $thisMonthPhotos,
             'favoritePhotos'  => $favoritePhotos,
             'sixMonthsPhotos' => $sixMonthsPhotos,
-            'counts'          => $counts
+            'counts'          => $counts,
+            'selectedDate'    => $selectedDate,
+            'isToday'         => $isToday,
         ];
 
         return view('photos/memories', $data);
@@ -1137,6 +1405,12 @@ class Photos extends BaseController
             return $this->response->setJSON(['status' => 'error', 'message' => 'Smart albums follow rules automatically; you cannot add photos manually.']);
         }
 
+        $photoModel = new \App\Models\PhotoModel();
+        $photo      = $photoModel->where('user_id', auth()->id())->find($photoId);
+        if (! $photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
+        }
+
         // Check if already in album
         $exists = $builder->where(['album_id' => $albumId, 'photo_id' => $photoId])->get()->getRow();
         if ($exists) return $this->response->setJSON(['status' => 'error', 'message' => 'Already in album']);
@@ -1183,8 +1457,9 @@ class Photos extends BaseController
 
     public function archivePhoto($id)
     {
+        $userId     = auth()->id();
         $photoModel = new \App\Models\PhotoModel();
-        $photo = $photoModel->find($id);
+        $photo      = $photoModel->where('user_id', $userId)->find($id);
         if (!$photo) return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
         
         $newStatus = !$photo['is_archived'];
@@ -1195,18 +1470,25 @@ class Photos extends BaseController
 
     public function deletePhoto($id)
     {
+        $userId     = auth()->id();
         $photoModel = new \App\Models\PhotoModel();
-        // If already deleted, force delete
-        if ($photoModel->onlyDeleted()->find($id)) {
-            $photo = $photoModel->onlyDeleted()->find($id);
-            if ($photo) {
-                @unlink(FCPATH . $photo['path']);
-                @unlink(FCPATH . $photo['thumbnail_path']);
-                $this->deleteFromGcp($photo['path'], $photo['thumbnail_path']);
-                $photoModel->delete($id, true);
-                $this->clearSidebarCountsCache();
-            }
+
+        // If already deleted, force delete (only for owner)
+        $deletedPhoto = $photoModel->onlyDeleted()->where('user_id', $userId)->find($id);
+        if ($deletedPhoto) {
+            @unlink(FCPATH . $deletedPhoto['path']);
+            @unlink(FCPATH . $deletedPhoto['thumbnail_path']);
+            $this->deleteFromGcp($deletedPhoto['path'], $deletedPhoto['thumbnail_path']);
+            $this->deleteMlDataForPhotos([(int) $id]);
+            $photoModel->delete($id, true);
+            $this->clearSidebarCountsCache();
             return $this->response->setJSON(['status' => 'success', 'message' => 'Permanently deleted']);
+        }
+
+        // Verify ownership for active photo
+        $activePhoto = $photoModel->where('user_id', $userId)->find($id);
+        if (!$activePhoto) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found'])->setStatusCode(404);
         }
         
         // Otherwise, soft delete
@@ -1217,11 +1499,9 @@ class Photos extends BaseController
 
     public function restorePhoto($id)
     {
+        $userId     = auth()->id();
         $photoModel = new \App\Models\PhotoModel();
-        // The model has useSoftDeletes = true, so update() works on the soft-deleted row?
-        // Actually CI4 update doesn't automatically find soft-deleted items unless specifically told to,
-        // or we can just set deleted_at to null directly via builder.
-        $photoModel->builder()->where('id', $id)->update(['deleted_at' => null]);
+        $photoModel->builder()->where('id', $id)->where('user_id', $userId)->update(['deleted_at' => null]);
         $this->clearSidebarCountsCache();
         return $this->response->setJSON(['status' => 'success']);
     }
@@ -1232,15 +1512,17 @@ class Photos extends BaseController
         $db     = \Config\Database::connect();
         
         // Find all soft-deleted photos for this user
-        $photos = $db->table('photos')
+        $photos = $db->table('tbl_photos')
             ->where('user_id', $userId)
             ->where('deleted_at IS NOT NULL')
             ->get()
             ->getResultArray();
 
         $purged = 0;
+        $purgedIds = [];
         foreach ($photos as $photo) {
             $id = (int) $photo['id'];
+            $purgedIds[] = $id;
 
             // Clean related tables
             $db->table('tbl_album_photos')->where('photo_id', $id)->delete();
@@ -1266,6 +1548,9 @@ class Photos extends BaseController
             $purged++;
         }
 
+        // Clean up corresponding Qdrant vector embeddings and ML data
+        $this->deleteMlDataForPhotos($purgedIds);
+
         $this->clearSidebarCountsCache();
         helper('audit');
         log_security_action('USER_EMPTIED_TRASH', 'SUCCESS', ['user_id' => $userId, 'purged_count' => $purged]);
@@ -1274,6 +1559,23 @@ class Photos extends BaseController
             'status'  => 'success',
             'message' => "Successfully emptied trash. Permanently deleted {$purged} items."
         ]);
+    }
+
+    private function deleteMlDataForPhotos(array $photoIds): void
+    {
+        if (empty($photoIds)) return;
+        try {
+            $client = service('curlrequest', ['connect_timeout' => 3, 'timeout' => 10]);
+            $client->post($this->getMlUrl() . '/api/v1/faces/delete-by-photo-ids', [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                ],
+                'body'    => json_encode(['photo_ids' => array_values($photoIds)]),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('warning', 'Failed to clean ML vector data for photos: ' . $e->getMessage());
+        }
     }
 
     public function migrate()
@@ -1398,8 +1700,14 @@ class Photos extends BaseController
                     return $this->response->setJSON(['status' => 'error', 'message' => 'Smart albums follow rules automatically; you cannot add photos manually.']);
                 }
 
+                $validPhotos = $photoModel->select('id')
+                    ->whereIn('id', $photoIds)
+                    ->where('user_id', $userId)
+                    ->findAll();
+                $validPhotoIds = array_column($validPhotos, 'id');
+
                 $builder = $db->table('tbl_album_photos');
-                foreach ($photoIds as $id) {
+                foreach ($validPhotoIds as $id) {
                     $exists = $builder->where(['album_id' => $albumId, 'photo_id' => $id])->get()->getRow();
                     if (!$exists) {
                         $builder->insert([
@@ -1571,7 +1879,7 @@ class Photos extends BaseController
             'width'     => $imageInfo[0] ?? $photo['width'],
             'height'    => $imageInfo[1] ?? $photo['height'],
             'size'      => filesize($fullPath),
-            'file_hash' => md5_file($fullPath),
+            'file_hash' => hash_file('sha256', $fullPath),
             'updated_at'=> date('Y-m-d H:i:s')
         ]);
 
@@ -1648,6 +1956,14 @@ class Photos extends BaseController
             ])->setStatusCode(400);
         }
 
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        if (! $photo) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Photo not found or unauthorized',
+            ])->setStatusCode(404);
+        }
+
         $tagModel = new \App\Models\PhotoTagModel();
         $exists = $tagModel->where('photo_id', $photoId)->where('tag', $tag)->first();
         if ($exists) {
@@ -1677,6 +1993,14 @@ class Photos extends BaseController
             return $this->response->setJSON([
                 'status' => 'error', 'message' => 'Photo ID and tag are required',
             ])->setStatusCode(400);
+        }
+
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        if (! $photo) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'Photo not found or unauthorized',
+            ])->setStatusCode(404);
         }
 
         $tagModel = new \App\Models\PhotoTagModel();
@@ -1745,8 +2069,8 @@ class Photos extends BaseController
     public function apiSimilar(int $photoId): \CodeIgniter\HTTP\ResponseInterface
     {
         $userId = auth()->id() ?: 0;
-        $photoModel = new PhotoModel();
-        $targetPhoto = $photoModel->find($photoId);
+        $photoModel = new \App\Models\PhotoModel();
+        $targetPhoto = $photoModel->where('user_id', $userId)->find($photoId);
 
         if (! $targetPhoto) {
             return $this->response->setJSON([
@@ -1795,6 +2119,7 @@ class Photos extends BaseController
 
         $matchedPhotos = $photoModel
             ->whereIn('id', $similarIds)
+            ->where('user_id', $userId)
             ->where('deleted_at', null)
             ->findAll();
 

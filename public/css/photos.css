@@ -441,6 +441,18 @@ body {
 #lightboxModal .modal-content { background-color: #000 !important; }
 #lightboxModal .text-white    { color: #ffffff !important; }
 
+#lightboxImageContainer {
+    padding: 72px 16px 24px 16px !important;
+    box-sizing: border-box !important;
+    height: 100% !important;
+}
+#lightboxImageContainer img,
+#lightboxImageContainer video {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: contain !important;
+}
+
 /* Unified Floating Pill Toolbar (Google Photos style) */
 #lightboxModal .lightbox-toolbar {
     background: rgba(20, 20, 20, 0.78) !important;

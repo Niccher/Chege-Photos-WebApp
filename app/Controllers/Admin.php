@@ -1402,31 +1402,51 @@ class Admin extends BaseController
 
         $webappUrl = rtrim(base_url(), '/');
         $client = service('curlrequest', [
-            'connect_timeout' => 2,
-            'timeout'         => 5,
+            'connect_timeout' => 3,
+            'timeout'         => 30,
             'headers'         => [
                 'X-API-KEY'    => $this->getMlApiKey(),
                 'X-Webapp-Url' => $webappUrl,
             ]
         ]);
 
-        $queued = 0;
-        foreach ($photos as $p) {
-            $photoId = (int) $p['id'];
+        $photoIds = array_map('intval', array_column($photos, 'id'));
+        $chunks   = array_chunk($photoIds, 100);
+        $queued   = 0;
+
+        foreach ($chunks as $chunk) {
             try {
-                $client->post($this->getMlUrl() . '/api/v1/faces/encode', [
+                $response = $client->post($this->getMlUrl() . '/api/v1/faces/encode-batch', [
                     'form_params' => [
-                        'photo_id'   => $photoId,
-                        'scan_faces' => $type === 'faces' ? 1 : 0,
-                        'scan_tags'  => $type === 'tags' ? 1 : 0,
-                        'scan_clip'  => $type === 'clip' ? 1 : 0,
-                        'async_task' => 1,
-                        'webapp_url' => $webappUrl,
+                        'photo_ids'   => $chunk,
+                        'scan_faces'  => $type === 'faces' ? 1 : 0,
+                        'scan_tags'   => $type === 'tags' ? 1 : 0,
+                        'scan_clip'   => $type === 'clip' ? 1 : 0,
+                        'webapp_url'  => $webappUrl,
                     ]
                 ]);
-                $queued++;
+                if ($response->getStatusCode() === 200 || $response->getStatusCode() === 202) {
+                    $queued += count($chunk);
+                }
             } catch (\Exception $e) {
-                log_message('error', "Rescan queuing failed for photo {$photoId}: " . $e->getMessage());
+                // Fallback to individual requests if batch call fails
+                foreach ($chunk as $photoId) {
+                    try {
+                        $client->post($this->getMlUrl() . '/api/v1/faces/encode', [
+                            'form_params' => [
+                                'photo_id'   => $photoId,
+                                'scan_faces' => $type === 'faces' ? 1 : 0,
+                                'scan_tags'  => $type === 'tags' ? 1 : 0,
+                                'scan_clip'  => $type === 'clip' ? 1 : 0,
+                                'async_task' => 1,
+                                'webapp_url' => $webappUrl,
+                            ]
+                        ]);
+                        $queued++;
+                    } catch (\Exception $e2) {
+                        log_message('error', "Rescan queuing failed for photo {$photoId}: " . $e2->getMessage());
+                    }
+                }
             }
         }
 
@@ -2880,7 +2900,8 @@ class Admin extends BaseController
         ];
         try {
             $client = service('curlrequest', ['connect_timeout' => 2, 'timeout' => 3]);
-            $qRes = $client->get($this->getQdrantUrl() . '/telemetry?anonymize=false');
+            $qdrantUrl = rtrim($this->getQdrantUrl(), '/');
+            $qRes = $client->get($qdrantUrl . '/telemetry?anonymize=false');
             if ($qRes->getStatusCode() === 200) {
                 $qBody = json_decode($qRes->getBody(), true);
                 $qdrantStats['status'] = 'online';
@@ -2888,7 +2909,23 @@ class Admin extends BaseController
                 $qdrantStats['collections'] = count($collections);
                 $vectors = 0;
                 foreach ($collections as $col) {
-                    $vectors += ($col['vectors'] ?? 0);
+                    if (is_array($col)) {
+                        if (isset($col['vectors_count']) && is_numeric($col['vectors_count'])) {
+                            $vectors += (int) $col['vectors_count'];
+                        } elseif (isset($col['points_count']) && is_numeric($col['points_count'])) {
+                            $vectors += (int) $col['points_count'];
+                        } elseif (isset($col['vectors']) && is_numeric($col['vectors'])) {
+                            $vectors += (int) $col['vectors'];
+                        } elseif (isset($col['vectors']) && is_array($col['vectors'])) {
+                            foreach ($col['vectors'] as $subVec) {
+                                if (is_numeric($subVec)) {
+                                    $vectors += (int) $subVec;
+                                } elseif (is_array($subVec) && isset($subVec['count'])) {
+                                    $vectors += (int) $subVec['count'];
+                                }
+                            }
+                        }
+                    }
                 }
                 $qdrantStats['vectors'] = $vectors;
                 $mem = $qBody['result']['memory'] ?? [];
@@ -2897,12 +2934,36 @@ class Admin extends BaseController
                     $qdrantStats['percent'] = round(($qdrantStats['used_mb'] / $qdrantStats['limit_mb']) * 100, 1);
                 }
             }
-        } catch (\Throwable $t) {
+        } catch (\Throwable $t) {}
+
+        // Fallback or exact collection inspection if vectors report 0 or telemetry failed
+        if ($qdrantStats['vectors'] === 0) {
             try {
-                $client = service('curlrequest', ['connect_timeout' => 2, 'timeout' => 2]);
-                $cRes = $client->get($this->getQdrantUrl() . '/collections');
+                $client = service('curlrequest', ['connect_timeout' => 2, 'timeout' => 3]);
+                $qdrantUrl = rtrim($this->getQdrantUrl(), '/');
+                $cRes = $client->get($qdrantUrl . '/collections');
                 if ($cRes->getStatusCode() === 200) {
                     $qdrantStats['status'] = 'online';
+                    $cBody = json_decode($cRes->getBody(), true);
+                    $colList = $cBody['result']['collections'] ?? [];
+                    $qdrantStats['collections'] = max($qdrantStats['collections'], count($colList));
+                    $vectorSum = 0;
+                    foreach ($colList as $cItem) {
+                        $colName = $cItem['name'] ?? null;
+                        if ($colName) {
+                            try {
+                                $infoRes = $client->get($qdrantUrl . '/collections/' . rawurlencode($colName));
+                                if ($infoRes->getStatusCode() === 200) {
+                                    $infoBody = json_decode($infoRes->getBody(), true);
+                                    $res = $infoBody['result'] ?? [];
+                                    $vectorSum += (int) ($res['points_count'] ?? $res['vectors_count'] ?? $res['indexed_vectors_count'] ?? 0);
+                                }
+                            } catch (\Throwable $eSub) {}
+                        }
+                    }
+                    if ($vectorSum > 0) {
+                        $qdrantStats['vectors'] = $vectorSum;
+                    }
                 }
             } catch (\Throwable $t2) {}
         }

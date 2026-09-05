@@ -21,8 +21,8 @@ class Faces extends BaseController
         $options['headers'] = array_merge($defaultHeaders, $options['headers'] ?? []);
 
         $client = service('curlrequest', [
-            'connect_timeout' => 30,
-            'timeout'        => 120,
+            'connect_timeout' => $options['connect_timeout'] ?? 10,
+            'timeout'         => $options['timeout'] ?? 60,
         ]);
         $baseUrl = $this->getMlUrl();
         $url = $baseUrl . $path;
@@ -61,63 +61,78 @@ class Faces extends BaseController
             ->where('fe.person_id IS NULL')
             ->countAllResults();
 
-        // Attach thumbnail data for each person (first face's photo + bbox + attributes)
-        foreach ($persons as &$person) {
-            $firstFace = $faceModel->where('person_id', $person['id'])->orderBy('id', 'ASC')->first();
-            $person['thumbnail'] = null;
-            $person['age'] = null;
-            $person['gender'] = null;
-            if ($firstFace) {
-                $photo = $photoModel->find($firstFace['photo_id']);
-                $person['age'] = $firstFace['age'] ?? null;
-                $person['gender'] = $firstFace['gender'] ?? null;
-                if ($photo) {
-                    $pw = (float) ($photo['width'] ?: 800);
-                    $ph = (float) ($photo['height'] ?: 600);
+        // Attach thumbnail data for each person in ONE batch query using thumbnail_path
+        if (!empty($persons)) {
+            $personIds = array_column($persons, 'id');
+            $personFaces = $db->table('tbl_face_encodings fe')
+                ->select('fe.person_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, p.path, p.thumbnail_path, p.width, p.height')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->whereIn('fe.person_id', $personIds)
+                ->orderBy('fe.id', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            $personFaceMap = [];
+            foreach ($personFaces as $pf) {
+                $pid = (int) $pf['person_id'];
+                if (!isset($personFaceMap[$pid])) {
+                    $personFaceMap[$pid] = $pf;
+                }
+            }
+
+            foreach ($persons as &$person) {
+                $pid = (int) $person['id'];
+                $pf = $personFaceMap[$pid] ?? null;
+                $person['thumbnail'] = null;
+                $person['age'] = null;
+                $person['gender'] = null;
+                if ($pf) {
+                    $person['age'] = $pf['age'] ?? null;
+                    $person['gender'] = $pf['gender'] ?? null;
+                    $pw = (float) ($pf['width'] ?: 800);
+                    $ph = (float) ($pf['height'] ?: 600);
+                    $thumbUrl = !empty($pf['thumbnail_path']) ? base_url($pf['thumbnail_path']) : base_url($pf['path']);
                     $person['thumbnail'] = [
-                        'url'  => base_url($photo['path']),
-                        'x'    => (float) $firstFace['bbox_x'],
-                        'y'    => (float) $firstFace['bbox_y'],
-                        'w'    => (float) $firstFace['bbox_w'],
-                        'h'    => (float) $firstFace['bbox_h'],
+                        'url'  => $thumbUrl,
+                        'x'    => (float) $pf['bbox_x'],
+                        'y'    => (float) $pf['bbox_y'],
+                        'w'    => (float) $pf['bbox_w'],
+                        'h'    => (float) $pf['bbox_h'],
                         'pw'   => $pw,
                         'ph'   => $ph,
                     ];
                 }
             }
+            unset($person);
         }
-        unset($person);
 
-        // Attach thumbnail data for unassigned faces scoped to user
+        // Attach thumbnail data for unassigned faces scoped to user (single JOIN, capped at 48 for fast DOM rendering)
         $unassignedRows = $db->table('tbl_face_encodings fe')
-            ->select('fe.*')
+            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
-            ->orderBy('fe.id')
+            ->orderBy('fe.id', 'DESC')
+            ->limit(48)
             ->get()
             ->getResultArray();
 
         $unassigned = [];
-        foreach ($unassignedRows as &$uface) {
-            $uface['thumbnail'] = null;
-            $photo = $photoModel->find($uface['photo_id']);
-            if ($photo) {
-                $pw = (float) ($photo['width'] ?: 800);
-                $ph = (float) ($photo['height'] ?: 600);
-                $uface['thumbnail'] = [
-                    'url'  => base_url($photo['path']),
-                    'x'    => (float) $uface['bbox_x'],
-                    'y'    => (float) $uface['bbox_y'],
-                    'w'    => (float) $uface['bbox_w'],
-                    'h'    => (float) $uface['bbox_h'],
-                    'pw'   => $pw,
-                    'ph'   => $ph,
-                ];
-            }
+        foreach ($unassignedRows as $uface) {
+            $pw = (float) ($uface['width'] ?: 800);
+            $ph = (float) ($uface['height'] ?: 600);
+            $thumbUrl = !empty($uface['thumbnail_path']) ? base_url($uface['thumbnail_path']) : base_url($uface['path']);
+            $uface['thumbnail'] = [
+                'url'  => $thumbUrl,
+                'x'    => (float) $uface['bbox_x'],
+                'y'    => (float) $uface['bbox_y'],
+                'w'    => (float) $uface['bbox_w'],
+                'h'    => (float) $uface['bbox_h'],
+                'pw'   => $pw,
+                'ph'   => $ph,
+            ];
             $unassigned[] = $uface;
         }
-        unset($uface);
 
         // Storage metrics for sidebar bar
         $totalBytes     = (int)($photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0);
@@ -146,12 +161,15 @@ class Faces extends BaseController
         $faceModel = new FaceEncodingModel();
         $faces = $faceModel->where('person_id', $personId)->orderBy('id', 'ASC')->findAll();
 
-        $photoIds = array_unique(array_column($faces, 'photo_id'));
-        $photoModel = new \App\Models\PhotoModel();
+        $photoIds = array_unique(array_filter(array_column($faces, 'photo_id')));
         $photos = [];
-        foreach ($photoIds as $pid) {
-            $p = $photoModel->find($pid);
-            if ($p) $photos[] = $p;
+        if (!empty($photoIds)) {
+            $photoModel = new \App\Models\PhotoModel();
+            $photos = $photoModel->whereIn('id', $photoIds)
+                ->where('user_id', auth()->id())
+                ->where('is_archived', false)
+                ->orderBy('taken_at', 'DESC')
+                ->findAll();
         }
 
         $label = $person['name'] ?: 'Person ' . $person['id'];
@@ -166,11 +184,14 @@ class Faces extends BaseController
 
     public function photo(int $photoId)
     {
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        if (!$photo) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
         $faceModel = new FaceEncodingModel();
         $faces = $faceModel->getFacesByPhoto($photoId);
-
-        $photoModel = new \App\Models\PhotoModel();
-        $photo = $photoModel->find($photoId);
 
         $tagModel = new \App\Models\PhotoTagModel();
         $tags = $tagModel->where('photo_id', $photoId)->orderBy('tag', 'ASC')->findAll();
@@ -184,16 +205,18 @@ class Faces extends BaseController
         $currentIndex = 0;
         if ($highlightPersonId) {
             $allFaces = $faceModel->where('person_id', $highlightPersonId)->orderBy('id', 'ASC')->findAll();
-            $allPhotoIds = array_unique(array_column($allFaces, 'photo_id'));
-            $idx = 0;
-            foreach ($allPhotoIds as $pid) {
-                $p = $photoModel->find($pid);
-                if ($p) {
-                    $personPhotos[] = $p;
-                    if ($pid == $photoId) {
+            $allPhotoIds = array_unique(array_filter(array_column($allFaces, 'photo_id')));
+            if (!empty($allPhotoIds)) {
+                $personPhotos = $photoModel->whereIn('id', $allPhotoIds)
+                    ->where('user_id', auth()->id())
+                    ->where('is_archived', false)
+                    ->orderBy('taken_at', 'DESC')
+                    ->findAll();
+                foreach ($personPhotos as $idx => $p) {
+                    if ((int)$p['id'] === $photoId) {
                         $currentIndex = $idx;
+                        break;
                     }
-                    $idx++;
                 }
             }
         }
@@ -213,16 +236,27 @@ class Faces extends BaseController
 
     public function apiFaces(int $photoId): ResponseInterface
     {
+        $photoModel = new \App\Models\PhotoModel();
+        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found'])->setStatusCode(404);
+        }
+
         $faceModel = new FaceEncodingModel();
         $faces = $faceModel->getFacesByPhoto($photoId);
 
+        $personIds = array_unique(array_filter(array_column($faces, 'person_id')));
+        $personMap = [];
+        if (!empty($personIds)) {
+            $persons = model('App\Models\PersonModel')->whereIn('id', $personIds)->findAll();
+            foreach ($persons as $p) {
+                $personMap[$p['id']] = $p['name'];
+            }
+        }
+
         $result = [];
         foreach ($faces as $f) {
-            $personName = null;
-            if ($f['person_id']) {
-                $person = model('App\Models\PersonModel')->find($f['person_id']);
-                $personName = $person['name'] ?? null;
-            }
+            $personName = $f['person_id'] ? ($personMap[$f['person_id']] ?? null) : null;
             $result[] = [
                 'face_id'      => (int) $f['id'],
                 'photo_id'     => (int) $f['photo_id'],
@@ -296,30 +330,30 @@ class Faces extends BaseController
 
         $db = \Config\Database::connect();
         $faces = $db->table('tbl_face_encodings fe')
-            ->select('fe.*')
+            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
-            ->orderBy('fe.id')
+            ->orderBy('fe.id', 'DESC')
+            ->limit(100)
             ->get()
             ->getResultArray();
 
-        $photoModel = new \App\Models\PhotoModel();
         $result = [];
         foreach ($faces as $f) {
-            $photo = $photoModel->find($f['photo_id']);
+            $thumbUrl = !empty($f['thumbnail_path']) ? base_url($f['thumbnail_path']) : base_url($f['path']);
             $result[] = [
-                'face_id'  => (int) $f['id'],
-                'photo_id' => (int) $f['photo_id'],
-                'photo_path' => $photo ? base_url($photo['path']) : '',
-                'bbox'     => [
+                'face_id'      => (int) $f['id'],
+                'photo_id'     => (int) $f['photo_id'],
+                'photo_path'   => $thumbUrl,
+                'bbox'         => [
                     'x' => (float) $f['bbox_x'],
                     'y' => (float) $f['bbox_y'],
                     'w' => (float) $f['bbox_w'],
                     'h' => (float) $f['bbox_h'],
                 ],
-                'photo_width' => $photo ? (float)($photo['width'] ?: 800) : 800,
-                'photo_height' => $photo ? (float)($photo['height'] ?: 600) : 600,
+                'photo_width'  => (float) ($f['width'] ?: 800),
+                'photo_height' => (float) ($f['height'] ?: 600),
             ];
         }
 
@@ -334,12 +368,15 @@ class Faces extends BaseController
         $faceModel = new FaceEncodingModel();
         $faces = $faceModel->where('person_id', $personId)->orderBy('id', 'ASC')->findAll();
 
-        $photoIds = array_unique(array_column($faces, 'photo_id'));
-        $photoModel = new \App\Models\PhotoModel();
+        $photoIds = array_unique(array_filter(array_column($faces, 'photo_id')));
         $photos = [];
-        foreach ($photoIds as $pid) {
-            $p = $photoModel->find($pid);
-            if ($p) $photos[] = $p;
+        if (!empty($photoIds)) {
+            $photoModel = new \App\Models\PhotoModel();
+            $photos = $photoModel->whereIn('id', $photoIds)
+                ->where('user_id', auth()->id())
+                ->where('is_archived', false)
+                ->orderBy('taken_at', 'DESC')
+                ->findAll();
         }
 
         return $this->response->setJSON([
@@ -455,6 +492,12 @@ class Faces extends BaseController
             ])->setStatusCode(404);
         }
 
+        // Verify photo ownership
+        $photo = model('App\Models\PhotoModel')->where('user_id', auth()->id())->find($face['photo_id']);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(403);
+        }
+
         $newPersonId = null;
         if ($personIdInput === 'new') {
             $personModel = new PersonModel();
@@ -532,6 +575,12 @@ class Faces extends BaseController
             ])->setStatusCode(404);
         }
 
+        // Verify photo ownership
+        $photo = model('App\Models\PhotoModel')->where('user_id', auth()->id())->find($face['photo_id']);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(403);
+        }
+
         $updateData = [];
         if ($gender !== null) {
             $updateData['gender'] = ($gender === '' || $gender === 'null') ? null : strtolower($gender);
@@ -565,6 +614,23 @@ class Faces extends BaseController
             ])->setStatusCode(400);
         }
 
+        // Verify that the faces belong to photos owned by the authenticated user
+        $userId = auth()->id() ?: 0;
+        $db = \Config\Database::connect();
+        $ownedFaces = $db->table('tbl_face_encodings fe')
+            ->select('fe.id')
+            ->join('tbl_photos p', 'p.id = fe.photo_id')
+            ->where('p.user_id', $userId)
+            ->whereIn('fe.id', array_map('intval', $faceIds))
+            ->get()->getResultArray();
+        $validFaceIds = array_column($ownedFaces, 'id');
+
+        if (empty($validFaceIds)) {
+            return $this->response->setJSON([
+                'status' => 'error', 'message' => 'No valid faces found or unauthorized',
+            ])->setStatusCode(403);
+        }
+
         $newPersonId = null;
         if ($personIdInput === 'new') {
             $personModel = new PersonModel();
@@ -581,9 +647,8 @@ class Faces extends BaseController
 
         $faceModel = new FaceEncodingModel();
         $oldPersonIds = [];
-        $userId = auth()->id() ?: 0;
 
-        foreach ($faceIds as $faceId) {
+        foreach ($validFaceIds as $faceId) {
             $face = $faceModel->find((int)$faceId);
             if ($face) {
                 $oldPersonId = $face['person_id'];
@@ -628,7 +693,7 @@ class Faces extends BaseController
 
         return $this->response->setJSON([
             'status' => 'success',
-            'updated_count' => count($faceIds),
+            'updated_count' => count($validFaceIds),
             'person_id' => $newPersonId,
         ]);
     }
@@ -657,6 +722,18 @@ class Faces extends BaseController
         $faceModel->where('person_id', $sourceId)->set(['person_id' => $targetId])->update();
 
         $personModel->delete($sourceId);
+
+        // Notify ML service to merge cluster centroids in Qdrant
+        try {
+            $this->mlProxy('POST', '/api/v1/faces/persons/merge', [
+                'form_params' => [
+                    'source_person_id' => $sourceId,
+                    'target_person_id' => $targetId,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            log_message('warning', "ML persons/merge failed for {$sourceId} -> {$targetId}: " . $e->getMessage());
+        }
 
         return $this->response->setJSON([
             'status' => 'success',
@@ -940,6 +1017,12 @@ class Faces extends BaseController
             ])->setStatusCode(404);
         }
 
+        // Verify photo ownership
+        $photo = model('App\Models\PhotoModel')->where('user_id', auth()->id())->find($face['photo_id']);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(403);
+        }
+
         $personModel->update($personId, [
             'thumbnail_face_id' => $faceId,
         ]);
@@ -971,6 +1054,12 @@ class Faces extends BaseController
             ])->setStatusCode(404);
         }
 
+        // Verify photo ownership
+        $photo = model('App\Models\PhotoModel')->where('user_id', auth()->id())->find($face['photo_id']);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(403);
+        }
+
         $faceModel->update($faceId, [
             'person_id' => null,
         ]);
@@ -993,7 +1082,16 @@ class Faces extends BaseController
         $queueSize = 0;
         $isProcessing = false;
         try {
-            $h = $this->mlProxy('GET', '/api/v1/health');
+            $h = cache('ml_health_status');
+            if ($h === null) {
+                $h = $this->mlProxy('GET', '/api/v1/health', [
+                    'connect_timeout' => 2,
+                    'timeout'         => 3,
+                ]);
+                if (!empty($h) && !isset($h['error'])) {
+                    cache()->save('ml_health_status', $h, 3);
+                }
+            }
             if (isset($h['queue_size'])) {
                 $queueSize = (int)$h['queue_size'];
                 $isProcessing = (bool)($h['is_processing'] ?? false);

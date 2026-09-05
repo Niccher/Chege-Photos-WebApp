@@ -28,14 +28,17 @@ class MediaFallback extends BaseController
      */
     protected function serveMedia(string $type, array $segments)
     {
-        // 1. Sanitize segments to prevent directory traversal attacks
+        // 1. Sanitize segments to prevent directory traversal attacks while preserving directory hierarchy
         $cleanSegments = [];
         foreach ($segments as $segment) {
-            $segment = str_replace(["\0", '\\'], '', (string) $segment);
-            if ($segment === '' || $segment === '.' || $segment === '..') {
-                continue;
+            $parts = explode('/', (string) $segment);
+            foreach ($parts as $part) {
+                $part = str_replace(["\0", '\\'], '', trim($part));
+                if ($part === '' || $part === '.' || $part === '..') {
+                    continue;
+                }
+                $cleanSegments[] = basename($part);
             }
-            $cleanSegments[] = basename($segment);
         }
 
         if (empty($cleanSegments)) {
@@ -55,6 +58,11 @@ class MediaFallback extends BaseController
         $gcp = new GcpStorageService();
 
         if ($gcp->isConfigured()) {
+            $targetDir = dirname($localPath);
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0777, true);
+            }
+
             // Attempt to hydrate requested file directly from GCP
             $downloaded = $gcp->downloadFile($relativePath, $localPath);
             if ($downloaded && file_exists($localPath) && filesize($localPath) > 0) {

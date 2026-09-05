@@ -235,7 +235,7 @@ $(function() {
                 const isProc = res.is_processing || (res.queue_size || 0) > 0;
                 const pct = total > 0 ? Math.min(100, Math.round((scanned / total) * 100)) : 100;
 
-                if (isProc || (unscanned > 0 && pct < 100)) {
+                if (isProc) {
                     $('#facesScanBanner').removeClass('d-none');
                     $('#facesScanProgressBar').css('width', pct + '%');
                     $('#facesScanCounts').text(scanned + ' / ' + total + ' photos (' + pct + '%)');

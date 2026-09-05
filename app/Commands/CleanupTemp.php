@@ -28,6 +28,10 @@ class CleanupTemp extends BaseCommand
             );
 
             foreach ($files as $fileinfo) {
+                // Safeguard: Never delete actual user media files
+                if (strpos($fileinfo->getRealPath(), '/users/') !== false) {
+                    continue;
+                }
                 if ($fileinfo->isFile() && $fileinfo->getMTime() < $cutoff) {
                     @unlink($fileinfo->getRealPath());
                     $cleaned++;

@@ -44,16 +44,21 @@
     </div>
 </div>
 
-<!-- Storage Optimization Assistant -->
+<!-- Duplicate Photo Detection & Storage Reclaimer -->
 <div class="card border-0 shadow-sm rounded-card p-4 mt-4" style="background: var(--card-bg); color: var(--text-primary);">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-            <h5 class="mb-1"><i class="bi bi-magic text-warning me-2"></i>Storage Optimization Assistant</h5>
-            <p class="text-muted small mb-0">Identify redundant media, purge duplicates, and recover valuable storage quota.</p>
+            <h5 class="mb-1"><i class="bi bi-files text-primary me-2"></i>Duplicate Photo Detection &amp; Storage Reclaimer</h5>
+            <p class="text-muted small mb-0">Scan for exact binary file duplicates across your photo library. Group identical photos by SHA-256 hash and reclaim disk storage by moving redundant copies to the Trash bin in a single click.</p>
         </div>
-        <button class="btn btn-primary rounded-pill px-3 py-1" id="btnScanOptimizer">
-            <i class="bi bi-search me-1"></i> Scan Library
-        </button>
+        <div class="d-flex gap-2">
+            <a href="<?= base_url('duplicates') ?>" class="btn btn-outline-secondary rounded-pill px-3 py-1">
+                <i class="bi bi-eye me-1"></i> Review Duplicates
+            </a>
+            <button class="btn btn-primary rounded-pill px-3 py-1" id="btnScanOptimizer">
+                <i class="bi bi-search me-1"></i> Scan Library
+            </button>
+        </div>
     </div>
 
     <div id="optimizerResults" class="d-none">

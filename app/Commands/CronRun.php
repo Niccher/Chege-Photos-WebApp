@@ -21,6 +21,7 @@ class CronRun extends BaseCommand
             'trash:purge'                    => setting('Cron.trashPurge') ?? '0 2 * * *',
             'ml:cluster'                     => setting('Cron.mlCluster') ?? '0 * * * *',
             'ml:sweep'                       => setting('Cron.mlSweep') ?? '*/5 * * * *',
+            'media:process-pending'          => setting('Cron.processPendingMedia') ?? '*/15 * * * *',
             'storage:clean-temp'             => setting('Cron.cleanTemp') ?? '30 1 * * *',
             'db:backup'                      => setting('Cron.dbBackup') ?? '0 3 * * *',
             'cloud:sync'                     => setting('Cron.cloudSync') ?? '30 3 * * *',

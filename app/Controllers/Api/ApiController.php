@@ -243,7 +243,110 @@ class ApiController extends BaseController
 
     public function memories()
     {
-        return $this->getPhotosByCategory('memories');
+        try {
+            $userId = auth()->id();
+            if (!$userId) {
+                return $this->response->setJSON(['status' => 'error', 'message' => 'User not authenticated'])->setStatusCode(401);
+            }
+
+            $photoModel = new \App\Models\PhotoModel();
+            $thisYear = (int) date('Y');
+            $dayRange = [];
+            for ($offset = -3; $offset <= 3; $offset++) {
+                $dayRange[] = date('m-d', strtotime("$offset days"));
+            }
+
+            $excludeHidden = (bool) (setting('ML.excludeHiddenMemories', "user:{$userId}") ?? true);
+            $excludedPhotoIds = [];
+            if ($excludeHidden) {
+                $db = \Config\Database::connect();
+                $unnamedOnlyRows = $db->query("
+                    SELECT fe.photo_id
+                    FROM tbl_face_encodings fe
+                    JOIN tbl_photos ph ON ph.id = fe.photo_id
+                    LEFT JOIN tbl_people p ON p.id = fe.person_id
+                    WHERE ph.user_id = ?
+                    GROUP BY fe.photo_id
+                    HAVING COUNT(fe.id) > 0 AND SUM(CASE WHEN p.name IS NOT NULL AND p.name != '' THEN 1 ELSE 0 END) = 0
+                ", [$userId])->getResultArray();
+                $excludedPhotoIds = array_column($unnamedOnlyRows, 'photo_id');
+            }
+
+            $seenIds = [];
+            $baseQuery = function() use ($photoModel, $userId, $excludedPhotoIds) {
+                $q = $photoModel->where('user_id', $userId)->where('is_archived', false);
+                if (!empty($excludedPhotoIds)) {
+                    $q->whereNotIn('id', $excludedPhotoIds);
+                }
+                return $q;
+            };
+
+            // 1. On this day & week in past years
+            $pastYearsPhotos = $baseQuery()
+                ->whereIn("DATE_FORMAT(taken_at, '%m-%d')", $dayRange)
+                ->where("YEAR(taken_at) <", $thisYear)
+                ->orderBy('taken_at', 'DESC')
+                ->findAll(60);
+            foreach ($pastYearsPhotos as $p) $seenIds[] = (int) $p['id'];
+
+            // 2. This month in past years
+            $thisMonthQuery = $baseQuery()
+                ->where("MONTH(taken_at) =", (int) date('m'))
+                ->where("YEAR(taken_at) <", $thisYear);
+            if (!empty($seenIds)) $thisMonthQuery->whereNotIn('id', $seenIds);
+            $thisMonthPhotos = $thisMonthQuery->orderBy('is_favorite', 'DESC')->orderBy('taken_at', 'DESC')->findAll(30);
+            foreach ($thisMonthPhotos as $p) $seenIds[] = (int) $p['id'];
+
+            // 3. Favorites
+            $favQuery = $baseQuery()->where('is_favorite', true);
+            if (!empty($seenIds)) $favQuery->whereNotIn('id', $seenIds);
+            $favoritePhotos = $favQuery->orderBy('taken_at', 'DESC')->findAll(20);
+            foreach ($favoritePhotos as $p) $seenIds[] = (int) $p['id'];
+
+            // Build stories
+            $stories = [];
+            $byYear = [];
+            foreach ($pastYearsPhotos as $photo) {
+                $y = date('Y', strtotime($photo['taken_at']));
+                $byYear[$y][] = $photo;
+            }
+            foreach ($byYear as $year => $photos) {
+                $yearsAgo = $thisYear - (int) $year;
+                $label = $yearsAgo === 1 ? '1 Year Ago' : "{$yearsAgo} Years Ago";
+                $hero = $photos[0];
+                $stories[] = [
+                    'id'        => 'year_' . $year,
+                    'title'     => $label,
+                    'subtitle'  => date('M j, Y', strtotime($hero['taken_at'])),
+                    'cover_url' => !empty($hero['thumbnail_path']) ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                    'count'     => count($photos),
+                    'photos'    => array_map([$this, 'formatPhotoForApi'], $photos),
+                ];
+            }
+
+            if (!empty($thisMonthPhotos)) {
+                $hero = $thisMonthPhotos[0];
+                $stories[] = [
+                    'id'        => 'month_flashback',
+                    'title'     => date('F') . ' Flashback',
+                    'subtitle'  => 'From previous years',
+                    'cover_url' => !empty($hero['thumbnail_path']) ? base_url($hero['thumbnail_path']) : base_url($hero['path']),
+                    'count'     => count($thisMonthPhotos),
+                    'photos'    => array_map([$this, 'formatPhotoForApi'], $thisMonthPhotos),
+                ];
+            }
+
+            $allPhotos = array_merge($pastYearsPhotos, $thisMonthPhotos, $favoritePhotos);
+            $formattedPhotos = array_map([$this, 'formatPhotoForApi'], $allPhotos);
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'stories' => $stories,
+                'photos'  => $formattedPhotos,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['status' => 'error', 'message' => $e->getMessage()])->setStatusCode(500);
+        }
     }
 
     public function favorites()
@@ -351,16 +454,6 @@ class ApiController extends BaseController
     public function checkHashes()
     {
         try {
-            $sha256 = $this->request->getPost('sha256') ?? $this->request->getVar('sha256');
-
-            if (empty($sha256)) {
-                return $this->response->setJSON([
-                    'status' => 'error',
-                    'message' => 'sha256 parameter is required'
-                ])->setStatusCode(400);
-            }
-
-            $photoModel = new \App\Models\PhotoModel();
             $userId = auth()->id();
 
             if (!$userId) {
@@ -368,6 +461,45 @@ class ApiController extends BaseController
                     'status' => 'error',
                     'message' => 'User not authenticated'
                 ])->setStatusCode(401);
+            }
+
+            $photoModel = new \App\Models\PhotoModel();
+
+            // 1. Batch mode: 'hashes' (array, JSON, or comma-separated)
+            $rawHashes = $this->request->getPost('hashes') ?? $this->request->getVar('hashes');
+            if (!empty($rawHashes)) {
+                if (is_string($rawHashes)) {
+                    $decoded = json_decode($rawHashes, true);
+                    $hashList = is_array($decoded) ? $decoded : explode(',', $rawHashes);
+                } elseif (is_array($rawHashes)) {
+                    $hashList = $rawHashes;
+                } else {
+                    $hashList = [];
+                }
+
+                $hashList = array_values(array_filter(array_map('trim', $hashList)));
+                if (!empty($hashList)) {
+                    $matched = $photoModel->select('file_hash')
+                        ->where('user_id', $userId)
+                        ->whereIn('file_hash', $hashList)
+                        ->findAll();
+                    $existing = array_values(array_unique(array_column($matched, 'file_hash')));
+                    return $this->response->setJSON([
+                        'status'   => 'success',
+                        'existing' => $existing,
+                        'count'    => count($existing),
+                    ]);
+                }
+            }
+
+            // 2. Single-hash mode: 'sha256'
+            $sha256 = $this->request->getPost('sha256') ?? $this->request->getVar('sha256');
+
+            if (empty($sha256)) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'sha256 or hashes parameter is required'
+                ])->setStatusCode(400);
             }
 
             $existing = $photoModel->where('file_hash', $sha256)
