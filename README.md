@@ -9,12 +9,12 @@ Self-hosted personal photo and video management platform featuring automated ML 
 
 ## What “Running” Looks Like
 
-| Piece | URL / How to open | Port | Dev Login (Default) |
+| Piece | URL / How to open | Port | Purpose / Default Credential |
 |---|---|---|---|
-| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | `admin@example.com` / `SuperAdmin@2024!` |
-| **phpMyAdmin** | [http://localhost:9000](http://localhost:9000) | `9000` | `root` / `root_password` |
-| **REST Health Check**| `GET http://localhost:9005/api/v1/health` | `9005` | Returns `200 OK` |
-| **Android Client** | Companion APK | — | Point server to `http://10.0.2.2:9005` (emulator) |
+| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | Web UI & Admin (`admin@example.com` / `SuperAdmin@2024!`) |
+| **MySQL 8.4** | `localhost:9306` | `9306` | Database (`db_chege_photos` / `root_password`) |
+| **REST Health Check**| `GET http://localhost:9005/api/v1/health` | `9005` | Returns `200 OK` JSON |
+| **Android Client** | Companion APK | — | Connects to WebApp at `http://10.0.2.2:9005` (emulator) or LAN IP |
 
 ---
 
@@ -101,6 +101,46 @@ For architecture, database schemas, API specs, and development workflows, see th
 * [Database Migrations & Management](docs/engineering/database.md)
 * [Making Changes & Definition of Done](docs/engineering/making-changes.md)
 * [Testing Guide](docs/engineering/testing.md)
+
+---
+
+## Ecosystem & Multi-Repo Architecture
+
+Chege Photos is composed of three decoupled repositories that work together:
+
+```
+[ Android Companion App ]
+         │
+         │ (HTTPS / Bearer Token - port 9005)
+         ▼
+[ Chege Photos WebApp ] (Port 9005) ─── talks to ───► [ MySQL 8.4 ] (Port 9306)
+         │
+         │ (HTTP / X-API-KEY - port 9051)
+         ▼
+[ ML Chege Photos ] (Port 9051) ─────── talks to ───► [ Qdrant Vector DB ] (Port 9052)
+```
+
+### How the Repositories Interact
+1. **Android App** talks **exclusively to WebApp**:
+   - The Android client never communicates with the ML service directly.
+   - It only needs the WebApp address (`http://10.0.2.2:9005` in emulator, or host LAN IP e.g. `http://192.168.1.50:9005` on physical devices).
+2. **WebApp delegates AI to ML Service**:
+   - When photos are uploaded (from WebApp UI or Android), WebApp dispatches asynchronous scan jobs to the ML service via `ML_URL` (`http://localhost:9051` or `http://ml-chege-photos:8000`).
+   - The ML service detects faces (InsightFace), tags objects (YOLOv8), and generates vector embeddings (CLIP) stored in Qdrant.
+   - When Android or WebApp searches or explores faces, the WebApp queries the ML service/Qdrant transparently.
+
+### Startup Order for Complete Stack
+1. **Start WebApp First** (spins up MySQL and creates `hosts-shared-network`):
+   ```bash
+   cd "Chege Photos WebApp"
+   docker compose up -d
+   ```
+2. **Start ML Service Second** (joins `hosts-shared-network` and spins up Qdrant):
+   ```bash
+   cd "ML Chege Photos"
+   docker compose up -d
+   ```
+3. **Run Android Companion** (build & run in Android Studio; scan QR code in WebApp Settings to pair).
 
 ---
 

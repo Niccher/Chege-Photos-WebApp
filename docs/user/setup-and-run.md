@@ -41,7 +41,6 @@ Expected output:
 NAME                  IMAGE                        COMMAND                  SERVICE        CREATED         STATUS                   PORTS
 chege-photos-webapp   chege-photos-webapp:latest   "entrypoint.sh apach…"   chege-photos   1 minute ago    Up 1 minute              0.0.0.0:9005->80/tcp
 shared-mysql          mysql:8.4                    "docker-entrypoint.s…"   mysql          1 minute ago    Up 1 minute (healthy)    0.0.0.0:9306->3306/tcp
-shared-phpmyadmin     phpmyadmin:latest            "/docker-entrypoint.…"   phpmyadmin     1 minute ago    Up 1 minute              0.0.0.0:9000->80/tcp
 ```
 
 ---
@@ -53,7 +52,6 @@ Open your browser and test the following access points:
 | Service | URL | Default Credentials | Verification Check |
 |---|---|---|---|
 | **Web Application** | [http://localhost:9005](http://localhost:9005) | `admin@example.com` / `SuperAdmin@2024!` | Login redirects to `/admin/home` or photo grid. |
-| **phpMyAdmin** | [http://localhost:9000](http://localhost:9000) | `root` / `root_password` | Database `db_chege_photos` contains 24 tables. |
 | **REST Health Probe** | `http://localhost:9005/api/v1/health` | Public / Token | Returns JSON status `success`. |
 
 ---

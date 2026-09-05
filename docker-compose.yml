@@ -2,7 +2,7 @@ version: '3.8'
 
 # Standalone Docker Compose for Chege Photos WebApp
 # Usage: docker compose up --build -d
-# This will spin up the webapp, MySQL, and phpMyAdmin.
+# This will spin up the webapp and MySQL.
 
 services:
   mysql:
@@ -22,22 +22,6 @@ services:
       start_period: 30s
     volumes:
       - mysql-data:/var/lib/mysql
-    networks:
-      - shared-network
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: shared-phpmyadmin
-    ports:
-      - "9000:80"
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: root_password
-    depends_on:
-      mysql:
-        condition: service_healthy
     networks:
       - shared-network
 
