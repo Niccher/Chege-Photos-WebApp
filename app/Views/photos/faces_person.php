@@ -2,12 +2,15 @@
 
 <?= $this->section('content') ?>
 
-<div class="mb-3 d-flex align-items-center gap-2">
+<div class="mb-3 d-flex align-items-center flex-wrap gap-2">
     <a href="<?= base_url('faces') ?>" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back
     </a>
-    <h4 class="mb-0"><?= esc($label) ?></h4>
+    <h4 class="mb-0" id="personTitle"><?= esc($label) ?></h4>
     <span class="badge bg-secondary rounded-pill"><?= count($photos) ?> photo<?= count($photos) !== 1 ? 's' : '' ?></span>
+    <button class="btn btn-outline-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#renamePersonModal">
+        <i class="bi bi-pencil me-1"></i>Rename
+    </button>
 </div>
 
 <?php if (!empty($photos)): ?>
@@ -29,4 +32,49 @@
     <div class="text-center py-5 text-muted">No photos found for this face.</div>
 <?php endif; ?>
 
+<!-- Rename Person Modal -->
+<div class="modal fade" id="renamePersonModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title"><i class="bi bi-person me-2"></i>Rename Person</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small text-muted">Person Name</label>
+                <input type="text" class="form-control form-control-sm fw-semibold" id="newPersonNameInput" 
+                       value="<?= esc($person['name'] ?? '') ?>" placeholder="e.g. John">
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSavePersonName">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+<script>
+$(function() {
+    $('#btnSavePersonName').on('click', function() {
+        const name = $('#newPersonNameInput').val().trim();
+        if (!name) {
+            alert('Please enter a name.');
+            return;
+        }
+        const btn = $(this).prop('disabled', true);
+        $.post(BASE_URL + 'faces/persons/name/<?= $person['id'] ?>', { name: name }, function(res) {
+            if (res.status === 'success') {
+                $('#personTitle').text(res.person.name);
+                showToast('Person renamed successfully!');
+                bootstrap.Modal.getInstance(document.getElementById('renamePersonModal')).hide();
+            } else {
+                showToast('Rename failed: ' + (res.message || 'Error'), 'danger');
+            }
+        }, 'json').always(() => btn.prop('disabled', false));
+    });
+});
+</script>
 <?= $this->endSection() ?>

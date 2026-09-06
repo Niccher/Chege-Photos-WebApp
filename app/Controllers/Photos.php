@@ -306,11 +306,60 @@ class Photos extends BaseController
             ],
         ];
 
+        // 6. Hub 5: Expressions & Emotions
+        $emotionCategories = [];
+        try {
+            $emotionRows = $db->table('tbl_face_encodings fe')
+                ->select('fe.emotion, COUNT(DISTINCT fe.photo_id) as photo_count, MIN(fe.photo_id) as sample_photo_id')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->where('p.user_id', $userId)
+                ->where('p.is_archived', false)
+                ->where('fe.emotion IS NOT NULL')
+                ->where("fe.emotion != ''")
+                ->groupBy('fe.emotion')
+                ->having('photo_count >=', 1)
+                ->orderBy('photo_count', 'DESC')
+                ->limit(8)
+                ->get()
+                ->getResultArray();
+
+            $emPhotoIds = array_filter(array_column($emotionRows, 'sample_photo_id'));
+            $emPhotos = [];
+            if (!empty($emPhotoIds)) {
+                $emPhotoRows = $photoModel->select('id, path, thumbnail_path')
+                    ->whereIn('id', $emPhotoIds)
+                    ->findAll();
+                foreach ($emPhotoRows as $epr) {
+                    $emPhotos[$epr['id']] = $epr;
+                }
+            }
+
+            foreach ($emotionRows as $er) {
+                $sample = $emPhotos[$er['sample_photo_id']] ?? null;
+                $coverUrl = null;
+                if ($sample) {
+                    $coverUrl = !empty($sample['thumbnail_path']) ? base_url($sample['thumbnail_path']) : base_url($sample['path']);
+                }
+                $cleanLabel = trim($er['emotion']);
+                $rawQuery = explode('/', $cleanLabel)[0];
+                $rawQuery = preg_replace('/[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u', '', $rawQuery);
+                $emotionCategories[] = [
+                    'emotion'   => $cleanLabel,
+                    'query'     => strtolower(trim($rawQuery)),
+                    'count'     => (int) $er['photo_count'],
+                    'cover_url' => $coverUrl,
+                ];
+            }
+        } catch (\Throwable $t) {
+            log_message('error', 'Explore emotion hub error: ' . $t->getMessage());
+        }
+
         $data = [
             'locations'        => $locations,
             'placeClusters'    => $placeClusters,
             'topPersons'       => $topPersons,
             'thingsCategories' => $thingsCategories,
+            'emotionCategories'=> $emotionCategories,
             'mediaTypes'       => $mediaTypes,
             'totalPhotos'      => $totalPhotos,
             'geotaggedPhotos'  => count($locations),
@@ -2219,6 +2268,63 @@ class Photos extends BaseController
                               ->get()
                               ->getResultArray();
         $photoIds = array_column($matchedPhotoIds, 'photo_id');
+
+        $userId = auth()->id() ?: 0;
+        $qLower = strtolower(trim($q));
+
+        // Emotion synonyms mapping
+        $emotionTerms = [];
+        if (in_array($qLower, ['smile', 'smiling', 'happy', 'laugh', 'laughing', 'joy', 'grin', 'cheerful', 'happiness'])) {
+            $emotionTerms = ['happy', 'smiling', 'smile'];
+        } elseif (in_array($qLower, ['sad', 'crying', 'cry', 'unhappy', 'sorrow', 'sadness', 'depressed'])) {
+            $emotionTerms = ['sad', 'crying'];
+        } elseif (in_array($qLower, ['neutral', 'serious', 'calm', 'blank', 'expressionless'])) {
+            $emotionTerms = ['neutral', 'serious'];
+        } elseif (in_array($qLower, ['angry', 'mad', 'furious', 'anger', 'annoyed'])) {
+            $emotionTerms = ['angry', 'mad'];
+        } elseif (in_array($qLower, ['surprised', 'surprise', 'shocked', 'astonished', 'gasp'])) {
+            $emotionTerms = ['surpris', 'shock'];
+        } elseif (in_array($qLower, ['fear', 'fearful', 'scared', 'afraid', 'frightened'])) {
+            $emotionTerms = ['fear', 'scared'];
+        } elseif (in_array($qLower, ['disgust', 'disgusted', 'gross'])) {
+            $emotionTerms = ['disgust'];
+        } else {
+            $emotionTerms = [$qLower];
+        }
+
+        try {
+            $faceQuery = $db->table('tbl_face_encodings fe')
+                ->select('fe.photo_id')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->where('p.user_id', $userId);
+
+            $faceQuery->groupStart();
+            foreach ($emotionTerms as $term) {
+                $faceQuery->orLike('fe.emotion', $term);
+            }
+
+            // Person name matching (e.g. searching "John" finds photos of John)
+            $faceQuery->orWhereIn('fe.person_id', function ($builder) use ($q) {
+                return $builder->select('id')->from('tbl_people')->like('name', $q);
+            });
+
+            // Gender matching
+            if (in_array($qLower, ['male', 'man', 'men', 'boy'])) {
+                $faceQuery->orWhere('fe.gender', 'male');
+            } elseif (in_array($qLower, ['female', 'woman', 'women', 'girl', 'lady'])) {
+                $faceQuery->orWhere('fe.gender', 'female');
+            }
+            $faceQuery->groupEnd();
+
+            $matchedFacePhotos = $faceQuery->get()->getResultArray();
+            if (!empty($matchedFacePhotos)) {
+                $facePhotoIds = array_column($matchedFacePhotos, 'photo_id');
+                $photoIds = array_merge($photoIds, $facePhotoIds);
+                $photoIds = array_values(array_unique($photoIds));
+            }
+        } catch (\Throwable $t) {
+            log_message('error', 'Face/Emotion search error: ' . $t->getMessage());
+        }
 
         // Query FastAPI ML service for CLIP semantic search
         try {

@@ -61,6 +61,15 @@
                                title="Select to merge">
                     </div>
 
+                    <!-- Quick Rename Icon Button -->
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle position-absolute top-0 end-0 m-1 shadow-sm btn-quick-rename" 
+                            data-person-id="<?= $person['id'] ?>" 
+                            data-person-name="<?= esc($pName) ?>" 
+                            title="Rename person" 
+                            style="z-index: 5; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; right: 34px !important;">
+                        <i class="bi bi-pencil text-muted" style="font-size: 0.75rem;"></i>
+                    </button>
+
                     <!-- Quick Merge Icon Button -->
                     <button type="button" class="btn btn-sm btn-light border rounded-circle position-absolute top-0 end-0 m-1 shadow-sm btn-quick-merge" 
                             data-person-id="<?= $person['id'] ?>" 
@@ -292,6 +301,28 @@
                 <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary rounded-pill px-4" id="btnExecuteQuickMerge" disabled>
                     <i class="bi bi-check-lg me-1"></i> Merge Identities
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Person Rename Modal -->
+<div class="modal fade" id="quickRenameModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); color: var(--text-primary);">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold fs-6"><i class="bi bi-pencil-square text-primary me-2"></i>Rename Person</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <label class="form-label small fw-bold text-muted mb-1">Person Name</label>
+                <input type="text" class="form-control form-control-sm fw-semibold" id="quickRenameInput" placeholder="e.g. John">
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" id="btnSubmitQuickRename">
+                    <i class="bi bi-check-lg me-1"></i> Save
                 </button>
             </div>
         </div>
@@ -573,6 +604,43 @@ $(function() {
             showToast('Network error during merge', 'danger');
             btn.prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i> Merge Identities');
         });
+    });
+
+    // ── Quick Rename Modal Logic ───────────────────────────────
+    let quickRenameTargetId = null;
+    let quickRenameCard = null;
+    const quickRenameModal = new bootstrap.Modal(document.getElementById('quickRenameModal'));
+
+    $(document).on('click', '.btn-quick-rename', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        quickRenameTargetId = $(this).data('person-id');
+        quickRenameCard = $(this).closest('.face-card');
+        const curName = $(this).data('person-name') || '';
+        $('#quickRenameInput').val(curName.startsWith('Person #') ? '' : curName);
+        quickRenameModal.show();
+    });
+
+    $('#btnSubmitQuickRename').on('click', function() {
+        const name = $('#quickRenameInput').val().trim();
+        if (!name) {
+            alert('Please enter a name');
+            return;
+        }
+        const btn = $(this).prop('disabled', true);
+        $.post(BASE_URL + 'faces/persons/name/' + quickRenameTargetId, { name: name }, function(res) {
+            if (res.status === 'success') {
+                showToast('Person renamed to ' + res.person.name + '!', 'success');
+                if (quickRenameCard) {
+                    quickRenameCard.find('.fw-semibold.small').text(res.person.name);
+                    quickRenameCard.attr('data-person-name', res.person.name);
+                    quickRenameCard.find('.btn-quick-rename').data('person-name', res.person.name);
+                }
+                quickRenameModal.hide();
+            } else {
+                showToast('Rename failed: ' + (res.message || 'Error'), 'danger');
+            }
+        }, 'json').always(() => btn.prop('disabled', false));
     });
 
     // ── Drag and Drop Logic (Single & Multi-Select) ────────────

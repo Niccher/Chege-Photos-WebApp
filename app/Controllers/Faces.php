@@ -221,10 +221,14 @@ class Faces extends BaseController
             }
         }
 
+        $personModel = new PersonModel();
+        $allPersons = $personModel->getPersonsWithFaceCountForUser(auth()->id());
+
         return view('photos/faces_photo', [
             'photo'              => $photo,
             'faces'              => $faces,
             'tags'               => $tags,
+            'allPersons'         => $allPersons,
             'highlightPersonId'  => $highlightPersonId,
             'personPhotos'       => $personPhotos,
             'currentIndex'       => $currentIndex,
@@ -569,6 +573,8 @@ class Faces extends BaseController
         $gender = $this->request->getPost('gender');
         $age = $this->request->getPost('age');
         $emotion = $this->request->getPost('emotion');
+        $personName = $this->request->getPost('person_name');
+        $personIdInput = $this->request->getPost('person_id');
 
         $faceModel = new FaceEncodingModel();
         $face = $faceModel->find($faceId);
@@ -578,13 +584,17 @@ class Faces extends BaseController
             ])->setStatusCode(404);
         }
 
+        $userId = auth()->id() ?: 0;
         // Verify photo ownership
-        $photo = model('App\Models\PhotoModel')->where('user_id', auth()->id())->find($face['photo_id']);
+        $photo = model('App\Models\PhotoModel')->where('user_id', $userId)->find($face['photo_id']);
         if (!$photo) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(403);
         }
 
+        $db = \Config\Database::connect();
+        $personModel = new PersonModel();
         $updateData = [];
+
         if ($gender !== null) {
             $updateData['gender'] = ($gender === '' || $gender === 'null') ? null : strtolower($gender);
         }
@@ -595,14 +605,110 @@ class Faces extends BaseController
             $updateData['emotion'] = ($emotion === '' || $emotion === 'null') ? null : $emotion;
         }
 
+        $targetPersonId = $face['person_id'] ? (int)$face['person_id'] : null;
+        $oldPersonId = $targetPersonId;
+        $savedPersonName = null;
+
+        if ($personIdInput !== null && $personIdInput !== '') {
+            if ($personIdInput === 'new') {
+                $targetPersonId = $personModel->insert(['name' => null]);
+            } else {
+                $targetPersonId = (int)$personIdInput;
+            }
+            $updateData['person_id'] = $targetPersonId;
+            if ($targetPersonId) {
+                $personRow = $personModel->find($targetPersonId);
+                $savedPersonName = $personRow['name'] ?? null;
+            }
+        }
+
+        if ($personName !== null) {
+            $personName = trim($personName);
+            $savedPersonName = $personName;
+
+            if ($personName !== '') {
+                // Find existing person with this name belonging to current user's photos
+                $existingPerson = $db->table('tbl_people p')
+                    ->select('p.id, p.name')
+                    ->join('tbl_face_encodings fe', 'fe.person_id = p.id')
+                    ->join('tbl_photos ph', 'ph.id = fe.photo_id')
+                    ->where('ph.user_id', $userId)
+                    ->where('LOWER(p.name)', strtolower($personName))
+                    ->get()->getRowArray();
+
+                if ($existingPerson && (int)$existingPerson['id'] !== $oldPersonId) {
+                    // Reassign face to existing named person
+                    $targetPersonId = (int)$existingPerson['id'];
+                    $updateData['person_id'] = $targetPersonId;
+                } elseif ($oldPersonId) {
+                    // Update name of the current person
+                    $personModel->update($oldPersonId, ['name' => $personName]);
+                    $targetPersonId = $oldPersonId;
+                } else {
+                    // Unassigned face with new name -> create person
+                    $targetPersonId = $personModel->insert(['name' => $personName]);
+                    $updateData['person_id'] = $targetPersonId;
+                }
+            } else {
+                // User cleared name
+                if ($oldPersonId) {
+                    $count = $faceModel->where('person_id', $oldPersonId)->countAllResults();
+                    if ($count <= 1) {
+                        $personModel->update($oldPersonId, ['name' => null]);
+                    }
+                    $savedPersonName = '';
+                }
+            }
+        }
+
         if (!empty($updateData)) {
             $faceModel->update($faceId, $updateData);
         }
 
+        // Active Learning sync to ML service
+        if ($targetPersonId && $targetPersonId !== $oldPersonId) {
+            try {
+                $this->mlProxy('POST', "/api/v1/faces/{$faceId}/annotate", [
+                    'form_params' => [
+                        'person_id'    => $targetPersonId,
+                        'action'       => 'confirm',
+                        'annotated_by' => $userId,
+                    ],
+                ]);
+            } catch (\Throwable $e) {
+                log_message('warning', "ML annotate failed for face {$faceId}: " . $e->getMessage());
+            }
+
+            // Cleanup old person if now orphaned
+            if ($oldPersonId) {
+                $remaining = $faceModel->where('person_id', $oldPersonId)->countAllResults();
+                if ($remaining === 0) {
+                    $personModel->delete($oldPersonId);
+                }
+            }
+        }
+
+        // Forward metadata updates to ML container
+        try {
+            $mlPayload = [];
+            if (isset($updateData['gender'])) $mlPayload['gender'] = $updateData['gender'];
+            if (isset($updateData['age'])) $mlPayload['age'] = $updateData['age'];
+            if (isset($updateData['emotion'])) $mlPayload['emotion'] = $updateData['emotion'];
+            if (!empty($mlPayload)) {
+                $this->mlProxy('POST', "/api/v1/faces/{$faceId}/metadata", [
+                    'form_params' => $mlPayload,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', "ML metadata update failed for face {$faceId}: " . $e->getMessage());
+        }
+
         return $this->response->setJSON([
-            'status' => 'success',
-            'face_id' => $faceId,
-            'updated' => $updateData,
+            'status'      => 'success',
+            'face_id'     => $faceId,
+            'person_id'   => $targetPersonId,
+            'person_name' => $savedPersonName,
+            'updated'     => $updateData,
         ]);
     }
 

@@ -103,10 +103,8 @@
                          data-img-h="<?= $photo['height'] ?: 600 ?>"
                          data-bs-toggle="tooltip"
                          onclick="showFaceModal(this)">
-                        <?php if ($personName): ?>
-                            <span class="position-absolute bottom-0 start-0 bg-dark bg-opacity-75 text-white px-1 small"
-                                  style="font-size:10px;line-height:1.2;"><?= esc($personName) ?></span>
-                        <?php endif; ?>
+                        <span class="position-absolute bottom-0 start-0 bg-dark bg-opacity-75 <?= $personName ? 'text-white' : 'text-white-50' ?> px-1 small face-bbox-name"
+                              style="font-size:10px;line-height:1.2;"><?= esc($personName ?: 'Unnamed') ?></span>
                         <!-- Hover Landmark overlays -->
                         <?php if (isset($face['landmark_left_eye_x']) && $face['bbox_w'] > 0): ?>
                             <?php
@@ -240,14 +238,17 @@
                                 $py = ($face['bbox_y'] / $fh) * 100;
                                 ?>
                                 <div class="d-flex align-items-center p-2 rounded border <?= $isFaceHighlighted ? 'border-warning bg-warning bg-opacity-10' : '' ?>" 
+                                     id="faceListItem-<?= $face['id'] ?>"
                                      onclick="triggerFaceDetails(<?= $face['id'] ?>)" style="cursor:pointer; background: var(--bs-tertiary-bg); transition: background-color 0.2s;">
                                     <div class="rounded-circle overflow-hidden flex-shrink-0 me-3" 
                                          style="width:40px;height:40px;background:url(<?= base_url($photo['path']) ?>) no-repeat;background-size:<?= 100 / ($face['bbox_w'] / $fw) ?>% <?= 100 / ($face['bbox_h'] / $fh) ?>%;background-position:<?= $px ?>% <?= $py ?>%;"></div>
                                     <div class="flex-grow-1 min-w-0">
-                                        <div class="fw-semibold text-truncate small"><?= $personName ? esc($personName) : 'Unassigned Face' ?></div>
-                                        <div class="text-muted" style="font-size:10px; line-height: 1.2;">
-                                            Sex: <?= $face['gender'] ? ucfirst($face['gender']) : 'Unknown' ?> | Age: <?= $face['age'] ? '~' . $face['age'] . 'y' : 'Unknown' ?><br>
-                                            Emotion: <?= esc(($face['emotion'] ?? null) ?: 'Auto detect') ?> | Coverage: <?= round($coverage, 2) ?>%
+                                        <div class="fw-semibold text-truncate small face-item-name"><?= $personName ? esc($personName) : 'Unassigned Face' ?></div>
+                                        <div class="text-muted face-item-meta" style="font-size:10px; line-height: 1.2;">
+                                            Sex: <span class="meta-val-gender"><?= $face['gender'] ? ucfirst($face['gender']) : 'Unknown' ?></span> | 
+                                            Age: <span class="meta-val-age"><?= $face['age'] ? '~' . $face['age'] . 'y' : 'Unknown' ?></span><br>
+                                            Emotion: <span class="meta-val-emotion"><?= esc(($face['emotion'] ?? null) ?: 'Auto detect') ?></span> | 
+                                            Coverage: <?= round($coverage, 2) ?>%
                                         </div>
                                     </div>
                                     <div class="text-muted small"><i class="bi bi-chevron-right"></i></div>
@@ -334,7 +335,28 @@
                 <div class="row align-items-center">
                     <div class="col-md-5 text-center border-end">
                         <div id="faceModalThumb" class="rounded-3 mx-auto mb-3 overflow-hidden position-relative" style="width:150px;height:150px;background:var(--card-bg);"></div>
-                        <h5 id="faceModalName" class="mb-0"></h5>
+                        <div id="faceNameWrapper" class="px-2">
+                            <div id="faceNameDisplay" class="d-flex align-items-center justify-content-center gap-1">
+                                <h5 id="faceModalName" class="mb-0 text-truncate" style="max-width: 140px;"></h5>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted" id="btnQuickRename" title="Rename or assign person" onclick="enterEditMode()">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </div>
+                            <div id="faceNameEditGroup" class="d-none mt-2">
+                                <label class="form-label small text-muted mb-1 text-start d-block">Person Name / Identity:</label>
+                                <input type="text" id="editPersonName" class="form-control form-control-sm text-center fw-semibold" placeholder="e.g. John" list="allPersonsList">
+                                <div class="text-muted small" style="font-size:10px;">Select existing or type new</div>
+                            </div>
+                        </div>
+                        <datalist id="allPersonsList">
+                            <?php if (!empty($allPersons)): ?>
+                                <?php foreach ($allPersons as $p): ?>
+                                    <?php if (!empty($p['name'])): ?>
+                                        <option value="<?= esc($p['name']) ?>"><?= esc($p['name']) ?> (<?= $p['face_count'] ?? 0 ?> faces)</option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </datalist>
                         <div id="faceModalLink" class="mt-3"></div>
                     </div>
                     <div class="col-md-7">
@@ -745,8 +767,14 @@ function enterEditMode() {
     $('#btnEditFaceMeta').addClass('d-none');
     $('#btnSaveFaceMeta, #btnCancelFaceMeta').removeClass('d-none');
 
+    // Show person name input
+    $('#faceNameDisplay').addClass('d-none');
+    $('#faceNameEditGroup').removeClass('d-none');
+    const currentName = activeTriggerElement.dataset.personName || '';
+    $('#editPersonName').val(currentName);
+
     // Get current values
-    const currentGender = activeTriggerElement.dataset.gender || '';
+    const currentGender = (activeTriggerElement.dataset.gender || '').toLowerCase();
     const currentAge = activeTriggerElement.dataset.age || '';
     const currentEmotion = activeTriggerElement.dataset.emotion || '';
 
@@ -759,27 +787,28 @@ function enterEditMode() {
     $('#metaGender').html(`
         <select id="editGender" class="form-select form-select-sm" style="width: auto;">
             <option value="" ${currentGender === '' ? 'selected' : ''}>Unknown</option>
-            <option value="male" ${currentGender.toLowerCase() === 'male' ? 'selected' : ''}>Male</option>
-            <option value="female" ${currentGender.toLowerCase() === 'female' ? 'selected' : ''}>Female</option>
+            <option value="male" ${currentGender === 'male' ? 'selected' : ''}>Male</option>
+            <option value="female" ${currentGender === 'female' ? 'selected' : ''}>Female</option>
+            <option value="other" ${currentGender === 'other' ? 'selected' : ''}>Other</option>
         </select>
     `);
 
     // Replace Age
     $('#metaAge').html(`
-        <input type="number" id="editAge" class="form-control form-control-sm" style="width: 80px;" min="0" max="120" value="${currentAge}">
+        <input type="number" id="editAge" class="form-control form-control-sm" style="width: 80px;" min="0" max="120" value="${currentAge}" placeholder="Age">
     `);
 
     // Replace Emotion/Expression
     $('#metaExpression').html(`
         <select id="editEmotion" class="form-select form-select-sm" style="width: auto;">
             <option value="" ${currentEmotion === '' ? 'selected' : ''}>Baseline (Auto) 🙂</option>
-            <option value="Smiling 😊" ${currentEmotion === 'Smiling 😊' ? 'selected' : ''}>Smiling 😊</option>
-            <option value="Serious/Neutral 😐" ${currentEmotion === 'Serious/Neutral 😐' ? 'selected' : ''}>Serious/Neutral 😐</option>
-            <option value="Sad 😢" ${currentEmotion === 'Sad 😢' ? 'selected' : ''}>Sad 😢</option>
-            <option value="Angry 😠" ${currentEmotion === 'Angry 😠' ? 'selected' : ''}>Angry 😠</option>
-            <option value="Surprised 😮" ${currentEmotion === 'Surprised 😮' ? 'selected' : ''}>Surprised 😮</option>
-            <option value="Scared 😨" ${currentEmotion === 'Scared 😨' ? 'selected' : ''}>Scared 😨</option>
-            <option value="Disgusted 🤢" ${currentEmotion === 'Disgusted 🤢' ? 'selected' : ''}>Disgusted 🤢</option>
+            <option value="Smiling 😊" ${currentEmotion.indexOf('Smil') !== -1 || currentEmotion.indexOf('Happy') !== -1 ? 'selected' : ''}>Smiling / Happy 😊</option>
+            <option value="Serious/Neutral 😐" ${currentEmotion.indexOf('Neutral') !== -1 || currentEmotion.indexOf('Serious') !== -1 ? 'selected' : ''}>Serious / Neutral 😐</option>
+            <option value="Sad 😢" ${currentEmotion.indexOf('Sad') !== -1 ? 'selected' : ''}>Sad 😢</option>
+            <option value="Angry 😠" ${currentEmotion.indexOf('Angry') !== -1 ? 'selected' : ''}>Angry 😠</option>
+            <option value="Surprised 😮" ${currentEmotion.indexOf('Surpris') !== -1 ? 'selected' : ''}>Surprised 😮</option>
+            <option value="Scared 😨" ${currentEmotion.indexOf('Scared') !== -1 || currentEmotion.indexOf('Fear') !== -1 ? 'selected' : ''}>Fearful / Scared 😨</option>
+            <option value="Disgusted 🤢" ${currentEmotion.indexOf('Disgust') !== -1 ? 'selected' : ''}>Disgusted 🤢</option>
         </select>
     `);
 }
@@ -788,6 +817,9 @@ function exitEditMode(save = false) {
     isEditing = false;
     $('#btnEditFaceMeta').removeClass('d-none');
     $('#btnSaveFaceMeta, #btnCancelFaceMeta').addClass('d-none');
+
+    $('#faceNameDisplay').removeClass('d-none');
+    $('#faceNameEditGroup').addClass('d-none');
 
     if (!save && originalHtmls['metaGender']) {
         // Restore backups
@@ -817,32 +849,71 @@ $(function() {
     $('#btnCancelFaceMeta').on('click', () => exitEditMode(false));
 
     $('#btnSaveFaceMeta').on('click', function() {
+        const btn = $(this).prop('disabled', true);
+        const origText = btn.html();
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
+
         const g = $('#editGender').val();
         const a = $('#editAge').val();
         const em = $('#editEmotion').val();
+        const personName = $('#editPersonName').val().trim();
 
         $.post(BASE_URL + 'api/v1/faces/update-metadata', {
             face_id: currentFaceId,
             gender: g,
             age: a,
-            emotion: em
+            emotion: em,
+            person_name: personName
         }, function(res) {
             if (res.status === 'success') {
-                showToast('Face attributes updated successfully!');
-                
-                // update active trigger element dataset
+                showToast('Face attributes and identity saved successfully!');
+
+                const newName = res.person_name !== undefined ? res.person_name : personName;
+                const newPersonId = res.person_id !== undefined ? res.person_id : activeTriggerElement.dataset.personId;
+
+                // Update activeTriggerElement dataset
                 activeTriggerElement.dataset.gender = g;
                 activeTriggerElement.dataset.age = a;
                 activeTriggerElement.dataset.emotion = em;
-                
+                activeTriggerElement.dataset.personName = newName;
+                activeTriggerElement.dataset.personId = newPersonId || '';
+
+                // Update face bbox badge on photo
+                let bboxNameSpan = activeTriggerElement.querySelector('.face-bbox-name');
+                if (!bboxNameSpan) {
+                    bboxNameSpan = document.createElement('span');
+                    bboxNameSpan.className = 'position-absolute bottom-0 start-0 bg-dark bg-opacity-75 text-white px-1 small face-bbox-name';
+                    bboxNameSpan.style.fontSize = '10px';
+                    bboxNameSpan.style.lineHeight = '1.2';
+                    activeTriggerElement.appendChild(bboxNameSpan);
+                }
+                bboxNameSpan.textContent = newName || 'Unnamed';
+                bboxNameSpan.className = newName ? 'position-absolute bottom-0 start-0 bg-dark bg-opacity-75 text-white px-1 small face-bbox-name' : 'position-absolute bottom-0 start-0 bg-dark bg-opacity-75 text-white-50 px-1 small face-bbox-name';
+                activeTriggerElement.title = `Face #${currentFaceId}${newName ? ' – ' + newName : ''}`;
+
+                // Update sidebar list item
+                const listItem = document.getElementById('faceListItem-' + currentFaceId);
+                if (listItem) {
+                    const nameEl = listItem.querySelector('.face-item-name');
+                    if (nameEl) nameEl.textContent = newName || 'Unassigned Face';
+                    const gEl = listItem.querySelector('.meta-val-gender');
+                    if (gEl) gEl.textContent = g ? g.charAt(0).toUpperCase() + g.slice(1) : 'Unknown';
+                    const aEl = listItem.querySelector('.meta-val-age');
+                    if (aEl) aEl.textContent = a ? '~' + a + 'y' : 'Unknown';
+                    const emEl = listItem.querySelector('.meta-val-emotion');
+                    if (emEl) emEl.textContent = em || 'Auto detect';
+                }
+
                 exitEditMode(true);
-                
+
                 // Reload visual attributes in the modal
                 showFaceModal(activeTriggerElement);
             } else {
                 showToast('Save failed: ' + (res.message || 'Error'), 'danger');
             }
-        }, 'json');
+        }, 'json').always(() => {
+            btn.prop('disabled', false).html(origText);
+        });
     });
 
     // Merge Selection Modal Logic

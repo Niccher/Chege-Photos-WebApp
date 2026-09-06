@@ -66,6 +66,60 @@ class ApiController extends BaseController
                                       ->getResultArray();
                 $photoIds = array_column($matchedPhotoIds, 'photo_id');
 
+                $qLower = strtolower(trim($q));
+                $emotionTerms = [];
+                if (in_array($qLower, ['smile', 'smiling', 'happy', 'laugh', 'laughing', 'joy', 'grin', 'cheerful', 'happiness'])) {
+                    $emotionTerms = ['happy', 'smiling', 'smile'];
+                } elseif (in_array($qLower, ['sad', 'crying', 'cry', 'unhappy', 'sorrow', 'sadness', 'depressed'])) {
+                    $emotionTerms = ['sad', 'crying'];
+                } elseif (in_array($qLower, ['neutral', 'serious', 'calm', 'blank', 'expressionless'])) {
+                    $emotionTerms = ['neutral', 'serious'];
+                } elseif (in_array($qLower, ['angry', 'mad', 'furious', 'anger', 'annoyed'])) {
+                    $emotionTerms = ['angry', 'mad'];
+                } elseif (in_array($qLower, ['surprised', 'surprise', 'shocked', 'astonished', 'gasp'])) {
+                    $emotionTerms = ['surpris', 'shock'];
+                } elseif (in_array($qLower, ['fear', 'fearful', 'scared', 'afraid', 'frightened'])) {
+                    $emotionTerms = ['fear', 'scared'];
+                } elseif (in_array($qLower, ['disgust', 'disgusted', 'gross'])) {
+                    $emotionTerms = ['disgust'];
+                } else {
+                    $emotionTerms = [$qLower];
+                }
+
+                try {
+                    $faceQuery = $db->table('tbl_face_encodings fe')
+                        ->select('fe.photo_id')
+                        ->join('tbl_photos p', 'p.id = fe.photo_id')
+                        ->where('p.user_id', $userId);
+
+                    $faceQuery->groupStart();
+                    foreach ($emotionTerms as $term) {
+                        $faceQuery->orLike('fe.emotion', $term);
+                    }
+
+                    // Person name matching (e.g. searching "John" finds photos of John)
+                    $faceQuery->orWhereIn('fe.person_id', function ($builder) use ($q) {
+                        return $builder->select('id')->from('tbl_people')->like('name', $q);
+                    });
+
+                    // Gender matching
+                    if (in_array($qLower, ['male', 'man', 'men', 'boy'])) {
+                        $faceQuery->orWhere('fe.gender', 'male');
+                    } elseif (in_array($qLower, ['female', 'woman', 'women', 'girl', 'lady'])) {
+                        $faceQuery->orWhere('fe.gender', 'female');
+                    }
+                    $faceQuery->groupEnd();
+
+                    $matchedFacePhotos = $faceQuery->get()->getResultArray();
+                    if (!empty($matchedFacePhotos)) {
+                        $facePhotoIds = array_column($matchedFacePhotos, 'photo_id');
+                        $photoIds = array_merge($photoIds, $facePhotoIds);
+                        $photoIds = array_values(array_unique($photoIds));
+                    }
+                } catch (\Throwable $t) {
+                    log_message('error', 'API Face/Emotion search error: ' . $t->getMessage());
+                }
+
                 // Query FastAPI ML service for CLIP semantic search
                 try {
                     $client = service('curlrequest', [
@@ -97,6 +151,7 @@ class ApiController extends BaseController
 
                 $query->groupStart()
                       ->like('filename', $q)
+                      ->orLike('ocr_text', $q)
                       ->orLike('exif_data', $q)
                       ->orLike('taken_at', $q);
                 if (!empty($photoIds)) {

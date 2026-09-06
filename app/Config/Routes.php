@@ -93,6 +93,7 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('faces/detach', 'Faces::apiDetachFace');
     $routes->post('faces/assign-face', 'Faces::apiAssignFaceToPerson');
     $routes->post('faces/bulk-assign', 'Faces::apiBulkAssign');
+    $routes->post('faces/persons/name/(:num)', 'Faces::apiNamePerson/$1');
     $routes->get('photos/(:num)/similar', 'Photos::apiSimilar/$1');
     $routes->get('tools/duplicates', 'Duplicates::index');
     $routes->post('tools/duplicates/trash', 'Duplicates::apiTrashDuplicate');

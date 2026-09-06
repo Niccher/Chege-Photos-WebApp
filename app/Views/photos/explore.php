@@ -275,6 +275,28 @@
 <?php endif; ?>
 
 <!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION: EXPRESSIONS & EMOTIONS (Facial Emotion Classification)
+     ══════════════════════════════════════════════════════════════════════════ -->
+<?php if (!empty($emotionCategories)): ?>
+    <div class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+            <span class="hub-title"><i class="bi bi-emoji-smile me-1 text-info"></i> Expressions &amp; Emotions</span>
+            <span class="text-muted small"><?= count($emotionCategories) ?> expressions</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <?php foreach ($emotionCategories as $em): ?>
+                <a href="<?= base_url('photos?q=' . urlencode($em['query'] ?: $em['emotion'])) ?>" 
+                   class="btn btn-outline-secondary btn-sm rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-2 border-opacity-50"
+                   style="transition: all 0.2s;">
+                    <span class="fw-semibold"><?= esc($em['emotion']) ?></span>
+                    <span class="badge bg-secondary bg-opacity-50 rounded-pill"><?= $em['count'] ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
      SECTION 4: MEDIA TYPES & FORMATS
      ══════════════════════════════════════════════════════════════════════════ -->
 <div class="mb-4">
