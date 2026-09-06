@@ -232,10 +232,18 @@
                 </button>
             </div>
 
-            <!-- Tile Theme Switcher -->
-            <button type="button" class="btn btn-sm btn-dark border-secondary text-light px-2" id="toggleTileTheme" title="Toggle Dark/Light Map Style">
-                <i class="bi bi-moon-stars" id="tileIcon"></i>
-            </button>
+            <!-- Map Layer Switcher -->
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active" id="btnLayerGoogleRoad" title="Google Maps Roadmap">
+                    <i class="bi bi-google me-1"></i>Roadmap
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnLayerGoogleSat" title="Google Satellite Imagery">
+                    <i class="bi bi-globe-americas me-1"></i>Satellite
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnLayerOsm" title="OpenStreetMap">
+                    <i class="bi bi-map me-1"></i>OSM
+                </button>
+            </div>
         </div>
     </div>
 
@@ -288,21 +296,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!mapEl || !rawPhotos || rawPhotos.length === 0) return;
 
     // ── 1. Map & Tile Setup ──
-    const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap & CartoDB',
-        maxZoom: 19
+    const googleRoadTile = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        attribution: '&copy; Google Maps',
+        maxZoom: 20
     });
-    const standardTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
+    const googleSatTile = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        subdomains: ['0', '1', '2', '3'],
+        attribution: '&copy; Google Maps',
+        maxZoom: 20
+    });
+    const osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     });
 
-    let isDarkTheme = true;
+    let currentTileLayer = googleRoadTile;
     const map = L.map('travelMap', {
         center: [0, 0],
         zoom: 3,
         zoomControl: false,
-        layers: [darkTile]
+        layers: [currentTileLayer]
     });
 
     L.control.zoom({ position: 'topright' }).addTo(map);
@@ -370,18 +384,29 @@ document.addEventListener('DOMContentLoaded', function() {
         map.addLayer(heatLayer);
     });
 
-    $('#toggleTileTheme').on('click', function() {
-        if (isDarkTheme) {
-            map.removeLayer(darkTile);
-            map.addLayer(standardTile);
-            $('#tileIcon').removeClass('bi-moon-stars').addClass('bi-sun');
-            isDarkTheme = false;
-        } else {
-            map.removeLayer(standardTile);
-            map.addLayer(darkTile);
-            $('#tileIcon').removeClass('bi-sun').addClass('bi-moon-stars');
-            isDarkTheme = true;
+    function switchTileLayer(newLayer, activeBtnId) {
+        if (currentTileLayer === newLayer) return;
+        map.removeLayer(currentTileLayer);
+        map.addLayer(newLayer);
+        if (newLayer.bringToBack) {
+            newLayer.bringToBack();
         }
+        currentTileLayer = newLayer;
+
+        $('#btnLayerGoogleRoad, #btnLayerGoogleSat, #btnLayerOsm').removeClass('active');
+        $(activeBtnId).addClass('active');
+    }
+
+    $('#btnLayerGoogleRoad').on('click', function() {
+        switchTileLayer(googleRoadTile, '#btnLayerGoogleRoad');
+    });
+
+    $('#btnLayerGoogleSat').on('click', function() {
+        switchTileLayer(googleSatTile, '#btnLayerGoogleSat');
+    });
+
+    $('#btnLayerOsm').on('click', function() {
+        switchTileLayer(osmTile, '#btnLayerOsm');
     });
 
     // Zoom to cluster pill

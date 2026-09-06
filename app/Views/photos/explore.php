@@ -194,7 +194,8 @@
                         </div>
                     <?php endif; ?>
                     <span class="person-name text-truncate"><?= esc(($person['name'] ?? null) ?: 'Unnamed') ?></span>
-                    <span class="person-count"><?= (int) $person['face_count'] ?> photo<?= $person['face_count'] == 1 ? '' : 's' ?></span>
+                    <?php $fc = (int) ($person['face_count'] ?? 0); ?>
+                    <span class="person-count"><?= $fc ?> photo<?= $fc === 1 ? '' : 's' ?></span>
                 </a>
             <?php endforeach; ?>
         </div>
