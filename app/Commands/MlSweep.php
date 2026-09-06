@@ -23,9 +23,12 @@ class MlSweep extends BaseCommand
         $mlUrl      = get_ml_url();
         $mlKey      = get_ml_api_key();
 
-        $photos = $photoModel->select('id, scanned_face, scanned_tag, scanned_clip, scanned_nsfw')
+        $photos = $photoModel->select('id, scanned_face, ignore_faces, scanned_tag, scanned_clip, scanned_nsfw')
             ->groupStart()
-                ->where('scanned_face', 0)
+                ->groupStart()
+                    ->where('scanned_face', 0)
+                    ->where('ignore_faces', 0)
+                ->groupEnd()
                 ->orWhere('scanned_tag', 0)
                 ->orWhere('scanned_clip', 0)
                 ->orWhere('scanned_nsfw', 0)
@@ -63,7 +66,7 @@ class MlSweep extends BaseCommand
                     $client->post($mlUrl . '/api/v1/faces/encode', [
                         'form_params' => [
                             'photo_id'   => (int) $p['id'],
-                            'scan_faces' => $p['scanned_face'] == 0 ? 1 : 0,
+                            'scan_faces' => ($p['scanned_face'] == 0 && ($p['ignore_faces'] ?? 0) == 0) ? 1 : 0,
                             'scan_tags'  => $p['scanned_tag']  == 0 ? 1 : 0,
                             'scan_clip'  => $p['scanned_clip'] == 0 ? 1 : 0,
                             'scan_nsfw'  => ($p['scanned_nsfw'] ?? 0) == 0 ? 1 : 0,

@@ -313,6 +313,16 @@ $(document).ready(function () {
         locLink.textContent = '';
         locLink.removeAttribute('href');
 
+        // Reset or reload faces section
+        if (!$('#metadataPanel').hasClass('d-none') && currentPhotoId) {
+            loadPhotoFaces(currentPhotoId);
+        } else {
+            $('#metaFacesContainer').hide();
+            $('#metaFacesChips').empty();
+            $('#metaDiscardFacesAction').hide();
+            $('#metaFacesIgnoredNotice').hide();
+        }
+
         // ── Populate EXIF ────────────────────────────────────────────────────────
         if (photoExif && typeof photoExif === 'object') {
             let anyExif = false;
@@ -513,6 +523,9 @@ $(document).ready(function () {
     $('#btnInfo').on('click', function () {
         $('#similarPhotosPanel').addClass('d-none');
         $('#metadataPanel').toggleClass('d-none');
+        if (!$('#metadataPanel').hasClass('d-none') && currentPhotoId) {
+            loadPhotoFaces(currentPhotoId);
+        }
     });
 
     $('#btnCloseMetadata').on('click', function () {
@@ -584,6 +597,109 @@ $(document).ready(function () {
             `);
         });
     }
+
+    // ── Photo Face Recognition & Discard Non-Personal Faces ──
+    function loadPhotoFaces(photoId) {
+        const $container = $('#metaFacesContainer');
+        const $chips = $('#metaFacesChips');
+        const $badge = $('#metaFacesCountBadge');
+        const $discardAction = $('#metaDiscardFacesAction');
+        const $ignoredNotice = $('#metaFacesIgnoredNotice');
+
+        $container.show();
+        $chips.html('<div class="text-secondary small py-1"><span class="spinner-border spinner-border-sm me-1" style="width: 0.8rem; height: 0.8rem;"></span>Loading faces...</div>');
+        $discardAction.hide();
+        $ignoredNotice.hide();
+
+        $.getJSON(BASE_URL + 'photos/' + photoId + '/faces', function (res) {
+            if (res && res.status === 'success') {
+                if (res.ignore_faces) {
+                    $badge.text('Ignored').removeClass('bg-secondary bg-primary').addClass('bg-warning text-dark');
+                    $chips.empty();
+                    $discardAction.hide();
+                    $ignoredNotice.show();
+                    return;
+                }
+
+                $ignoredNotice.hide();
+                const faces = res.faces || [];
+                $badge.text(faces.length + (faces.length === 1 ? ' face' : ' faces'))
+                      .removeClass('bg-warning text-dark')
+                      .addClass('bg-secondary');
+
+                if (faces.length > 0) {
+                    let html = '';
+                    faces.forEach(function (f) {
+                        const rawName = f.person_name || 'Unassigned face';
+                        const safeName = $('<div>').text(rawName).html();
+                        const score = f.detection_score ? Math.round(f.detection_score * 100) + '%' : '';
+                        const meta = [];
+                        if (f.gender) meta.push(f.gender);
+                        if (f.age) meta.push('~' + f.age + 'y');
+                        if (f.emotion) meta.push(f.emotion);
+                        const metaStr = meta.length > 0 ? ` (${meta.join(', ')})` : '';
+
+                        html += `
+                            <span class="badge rounded-pill bg-dark border border-secondary border-opacity-50 text-light px-2.5 py-1.5 d-inline-flex align-items-center gap-1.5" style="font-size: 0.76rem;" title="${score ? 'Confidence: ' + score : ''}${metaStr}">
+                                <i class="bi bi-person-bounding-box text-info"></i>
+                                <span class="fw-normal">${safeName}</span>
+                                ${score ? `<small class="text-secondary" style="font-size: 0.68rem;">${score}</small>` : ''}
+                            </span>
+                        `;
+                    });
+                    $chips.html(html);
+                    $discardAction.show();
+                } else {
+                    $chips.html('<span class="text-secondary small fst-italic">No faces detected in this photo.</span>');
+                    $discardAction.hide();
+                }
+            } else {
+                $chips.html('<span class="text-danger small">Failed to load faces.</span>');
+            }
+        }).fail(function () {
+            $chips.html('<span class="text-muted small">Could not retrieve faces.</span>');
+        });
+    }
+
+    $(document).on('click', '#btnDiscardPhotoFaces', function () {
+        if (!currentPhotoId) return;
+        const msg = "Discard all detected faces in this photo?\n\n" +
+                    "• All face boxes and clusters on this photo will be deleted.\n" +
+                    "• The photo will be permanently shielded from future face sweeps or rescans.\n\n" +
+                    "This is recommended for photos of newspapers, movie posters, billboards, and crowds.";
+        if (!confirm(msg)) {
+            return;
+        }
+
+        const $btn = $(this);
+        const origHtml = $btn.html();
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Discarding...');
+
+        $.post(BASE_URL + 'photos/' + currentPhotoId + '/discard-faces', function (res) {
+            if (res && res.status === 'success') {
+                if (typeof showToast === 'function') {
+                    showToast(res.message || 'Faces successfully discarded.', 'success');
+                } else {
+                    alert(res.message || 'Faces successfully discarded.');
+                }
+                loadPhotoFaces(currentPhotoId);
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast(res.message || 'Failed to discard faces.', 'danger');
+                } else {
+                    alert(res.message || 'Failed to discard faces.');
+                }
+                $btn.prop('disabled', false).html(origHtml);
+            }
+        }).fail(function () {
+            if (typeof showToast === 'function') {
+                showToast('Server error while discarding faces.', 'danger');
+            } else {
+                alert('Server error while discarding faces.');
+            }
+            $btn.prop('disabled', false).html(origHtml);
+        });
+    });
 
     // Clicking a similar photo loads it into the viewer
     $(document).on('click', '.similar-photo-card', function () {

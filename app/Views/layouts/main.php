@@ -775,6 +775,31 @@
                         </div>
                     </div>
 
+                    <!-- ── PEOPLE & FACES SECTION ── -->
+                    <div id="metaFacesContainer" style="display:none;">
+                        <hr style="border-color: rgba(255,255,255,0.08); margin: 1rem 0;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <p class="text-uppercase mb-0" style="font-size: 0.67rem; letter-spacing: 0.12em; color: #888;">People & Faces</p>
+                            <span id="metaFacesCountBadge" class="badge rounded-pill bg-secondary" style="font-size: 0.65rem;">0 faces</span>
+                        </div>
+                        <div id="metaFacesChips" class="d-flex flex-wrap gap-2 mb-2">
+                            <!-- Face chips rendered dynamically -->
+                        </div>
+                        <div id="metaDiscardFacesAction" style="display:none;">
+                            <button type="button" class="btn btn-outline-danger btn-sm rounded-pill w-100 py-1" id="btnDiscardPhotoFaces" style="font-size: 0.8rem;">
+                                <i class="bi bi-newspaper me-1"></i> Discard Faces in Photo (Newspaper / Poster)
+                            </button>
+                            <div class="form-text text-muted text-center mt-1" style="font-size: 0.7rem;">
+                                Permanently purge non-personal faces and shield this photo from future face scans.
+                            </div>
+                        </div>
+                        <div id="metaFacesIgnoredNotice" style="display:none;" class="p-2 rounded bg-dark border border-warning border-opacity-25 text-center mt-2">
+                            <span class="text-warning" style="font-size: 0.78rem;">
+                                <i class="bi bi-shield-slash me-1"></i> Faces in this photo are ignored (Newspaper/Poster shield active).
+                            </span>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 

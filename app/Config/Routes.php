@@ -65,6 +65,8 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($rout
     $routes->post('photos/favorite/(:num)','\App\Controllers\Photos::toggleFavorite/$1', ['filter' => 'tokens:photos:write']);
     $routes->post('photos/empty-trash',    '\App\Controllers\Photos::emptyTrash', ['filter' => 'tokens:photos:write']);
     $routes->post('albums/add-photo',      '\App\Controllers\Photos::addPhotoToAlbum', ['filter' => 'tokens:photos:write']);
+    $routes->get('photos/(:num)/faces',    '\App\Controllers\Photos::photoFaces/$1', ['filter' => 'tokens:photos:read']);
+    $routes->post('photos/(:num)/discard-faces', '\App\Controllers\Photos::discardFaces/$1', ['filter' => 'tokens:photos:write']);
 
     // Face API endpoints (Android — token auth)
     $routes->get('faces/(:num)',       '\App\Controllers\Faces::apiFaces/$1', ['filter' => 'tokens:photos:read']);
@@ -116,6 +118,8 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('faces/bulk-assign', 'Faces::apiBulkAssign');
     $routes->post('faces/persons/name/(:num)', 'Faces::apiNamePerson/$1');
     $routes->get('photos/(:num)/similar', 'Photos::apiSimilar/$1');
+    $routes->get('photos/(:num)/faces', 'Photos::photoFaces/$1');
+    $routes->post('photos/(:num)/discard-faces', 'Photos::discardFaces/$1');
     $routes->get('tools/duplicates', 'Duplicates::index');
     $routes->post('tools/duplicates/trash', 'Duplicates::apiTrashDuplicate');
     $routes->post('tools/duplicates/auto-clean', 'Duplicates::apiAutoClean');

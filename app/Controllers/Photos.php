@@ -2530,5 +2530,120 @@ class Photos extends BaseController
             log_message('warning', 'GCP media deletion failed: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Fetch recognized face chips and ignore_faces status for a photo.
+     */
+    public function photoFaces(int $id)
+    {
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($id);
+
+        if (!$photo) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => 'Photo not found.',
+            ]);
+        }
+
+        $db = \Config\Database::connect();
+        $faces = $db->table('tbl_face_encodings fe')
+            ->select('fe.id, fe.person_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.detection_score, fe.age, fe.gender, fe.emotion, p.name as person_name')
+            ->join('tbl_people p', 'p.id = fe.person_id', 'left')
+            ->where('fe.photo_id', $id)
+            ->orderBy('fe.id', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        return $this->response->setJSON([
+            'status'       => 'success',
+            'photo_id'     => $id,
+            'ignore_faces' => (bool) ($photo['ignore_faces'] ?? 0),
+            'face_count'   => count($faces),
+            'faces'        => $faces,
+        ]);
+    }
+
+    /**
+     * Discard all detected faces on a photo (newspaper, poster, billboard, etc.)
+     * and permanently shield the photo from future face scans.
+     */
+    public function discardFaces(int $id)
+    {
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($id);
+
+        if (!$photo) {
+            return $this->response->setStatusCode(404)->setJSON([
+                'status'  => 'error',
+                'message' => 'Photo not found.',
+            ]);
+        }
+
+        $db = \Config\Database::connect();
+
+        // 1. Get associated face records and person IDs
+        $faces = $db->table('tbl_face_encodings')
+            ->select('id, person_id, qdrant_point_id')
+            ->where('photo_id', $id)
+            ->get()
+            ->getResultArray();
+
+        $discardedCount = count($faces);
+        $faceIds = array_column($faces, 'id');
+        $personIds = array_filter(array_unique(array_column($faces, 'person_id')));
+
+        // 2. Call ML microservice to purge Qdrant face vectors and clean centroids
+        try {
+            $mlUrl = $this->getMlUrl();
+            $client = service('curlrequest', [
+                'connect_timeout' => 5,
+                'timeout'         => 15,
+                'headers'         => [
+                    'X-API-KEY'    => $this->getMlApiKey(),
+                    'Content-Type' => 'application/json',
+                ],
+            ]);
+            $client->post($mlUrl . '/api/v1/faces/discard-photo-faces', [
+                'json' => [
+                    'photo_ids' => [$id],
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            log_message('warning', "ML discard-photo-faces call failed for photo {$id}: " . $e->getMessage());
+        }
+
+        // 3. Delete face annotations if any
+        if (!empty($faceIds)) {
+            $db->table('tbl_face_annotations')->whereIn('face_encoding_id', $faceIds)->delete();
+        }
+
+        // 4. Delete local face encodings in MySQL
+        $db->table('tbl_face_encodings')->where('photo_id', $id)->delete();
+
+        // 5. Clean up any orphaned people who no longer have any faces
+        if (!empty($personIds)) {
+            foreach ($personIds as $pid) {
+                $remainingFaces = $db->table('tbl_face_encodings')->where('person_id', $pid)->countAllResults();
+                if ($remainingFaces === 0) {
+                    $db->table('tbl_people')->where('id', $pid)->delete();
+                }
+            }
+        }
+
+        // 6. Permanently mark photo as ignore_faces = 1 and scanned_face = 1
+        $photoModel->update($id, [
+            'ignore_faces' => 1,
+            'scanned_face' => 1,
+        ]);
+
+        return $this->response->setJSON([
+            'status'          => 'success',
+            'message'         => "Successfully discarded {$discardedCount} face(s). Future face scans will ignore this photo.",
+            'discarded_count' => $discardedCount,
+        ]);
+    }
 }
 
