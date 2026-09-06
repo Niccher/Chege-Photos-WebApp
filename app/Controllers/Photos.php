@@ -677,6 +677,9 @@ class Photos extends BaseController
 
         $password = trim((string) ($this->request->getPost('password') ?? ''));
         $passwordHash = !empty($password) ? password_hash($password, PASSWORD_DEFAULT) : null;
+        $removePassword = (bool) $this->request->getPost('remove_password');
+
+        $hasPassword = false;
 
         // Check for existing link
         $existing = $shareModel->where('photo_id', $id)->first();
@@ -686,8 +689,14 @@ class Photos extends BaseController
             if ($existing['expires_at'] !== $expiresAt) {
                 $updateData['expires_at'] = $expiresAt;
             }
-            if (!empty($password)) {
+            if ($removePassword) {
+                $updateData['password_hash'] = null;
+                $hasPassword = false;
+            } elseif (!empty($password)) {
                 $updateData['password_hash'] = $passwordHash;
+                $hasPassword = true;
+            } else {
+                $hasPassword = !empty($existing['password_hash']);
             }
             if (!empty($updateData)) {
                 $shareModel->update($existing['id'], $updateData);
@@ -700,16 +709,18 @@ class Photos extends BaseController
                 'access_token' => $token,
                 'expires_at'   => $expiresAt,
             ];
-            if (!empty($passwordHash)) {
+            if (!empty($passwordHash) && !$removePassword) {
                 $insertData['password_hash'] = $passwordHash;
+                $hasPassword = true;
             }
             $shareModel->insert($insertData);
         }
 
         return $this->response->setJSON([
-            'status'     => 'success', 
-            'url'        => base_url("s/{$token}"),
-            'expires_at' => $expiresAt
+            'status'       => 'success', 
+            'url'          => base_url("s/{$token}"),
+            'expires_at'   => $expiresAt,
+            'has_password' => $hasPassword,
         ]);
     }
 
@@ -2145,10 +2156,13 @@ class Photos extends BaseController
             $photosOut[] = [
                 'id'             => (int) $p['id'],
                 'filename'       => $p['filename'],
+                'path'           => $p['path'],
+                'thumbnail_path' => $p['thumbnail_path'],
                 'url'            => base_url($p['path']),
                 'thumbnail_url'  => $p['thumbnail_path'] ? base_url($p['thumbnail_path']) : base_url($p['path']),
                 'taken_at'       => $p['taken_at'],
                 'score'          => $score,
+                'similarity'     => $score,
                 'similarity_pct' => round($score * 100),
             ];
         }

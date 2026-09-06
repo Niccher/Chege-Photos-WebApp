@@ -185,7 +185,7 @@
         </div>
         <div class="people-scroll d-flex gap-3">
             <?php foreach ($topPersons as $person): ?>
-                <a href="<?= base_url('faces/' . $person['id']) ?>" class="person-chip">
+                <a href="<?= base_url('faces/person/' . $person['id']) ?>" class="person-chip">
                     <?php if (!empty($person['thumb_url'])): ?>
                         <img src="<?= esc($person['thumb_url']) ?>" alt="<?= esc($person['name'] ?? 'Person') ?>" class="person-avatar" loading="lazy">
                     <?php else: ?>

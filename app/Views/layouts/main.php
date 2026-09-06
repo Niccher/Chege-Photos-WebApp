@@ -565,6 +565,10 @@
                     <span class="small fw-bold text-truncate" id="sharedUrlText" style="max-width: 200px;"></span>
                     <button class="btn btn-primary btn-sm rounded-pill px-3" id="btnCopyLink">Copy</button>
                 </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span id="linkPasswordStatus" class="badge bg-warning-subtle text-warning-emphasis d-none"></span>
+                    <button type="button" id="btnRemovePassword" class="btn btn-link btn-sm text-danger p-0 text-decoration-none d-none" style="font-size: 0.75rem;">Remove password</button>
+                </div>
                 <div class="row g-2 align-items-center mb-2">
                     <div class="col-4">
                         <label class="small text-muted mb-0" for="linkExpiryPreset">Expires</label>
@@ -583,7 +587,7 @@
                         <label class="small text-muted mb-0" for="linkPasswordInput">Password</label>
                     </div>
                     <div class="col-8">
-                        <input type="password" id="linkPasswordInput" class="form-control form-control-sm" placeholder="Optional">
+                        <input type="password" id="linkPasswordInput" class="form-control form-control-sm" placeholder="Optional" autocomplete="new-password">
                     </div>
                 </div>
                 <div class="text-end">

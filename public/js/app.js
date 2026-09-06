@@ -253,6 +253,9 @@ $(document).ready(function () {
         currentPhotoId = $this.data('id');
         const context = window.location.pathname.split('/').pop() || 'index';
 
+        $('#shareLinkPopup').addClass('d-none');
+        $('#linkPasswordInput').val('');
+
         console.log('Opening photo index:', currentIndex, 'ID:', currentPhotoId);
 
         if (context === 'trash') {
@@ -542,11 +545,12 @@ $(document).ready(function () {
             if (res.status === 'success' && res.photos && res.photos.length > 0) {
                 let html = '<div class="row g-2">';
                 res.photos.forEach(function (p) {
-                    const matchScore = p.similarity ? Math.round(p.similarity * 100) : 0;
-                    const thumbUrl = p.thumbnail_path ? BASE_URL + p.thumbnail_path : (BASE_URL + p.path);
+                    const matchScore = p.similarity_pct !== undefined ? p.similarity_pct : (p.similarity ? Math.round(p.similarity * 100) : (p.score ? Math.round(p.score * 100) : 0));
+                    const thumbUrl = p.thumbnail_url || (p.thumbnail_path ? (p.thumbnail_path.startsWith('http') ? p.thumbnail_path : BASE_URL + p.thumbnail_path) : (p.url || (p.path ? (p.path.startsWith('http') ? p.path : BASE_URL + p.path) : '')));
+                    const photoPath = p.path || p.url || '';
                     html += `
                         <div class="col-6">
-                            <div class="card bg-dark border-0 rounded overflow-hidden similar-photo-card position-relative" style="cursor: pointer;" data-id="${p.id}" data-path="${p.path}">
+                            <div class="card bg-dark border-0 rounded overflow-hidden similar-photo-card position-relative" style="cursor: pointer;" data-id="${p.id}" data-path="${photoPath}">
                                 <div class="ratio ratio-1x1 bg-black">
                                     <img src="${thumbUrl}" class="object-fit-cover w-100 h-100" alt="${p.filename || 'Photo'}" loading="lazy">
                                 </div>
@@ -625,19 +629,52 @@ $(document).ready(function () {
     });
 
     // Public Sharing Link
-    $('#btnShareLink, #btnApplyExpiry').on('click', function () {
-        if (!currentPhotoId) return;
+    function updateSharePopupUi(res) {
+        if (res.status === 'success') {
+            $('#sharedUrlText').text(res.url);
+            if (res.has_password) {
+                $('#linkPasswordStatus').removeClass('d-none').text('🔒 Password protected');
+                $('#btnRemovePassword').removeClass('d-none');
+            } else {
+                $('#linkPasswordStatus').addClass('d-none');
+                $('#btnRemovePassword').addClass('d-none');
+            }
+            $('#linkPasswordInput').val('');
+        }
+    }
 
+    $('#btnShareLink').on('click', function () {
+        if (!currentPhotoId) return;
+        const $popup = $('#shareLinkPopup');
+        if (!$popup.hasClass('d-none')) {
+            $popup.addClass('d-none');
+            return;
+        }
+        $('#linkPasswordInput').val('');
+        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, {}, function (res) {
+            updateSharePopupUi(res);
+            $popup.removeClass('d-none').hide().fadeIn(200);
+        });
+    });
+
+    $('#btnApplyExpiry').on('click', function () {
+        if (!currentPhotoId) return;
         const expiresPreset = $('#linkExpiryPreset').val() || '';
         const password = $('#linkPasswordInput').val() || '';
         $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, {
             expires_preset: expiresPreset,
             password: password
         }, function (res) {
-            if (res.status === 'success') {
-                $('#sharedUrlText').text(res.url);
-                $('#shareLinkPopup').removeClass('d-none').hide().fadeIn(200);
-            }
+            updateSharePopupUi(res);
+        });
+    });
+
+    $(document).on('click', '#btnRemovePassword', function () {
+        if (!currentPhotoId) return;
+        $.post(BASE_URL + 'photos/generate-link/' + currentPhotoId, {
+            remove_password: 1
+        }, function (res) {
+            updateSharePopupUi(res);
         });
     });
 

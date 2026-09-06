@@ -85,6 +85,7 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->get('faces',          'Faces::index');
     $routes->get('faces/scan-status', 'Faces::apiScanStatus');
     $routes->get('faces/person/(:num)', 'Faces::personPhotos/$1');
+    $routes->get('faces/(:num)',        'Faces::personPhotos/$1');
     $routes->get('faces/photo/(:num)', 'Faces::photo/$1');
     $routes->get('faces/unassigned', 'Faces::apiUnassigned');
     $routes->post('faces/persons/merge', 'Faces::apiMergePersons');
