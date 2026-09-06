@@ -193,7 +193,7 @@
                             <i class="bi bi-person fs-3"></i>
                         </div>
                     <?php endif; ?>
-                    <span class="person-name text-truncate"><?= esc($person['name'] ?: 'Unnamed') ?></span>
+                    <span class="person-name text-truncate"><?= esc(($person['name'] ?? null) ?: 'Unnamed') ?></span>
                     <span class="person-count"><?= (int) $person['face_count'] ?> photo<?= $person['face_count'] == 1 ? '' : 's' ?></span>
                 </a>
             <?php endforeach; ?>
@@ -212,12 +212,17 @@
                 <?= count($locations) ?> geotagged of <?= esc($totalPhotos) ?> total
             </span>
         </div>
-        <?php if (!empty($locations)): ?>
-            <div class="btn-group btn-group-sm" role="group">
-                <button type="button" class="btn btn-outline-secondary active" id="btnMarkers"><i class="bi bi-pin-map me-1"></i>Clustered</button>
-                <button type="button" class="btn btn-outline-secondary" id="btnHeatmap"><i class="bi bi-fire me-1"></i>Heatmap</button>
-            </div>
-        <?php endif; ?>
+        <div class="d-flex align-items-center gap-2">
+            <a href="<?= base_url('map') ?>" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-arrows-fullscreen me-1"></i>Open Travel Map
+            </a>
+            <?php if (!empty($locations)): ?>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary active" id="btnMarkers"><i class="bi bi-pin-map me-1"></i>Clustered</button>
+                    <button type="button" class="btn btn-outline-secondary" id="btnHeatmap"><i class="bi bi-fire me-1"></i>Heatmap</button>
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Quick Location Clusters Pills -->

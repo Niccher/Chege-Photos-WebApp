@@ -5,11 +5,13 @@
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
     <div>
         <h2 class="h4 mb-0"><i class="bi bi-people me-2"></i>Faces</h2>
-        <p class="text-muted small mb-0">Click a face to see all photos containing it</p>
+        <p class="text-muted small mb-0">Select and drag multiple faces onto a person to merge or group them as one identity</p>
     </div>
-    <button class="btn btn-outline-primary btn-sm" id="btnRescanAll" title="Scan all unprocessed photos for faces">
-        <i class="bi bi-search"></i> Rescan All
-    </button>
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-primary btn-sm" id="btnRescanAll" title="Scan all unprocessed photos for faces">
+            <i class="bi bi-search"></i> Rescan All
+        </button>
+    </div>
 </div>
 
 <!-- Live Real-Time Scan Progress & ETA Tracker Banner -->
@@ -32,28 +34,43 @@
 </div>
 
 <?php if (!empty($persons)): ?>
-    <h5 class="mb-3">Known Faces</h5>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">Known Faces (<?= count($persons) ?>)</h5>
+    </div>
     <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3 mb-4">
         <?php foreach ($persons as $person): ?>
             <?php
             $faceCount = (int) ($person['face_count'] ?? 0);
             $thumb = $person['thumbnail'] ?? null;
+            $pName = ($person['name'] ?? null) ?: 'Person #' . ($person['id'] ?? '');
             ?>
             <div class="col">
-                <a href="<?= base_url('faces/person/' . $person['id']) ?>" class="text-decoration-none">
-                    <div class="card h-100 text-center border-0 face-card position-relative" 
-                         style="background:var(--card-bg);cursor:grab;overflow:hidden;transition: transform 0.2s, border 0.2s; border: 2px solid transparent;"
-                         draggable="true"
-                         data-type="person"
-                         data-person-id="<?= $person['id'] ?>"
-                         data-person-name="<?= esc($person['name'] ?: 'Person ' . $person['id']) ?>">
-                        <button type="button" class="btn btn-sm btn-light border rounded-circle position-absolute top-0 end-0 m-1 shadow-sm btn-quick-merge" 
-                                data-person-id="<?= $person['id'] ?>" 
-                                data-person-name="<?= esc($person['name'] ?: 'Person ' . $person['id']) ?>" 
-                                title="Merge with another person" 
-                                style="z-index: 5; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
-                            <i class="bi bi-arrows-collapse text-muted" style="font-size: 0.75rem;"></i>
-                        </button>
+                <div class="card h-100 text-center border-0 face-card position-relative" 
+                     style="background:var(--card-bg);cursor:grab;overflow:hidden;transition: transform 0.2s, border 0.2s; border: 2px solid transparent;"
+                     draggable="true"
+                     data-type="person"
+                     data-person-id="<?= $person['id'] ?>"
+                     data-person-name="<?= esc($pName) ?>">
+                    
+                    <!-- Checkbox for multi-select -->
+                    <div class="form-check position-absolute top-0 start-0 m-1" style="z-index: 6;">
+                        <input class="form-check-input person-select-check" type="checkbox" 
+                               data-person-id="<?= $person['id'] ?>" 
+                               data-person-name="<?= esc($pName) ?>" 
+                               style="width: 18px; height: 18px; cursor: pointer; background-color: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.4);"
+                               title="Select to merge">
+                    </div>
+
+                    <!-- Quick Merge Icon Button -->
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle position-absolute top-0 end-0 m-1 shadow-sm btn-quick-merge" 
+                            data-person-id="<?= $person['id'] ?>" 
+                            data-person-name="<?= esc($pName) ?>" 
+                            title="Merge with another person" 
+                            style="z-index: 5; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-arrows-collapse text-muted" style="font-size: 0.75rem;"></i>
+                    </button>
+
+                    <a href="<?= base_url('faces/person/' . $person['id']) ?>" class="text-decoration-none text-reset d-block">
                         <div class="card-body py-3">
                             <?php if ($thumb): ?>
                                 <?php
@@ -74,29 +91,51 @@
                                     <i class="bi bi-person"></i>
                                 </div>
                             <?php endif; ?>
-                            <div class="small fw-medium" style="pointer-events:none;"><?= $faceCount ?> photo<?= $faceCount !== 1 ? 's' : '' ?></div>
-                            <?php if ($person['age'] || $person['gender']): ?>
-                                <div class="small text-muted" style="pointer-events:none;"><?= $person['age'] ? '~' . $person['age'] . 'y' : '' ?><?= $person['age'] && $person['gender'] ? ', ' : '' ?><?= $person['gender'] ? ucfirst($person['gender']) : '' ?></div>
+                            <div class="fw-semibold small text-truncate px-1 mb-1" style="pointer-events:none;"><?= esc($pName) ?></div>
+                            <div class="small text-muted" style="pointer-events:none;"><?= $faceCount ?> photo<?= $faceCount !== 1 ? 's' : '' ?></div>
+                            <?php if (!empty($person['age']) || !empty($person['gender'])): ?>
+                                <div class="small text-muted opacity-75" style="pointer-events:none; font-size: 0.72rem;">
+                                    <?= !empty($person['age']) ? '~' . $person['age'] . 'y' : '' ?><?= !empty($person['age']) && !empty($person['gender']) ? ', ' : '' ?><?= !empty($person['gender']) ? ucfirst($person['gender']) : '' ?>
+                                </div>
                             <?php endif; ?>
                         </div>
-                    </div>
-                </a>
+                    </a>
+                </div>
             </div>
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
 
 <?php if ($unassignedCount > 0): ?>
-    <h5 class="mb-3">Unknown Faces (<?= $unassignedCount ?>)</h5>
-    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="mb-0 d-inline-block me-2">Unknown Faces (<?= $unassignedCount ?>)</h5>
+            <span class="text-muted small">Select multiple faces and drag them onto any person above</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" id="btnSelectAllUnknown">
+                <i class="bi bi-check2-all me-1"></i>Select All Unknown
+            </button>
+        </div>
+    </div>
+    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3 mb-5">
         <?php foreach ($unassigned as $face): ?>
             <?php $thumb = $face['thumbnail'] ?? null; ?>
             <div class="col">
-                <div class="card h-100 text-center border-0 face-card-unassigned" 
-                     style="background:var(--card-bg);cursor:grab; transition: transform 0.2s;"
+                <div class="card h-100 text-center border-0 face-card-unassigned position-relative" 
+                     style="background:var(--card-bg);cursor:grab; transition: transform 0.2s, border 0.2s; border: 2px solid transparent;"
                      draggable="true"
                      data-type="face"
                      data-face-id="<?= $face['id'] ?>">
+                    
+                    <!-- Checkbox for multi-select -->
+                    <div class="form-check position-absolute top-0 start-0 m-1" style="z-index: 6;">
+                        <input class="form-check-input face-select-check" type="checkbox" 
+                               data-face-id="<?= $face['id'] ?>" 
+                               style="width: 18px; height: 18px; cursor: pointer; background-color: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.4);"
+                               title="Select to assign">
+                    </div>
+
                     <div class="card-body py-3">
                         <a href="<?= base_url('faces/photo/' . $face['photo_id']) ?>" class="text-decoration-none d-block">
                             <?php if ($thumb): ?>
@@ -140,20 +179,80 @@
     </div>
 <?php endif; ?>
 
+<!-- ── Floating Multi-Select Action Bar ── -->
+<div id="faceBulkBar" class="d-none position-fixed bottom-0 start-50 translate-middle-x mb-4 p-3 rounded-4 shadow-lg border border-secondary" style="z-index: 1050; background: rgba(18, 22, 28, 0.95); backdrop-filter: blur(16px); min-width: 360px; max-width: 90vw;">
+    <div class="d-flex align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary rounded-pill fs-6 px-2 py-1" id="bulkSelectedCount">0</span>
+            <div>
+                <strong class="text-white small d-block">Faces Selected</strong>
+                <small class="text-muted" style="font-size: 0.72rem;">Drag any selected card onto a Person card above</small>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" id="btnBulkAssignModal">
+                <i class="bi bi-person-plus me-1"></i>Assign to...
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" id="btnDeselectAll" title="Clear selection">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Bulk Assign Modal (Pick Target Person) ── -->
+<div class="modal fade" id="bulkAssignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); color: var(--text-primary);">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-check text-primary me-2"></i>Assign Selected Faces</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">
+                    Assign all <strong id="bulkModalCount">0</strong> selected face(s) to a person identity.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Select Destination Person</label>
+                    <select id="bulkTargetPersonSelect" class="form-select bg-light border-0 py-2">
+                        <option value="">-- Choose person or create new --</option>
+                        <option value="new">+ Create as New Person Identity</option>
+                        <?php if (!empty($persons)): ?>
+                            <optgroup label="Existing Persons">
+                                <?php foreach ($persons as $p): ?>
+                                    <option value="<?= $p['id'] ?>">
+                                        <?= esc(($p['name'] ?? null) ?: 'Person #' . $p['id']) ?> (<?= (int)($p['face_count'] ?? 0) ?> photos)
+                                    </option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" id="btnConfirmBulkAssign" disabled>
+                    <i class="bi bi-check-lg me-1"></i> Apply Assignment
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Merge Confirmation Modal -->
 <div class="modal fade" id="confirmMergeModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-people me-2"></i>Merge Faces / Persons</h5>
+        <div class="modal-content border-0 shadow-lg" style="background: var(--card-bg); color: var(--text-primary);">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-people text-primary me-2"></i>Confirm Face Grouping</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p id="confirmMergeText">Are you sure you want to merge these?</p>
+            <div class="modal-body p-4">
+                <p id="confirmMergeText" class="mb-0 text-muted">Are you sure you want to merge these faces?</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmMerge">Confirm Merge</button>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" id="btnConfirmMerge">Confirm</button>
             </div>
         </div>
     </div>
@@ -178,7 +277,7 @@
                         <?php if (!empty($persons)): ?>
                             <?php foreach ($persons as $p): ?>
                                 <option value="<?= $p['id'] ?>" class="opt-person-<?= $p['id'] ?>">
-                                    <?= esc($p['name'] ?: 'Person #' . $p['id']) ?> (<?= (int)($p['face_count'] ?? 0) ?> photos)
+                                    <?= esc(($p['name'] ?? null) ?: 'Person #' . $p['id']) ?> (<?= (int)($p['face_count'] ?? 0) ?> photos)
                                 </option>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -206,7 +305,12 @@
 .face-card.drag-over {
     transform: scale(1.05);
     border: 2px dashed #0d6efd !important;
-    background: rgba(13, 110, 253, 0.05) !important;
+    background: rgba(13, 110, 253, 0.12) !important;
+    box-shadow: 0 8px 24px rgba(13, 110, 253, 0.35);
+}
+.face-card-selected {
+    border: 2px solid #0d6efd !important;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.35);
 }
 </style>
 <?= $this->endSection() ?>
@@ -274,7 +378,6 @@ $(function() {
         });
     }
 
-    // Check scan status on page load
     checkScanStatus();
 
     $('#btnRescanAll').on('click', function() {
@@ -291,6 +394,137 @@ $(function() {
         }, 'json').always(function() {
             btn.prop('disabled', false).html('<i class="bi bi-search"></i> Rescan All');
         });
+    });
+
+    // ── Multi-Select Logic ─────────────────────────────────────
+    const selectedFaceIds = new Set();
+    const selectedPersonIds = new Set();
+
+    function updateBulkBar() {
+        const total = selectedFaceIds.size + selectedPersonIds.size;
+        $('#bulkSelectedCount').text(total);
+        if (total > 0) {
+            $('#faceBulkBar').removeClass('d-none');
+        } else {
+            $('#faceBulkBar').addClass('d-none');
+        }
+    }
+
+    $(document).on('change', '.face-select-check', function(e) {
+        e.stopPropagation();
+        const faceId = parseInt($(this).data('face-id'), 10);
+        const card = $(this).closest('.face-card-unassigned');
+        if (this.checked) {
+            selectedFaceIds.add(faceId);
+            card.addClass('face-card-selected');
+        } else {
+            selectedFaceIds.delete(faceId);
+            card.removeClass('face-card-selected');
+        }
+        updateBulkBar();
+    });
+
+    $(document).on('change', '.person-select-check', function(e) {
+        e.stopPropagation();
+        const personId = parseInt($(this).data('person-id'), 10);
+        const card = $(this).closest('.face-card');
+        if (this.checked) {
+            selectedPersonIds.add(personId);
+            card.addClass('face-card-selected');
+        } else {
+            selectedPersonIds.delete(personId);
+            card.removeClass('face-card-selected');
+        }
+        updateBulkBar();
+    });
+
+    $('#btnSelectAllUnknown').on('click', function() {
+        const allChecks = $('.face-select-check');
+        const allChecked = allChecks.length > 0 && allChecks.filter(':checked').length === allChecks.length;
+        allChecks.each(function() {
+            this.checked = !allChecked;
+            const fid = parseInt($(this).data('face-id'), 10);
+            const card = $(this).closest('.face-card-unassigned');
+            if (!allChecked) {
+                selectedFaceIds.add(fid);
+                card.addClass('face-card-selected');
+            } else {
+                selectedFaceIds.delete(fid);
+                card.removeClass('face-card-selected');
+            }
+        });
+        updateBulkBar();
+    });
+
+    $('#btnDeselectAll').on('click', function() {
+        $('.face-select-check, .person-select-check').prop('checked', false);
+        $('.face-card, .face-card-unassigned').removeClass('face-card-selected');
+        selectedFaceIds.clear();
+        selectedPersonIds.clear();
+        updateBulkBar();
+    });
+
+    // ── Bulk Assign Modal (Pick Person) ────────────────────────
+    const bulkModal = new bootstrap.Modal(document.getElementById('bulkAssignModal'));
+
+    $('#btnBulkAssignModal').on('click', function() {
+        const total = selectedFaceIds.size + selectedPersonIds.size;
+        if (total === 0) return;
+        $('#bulkModalCount').text(total);
+        $('#bulkTargetPersonSelect').val('');
+        $('#btnConfirmBulkAssign').prop('disabled', true);
+        bulkModal.show();
+    });
+
+    $('#bulkTargetPersonSelect').on('change', function() {
+        $('#btnConfirmBulkAssign').prop('disabled', !$(this).val());
+    });
+
+    $('#btnConfirmBulkAssign').on('click', function() {
+        const targetId = $('#bulkTargetPersonSelect').val();
+        if (!targetId) return;
+
+        const faceList = Array.from(selectedFaceIds);
+        const personList = Array.from(selectedPersonIds);
+
+        const btn = $(this).prop('disabled', true);
+        btn.html('<span class="spinner-border spinner-border-sm me-1"></span> Processing...');
+
+        if (faceList.length > 0) {
+            $.post(BASE_URL + 'faces/bulk-assign', {
+                face_ids: faceList,
+                person_id: targetId
+            }, function(res) {
+                if (personList.length > 0 && targetId !== 'new') {
+                    personList.filter(pid => pid != targetId).forEach(pid => {
+                        $.post(BASE_URL + 'faces/persons/merge', {
+                            source_person_id: pid,
+                            target_person_id: targetId
+                        });
+                    });
+                }
+                showToast('Faces assigned successfully!', 'success');
+                setTimeout(function() { location.reload(); }, 600);
+            }, 'json').fail(function() {
+                showToast('Failed to assign faces', 'danger');
+                btn.prop('disabled', false).text('Apply Assignment');
+            });
+        } else if (personList.length > 0 && targetId !== 'new') {
+            const merges = personList.filter(pid => pid != targetId);
+            let done = 0;
+            merges.forEach(pid => {
+                $.post(BASE_URL + 'faces/persons/merge', {
+                    source_person_id: pid,
+                    target_person_id: targetId
+                }, function() {
+                    done++;
+                    if (done === merges.length) {
+                        showToast('Persons merged successfully!', 'success');
+                        setTimeout(function() { location.reload(); }, 600);
+                    }
+                });
+            });
+        }
     });
 
     // ── Quick Merge Modal Logic ────────────────────────────────
@@ -341,18 +575,35 @@ $(function() {
         });
     });
 
-    // ── Drag and Drop Logic ────────────────────────────────────
+    // ── Drag and Drop Logic (Single & Multi-Select) ────────────
     let dragData = null;
-    let confirmModal = new bootstrap.Modal(document.getElementById('confirmMergeModal'));
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmMergeModal'));
     let pendingAction = null;
 
     $('.face-card, .face-card-unassigned').on('dragstart', function(e) {
         const target = $(this);
+        const type = target.data('type');
+        const id = type === 'person' ? parseInt(target.data('person-id'), 10) : parseInt(target.data('face-id'), 10);
+
+        let facesToDrag = Array.from(selectedFaceIds);
+        let personsToDrag = Array.from(selectedPersonIds);
+
+        // If dragging an unselected item, drag only that item
+        if (type === 'face' && !selectedFaceIds.has(id)) {
+            facesToDrag = [id];
+        }
+        if (type === 'person' && !selectedPersonIds.has(id)) {
+            personsToDrag = [id];
+        }
+
         dragData = {
-            type: target.data('type'),
-            id: target.data('type') === 'person' ? target.data('person-id') : target.data('face-id'),
-            name: target.data('person-name') || ('Face #' + target.data('face-id'))
+            primaryType: type,
+            primaryId: id,
+            name: target.data('person-name') || ('Face #' + id),
+            faceIds: facesToDrag,
+            personIds: personsToDrag
         };
+
         e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(dragData));
         e.originalEvent.dataTransfer.effectAllowed = 'move';
     });
@@ -374,38 +625,58 @@ $(function() {
         const targetPersonName = dropTarget.data('person-name');
 
         if (!dragData) return;
-        if (dragData.type === 'person' && dragData.id == targetPersonId) return;
 
-        if (dragData.type === 'person') {
-            $('#confirmMergeText').html(`Are you sure you want to merge all photos of <strong>${dragData.name}</strong> into <strong>${targetPersonName}</strong>? This action cannot be undone.`);
+        // 1. Dragging one or more unassigned faces onto a person card
+        if (dragData.faceIds && dragData.faceIds.length > 0) {
+            const count = dragData.faceIds.length;
+            const text = count === 1
+                ? `Assign <strong>Face #${dragData.faceIds[0]}</strong> to <strong>${targetPersonName}</strong>?`
+                : `Assign <strong>${count} selected faces</strong> to <strong>${targetPersonName}</strong> as one person?`;
+
+            $('#confirmMergeText').html(text);
             pendingAction = function() {
-                $.post(BASE_URL + 'faces/persons/merge', {
-                    source_person_id: dragData.id,
-                    target_person_id: targetPersonId
-                }, function(res) {
-                    if (res.status === 'success') {
-                        showToast('Persons merged successfully!');
-                        location.reload();
-                    } else {
-                        showToast('Merge failed: ' + (res.message || 'Error'), 'danger');
-                    }
-                }, 'json');
-            };
-            confirmModal.show();
-        } else if (dragData.type === 'face') {
-            $('#confirmMergeText').html(`Are you sure you want to assign <strong>${dragData.name}</strong> to <strong>${targetPersonName}</strong>?`);
-            pendingAction = function() {
-                $.post(BASE_URL + 'faces/assign-face', {
-                    face_id: dragData.id,
+                $.post(BASE_URL + 'faces/bulk-assign', {
+                    face_ids: dragData.faceIds,
                     person_id: targetPersonId
                 }, function(res) {
                     if (res.status === 'success') {
-                        showToast('Face assigned successfully!');
-                        location.reload();
+                        showToast(`${count} face(s) assigned to ${targetPersonName}!`, 'success');
+                        setTimeout(function() { location.reload(); }, 600);
                     } else {
                         showToast('Assignment failed: ' + (res.message || 'Error'), 'danger');
                     }
-                }, 'json');
+                }, 'json').fail(function() {
+                    showToast('Network error during face assignment', 'danger');
+                });
+            };
+            confirmModal.show();
+            return;
+        }
+
+        // 2. Dragging one or more person cards onto another person card
+        if (dragData.personIds && dragData.personIds.length > 0) {
+            const sources = dragData.personIds.filter(pid => pid != targetPersonId);
+            if (sources.length === 0) return;
+
+            const text = sources.length === 1
+                ? `Merge all photos of <strong>${dragData.name}</strong> into <strong>${targetPersonName}</strong>?`
+                : `Merge <strong>${sources.length} selected persons</strong> into <strong>${targetPersonName}</strong>?`;
+
+            $('#confirmMergeText').html(text);
+            pendingAction = function() {
+                let done = 0;
+                sources.forEach(srcId => {
+                    $.post(BASE_URL + 'faces/persons/merge', {
+                        source_person_id: srcId,
+                        target_person_id: targetPersonId
+                    }, function() {
+                        done++;
+                        if (done === sources.length) {
+                            showToast('Merged successfully!', 'success');
+                            setTimeout(function() { location.reload(); }, 600);
+                        }
+                    }, 'json');
+                });
             };
             confirmModal.show();
         }

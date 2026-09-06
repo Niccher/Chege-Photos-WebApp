@@ -323,6 +323,97 @@ class Photos extends BaseController
         return view('photos/explore', $data);
     }
 
+    public function map()
+    {
+        $photoModel = new \App\Models\PhotoModel();
+        $userId     = auth()->id();
+        $counts     = $this->getSidebarCounts();
+
+        $q = $this->request->getGet('q');
+        $geoQuery = $photoModel->where('user_id', $userId)
+                               ->where('latitude IS NOT NULL')
+                               ->where('longitude IS NOT NULL')
+                               ->where('is_archived', false)
+                               ->orderBy('taken_at', 'DESC');
+
+        if ($q) {
+            $geoQuery = $this->applySearchQuery($geoQuery, $q);
+        }
+
+        $rawLocations = $geoQuery->findAll();
+
+        $mapPhotos = [];
+        $placeClusters = [];
+
+        foreach ($rawLocations as $loc) {
+            $lat = (float) $loc['latitude'];
+            $lng = (float) $loc['longitude'];
+
+            // Skip invalid 0,0 coordinates
+            if ($lat == 0.0 && $lng == 0.0) {
+                continue;
+            }
+
+            $thumbUrl = !empty($loc['thumbnail_path']) ? base_url($loc['thumbnail_path']) : base_url($loc['path']);
+            $fullUrl  = base_url($loc['path']);
+
+            $camera = null;
+            if (!empty($loc['exif_data'])) {
+                $exif = is_string($loc['exif_data']) ? json_decode($loc['exif_data'], true) : $loc['exif_data'];
+                if (is_array($exif)) {
+                    $make = $exif['Make'] ?? '';
+                    $model = $exif['Model'] ?? '';
+                    $camera = trim("$make $model");
+                }
+            }
+
+            $item = [
+                'id'          => (int) $loc['id'],
+                'filename'    => $loc['filename'],
+                'lat'         => $lat,
+                'lng'         => $lng,
+                'thumb_url'   => $thumbUrl,
+                'photo_url'   => $fullUrl,
+                'taken_at'    => $loc['taken_at'] ? date('M j, Y g:i A', strtotime($loc['taken_at'])) : null,
+                'raw_date'    => $loc['taken_at'] ?: ($loc['created_at'] ?? ''),
+                'camera'      => $camera ?: null,
+                'is_favorite' => (bool) $loc['is_favorite'],
+                'ocr_text'    => !empty($loc['ocr_text']) ? mb_substr($loc['ocr_text'], 0, 150) : null,
+            ];
+
+            $mapPhotos[] = $item;
+
+            // Group into location clusters (~11km / 0.1 degree)
+            $clusterKey = round($lat, 1) . ',' . round($lng, 1);
+            if (!isset($placeClusters[$clusterKey])) {
+                $placeClusters[$clusterKey] = [
+                    'key'       => $clusterKey,
+                    'lat'       => $lat,
+                    'lng'       => $lng,
+                    'count'     => 0,
+                    'cover_url' => $thumbUrl,
+                ];
+            }
+            $placeClusters[$clusterKey]['count']++;
+        }
+
+        usort($placeClusters, fn($a, $b) => $b['count'] <=> $a['count']);
+        $topClusters = array_slice($placeClusters, 0, 12);
+
+        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
+
+        $data = [
+            'counts'         => $counts,
+            'mapPhotos'      => $mapPhotos,
+            'placeClusters'  => $topClusters,
+            'totalPhotos'    => $totalPhotos,
+            'geotaggedCount' => count($mapPhotos),
+            'searchQuery'    => $q,
+        ];
+
+        return view('photos/map', $data);
+    }
+
 
 
     public function upload()
@@ -2160,6 +2251,7 @@ class Photos extends BaseController
 
         $query->groupStart()
               ->like('filename', $q)
+              ->orLike('ocr_text', $q)
               ->orLike('exif_data', $q)
               ->orLike('taken_at', $q);
         if (!empty($photoIds)) {

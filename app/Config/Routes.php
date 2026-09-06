@@ -101,6 +101,7 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('photos/tags/remove', 'Photos::removeTag');
     $routes->post('upload', 'Photos::upload');
     $routes->get('explore', 'Photos::explore');
+    $routes->get('map',     'Photos::map');
     $routes->get('sharing', 'Photos::sharing');
     $routes->get('analytics', 'Photos::analytics');
     $routes->get('archive', 'Photos::archive');

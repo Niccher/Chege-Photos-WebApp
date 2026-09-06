@@ -344,6 +344,12 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--map <?= (url_is('map')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('map') ?>">
+                        <span><i class="bi bi-geo-alt"></i> Places Map</span>
+                        <span class="badge rounded-pill sidebar-count sidebar-count--map"><?= (int) ($counts['map'] ?? 0) ?></span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link sidebar-nav-tone sidebar-nav-tone--favorites <?= (url_is('favorites')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('favorites') ?>">
                         <span><i class="bi bi-heart"></i> Favorites</span>
                         <span class="badge rounded-pill sidebar-count sidebar-count--favorites"><?= (int) ($counts['favorites'] ?? 0) ?></span>

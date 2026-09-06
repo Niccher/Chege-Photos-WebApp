@@ -132,6 +132,7 @@ abstract class BaseController extends Controller
         $counts = [
             'photos'          => $photosCount,
             'explore'         => $exploreCount,
+            'map'             => $exploreCount,
             'sharing'         => $publicLinkCount + $sharedWithMeCount,
             'favorites'       => $favoritesCount,
             'albums'          => $albumsCount,
