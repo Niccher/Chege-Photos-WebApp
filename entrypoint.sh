@@ -10,6 +10,25 @@ mkdir -p /var/www/html/writable/cache \
          /var/www/html/writable/uploads \
          /var/www/html/public/uploads \
          /var/www/html/public/thumbnails
+
+# Handle unified persistent volume if mounted at /data on Railway
+if [ -d "/data" ]; then
+    echo "Persistent volume detected at /data. Linking uploads and thumbnails..."
+    mkdir -p /data/uploads /data/thumbnails
+    if [ ! -L "/var/www/html/public/uploads" ]; then
+        cp -rn /var/www/html/public/uploads/* /data/uploads/ 2>/dev/null || true
+        rm -rf /var/www/html/public/uploads
+        ln -sfn /data/uploads /var/www/html/public/uploads
+    fi
+    if [ ! -L "/var/www/html/public/thumbnails" ]; then
+        cp -rn /var/www/html/public/thumbnails/* /data/thumbnails/ 2>/dev/null || true
+        rm -rf /var/www/html/public/thumbnails
+        ln -sfn /data/thumbnails /var/www/html/public/thumbnails
+    fi
+    chmod -R 777 /data
+    chown -R www-data:www-data /data || true
+fi
+
 chmod -R 777 /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails
 chown -R www-data:www-data /var/www/html/writable /var/www/html/public/uploads /var/www/html/public/thumbnails || true
 
