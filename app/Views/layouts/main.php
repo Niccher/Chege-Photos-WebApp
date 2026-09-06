@@ -6,7 +6,12 @@
     <title><?= $this->renderSection('title') ?: 'Chege Photos — Photo Management' ?></title>
     <meta name="description" content="Manage, search, organize, and view your photo library with AI face recognition.">
     <link rel="canonical" href="<?= current_url() ?>">
-    <meta name="theme-color" content="#4f46e5">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="manifest" href="<?= base_url('manifest.json') ?>">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Chege Photos">
+    <link rel="apple-touch-icon" href="<?= base_url('icons/icon-192.png') ?>">
     <!-- Bulletproof Zero-Dependency Theme Engine -->
     <script>
         window.setAppTheme = function(theme) {

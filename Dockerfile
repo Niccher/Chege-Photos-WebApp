@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         zip \
         unzip \
         cron \
+        ffmpeg \
+        libheif-examples \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) intl mysqli pdo_mysql zip gd exif
 

@@ -421,10 +421,34 @@ class Photos extends BaseController
         $file->move($targetUploadDir, $newName);
 
         $fullPath = "{$targetUploadDir}/{$newName}";
-        $thumbnailPath = "{$targetThumbDir}/{$newName}";
+        $ext = strtolower(pathinfo($newName, PATHINFO_EXTENSION));
+        $isVideo = strpos($mimeType, 'video/') === 0 || in_array($ext, ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi']);
+        $isHeic = in_array($ext, ['heic', 'heif']) || strpos($mimeType, 'heic') !== false || strpos($mimeType, 'heif') !== false;
 
-        $isVideo = strpos($mimeType, 'video/') === 0;
-        $imageInfo = $isVideo ? false : @getimagesize($fullPath);
+        $thumbName = ($isVideo || $isHeic) ? (pathinfo($newName, PATHINFO_FILENAME) . '.jpg') : $newName;
+        $thumbnailPath = "{$targetThumbDir}/{$thumbName}";
+
+        $imageInfo = null;
+        if ($isVideo) {
+            self::generateVideoThumbnail($fullPath, $thumbnailPath);
+            if (file_exists($thumbnailPath)) {
+                $imageInfo = @getimagesize($thumbnailPath);
+            }
+        } elseif ($isHeic) {
+            $tmpJpg = sys_get_temp_dir() . '/' . uniqid('heic_info_', true) . '.jpg';
+            @exec(sprintf('heif-convert %s %s 2>&1', escapeshellarg($fullPath), escapeshellarg($tmpJpg)));
+            if (file_exists($tmpJpg) && filesize($tmpJpg) > 0) {
+                $imageInfo = @getimagesize($tmpJpg);
+                $this->generateThumbnail($tmpJpg, $thumbnailPath);
+                @unlink($tmpJpg);
+            } else {
+                $this->generateThumbnail($fullPath, $thumbnailPath);
+            }
+        } else {
+            $imageInfo = @getimagesize($fullPath);
+            $this->generateThumbnail($fullPath, $thumbnailPath);
+        }
+
         $metadata = $isVideo ? null : $this->getMergedMetadata($fullPath);
 
         $deviceUuid = $this->request->getPost('device_uuid') ?: ($this->request->getHeaderLine('X-Device-UUID') ?: null);
@@ -446,15 +470,12 @@ class Photos extends BaseController
             'gcp_synced_at'  => null,
             'file_hash'      => $fileHash,
             'taken_at'       => $metadata['taken_at'] ?? date('Y-m-d H:i:s'),
-            'thumbnail_path' => "thumbnails/{$subDir}/{$newName}",
+            'thumbnail_path' => "thumbnails/{$subDir}/{$thumbName}",
             'latitude'       => $metadata['lat'] ?? null,
             'longitude'      => $metadata['lng'] ?? null,
             'exif_data'      => $metadata['exif'] ?? null,
         ];
 
-        if (!$isVideo) {
-            $this->generateThumbnail($fullPath, $thumbnailPath);
-        }
         $photoId = $photoModel->insert($data);
         $this->clearSidebarCountsCache();
         $this->checkAndDispatchStorageWarning((int) $userId);
@@ -493,6 +514,12 @@ class Photos extends BaseController
     protected function dispatchBackgroundMediaProcessing(int $photoId): void
     {
         try {
+            // Guard against process storms: if a worker is already running, pending items are queued in DB
+            $running = @shell_exec('pgrep -f "media:process-pending" 2>/dev/null');
+            if (!empty(trim((string) $running))) {
+                return;
+            }
+
             $spark = escapeshellarg(ROOTPATH . 'spark');
             $idArg = escapeshellarg("--id={$photoId}");
             $cmd   = "php {$spark} media:process-pending {$idArg} > /dev/null 2>&1 &";
@@ -1853,9 +1880,59 @@ class Photos extends BaseController
         return (float)$parts[0] / (float)$parts[1];
     }
 
+    public static function generateVideoThumbnail(string $videoPath, string $thumbPath): bool
+    {
+        if (!file_exists($videoPath)) {
+            return false;
+        }
+
+        $thumbDir = dirname($thumbPath);
+        if (!is_dir($thumbDir)) {
+            @mkdir($thumbDir, 0777, true);
+        }
+
+        // Try extracting poster frame at 1s mark
+        $cmd = sprintf(
+            'ffmpeg -y -ss 00:00:01.000 -i %s -vframes 1 -vf "scale=400:400:force_original_aspect_ratio=increase,crop=400:400" %s 2>&1',
+            escapeshellarg($videoPath),
+            escapeshellarg($thumbPath)
+        );
+        @exec($cmd, $out, $ret);
+
+        if ($ret !== 0 || !file_exists($thumbPath) || filesize($thumbPath) === 0) {
+            // Fallback to start frame 0s (for very short clips)
+            $cmdFallback = sprintf(
+                'ffmpeg -y -ss 00:00:00.000 -i %s -vframes 1 -vf "scale=400:400:force_original_aspect_ratio=increase,crop=400:400" %s 2>&1',
+                escapeshellarg($videoPath),
+                escapeshellarg($thumbPath)
+            );
+            @exec($cmdFallback, $outF, $retF);
+        }
+
+        return file_exists($thumbPath) && filesize($thumbPath) > 0;
+    }
+
     private function generateThumbnail($source, $target)
     {
         if (file_exists($target)) @unlink($target);
+
+        $ext = strtolower(pathinfo($source, PATHINFO_EXTENSION));
+        if (in_array($ext, ['heic', 'heif'])) {
+            $tmpJpg = sys_get_temp_dir() . '/' . uniqid('heic_thumb_', true) . '.jpg';
+            @exec(sprintf('heif-convert %s %s 2>&1', escapeshellarg($source), escapeshellarg($tmpJpg)));
+            if (file_exists($tmpJpg) && filesize($tmpJpg) > 0) {
+                try {
+                    \Config\Services::image()
+                        ->withFile($tmpJpg)
+                        ->resize(400, 400, true, 'height')
+                        ->save($target);
+                } catch (\Exception $e) {
+                    @copy($tmpJpg, $target);
+                }
+                @unlink($tmpJpg);
+                return;
+            }
+        }
 
         try {
             $image = \Config\Services::image()

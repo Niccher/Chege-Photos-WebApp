@@ -1371,4 +1371,15 @@ $(document).ready(function () {
             window.setAppTheme(theme);
         }
     }
+
+    // Register PWA Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register(BASE_URL + 'sw.js').then(function (reg) {
+                console.log('PWA Service Worker registered with scope:', reg.scope);
+            }).catch(function (err) {
+                console.warn('PWA Service Worker registration failed:', err);
+            });
+        });
+    }
 });

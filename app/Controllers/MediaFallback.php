@@ -83,6 +83,22 @@ class MediaFallback extends BaseController
             $origRel = "uploads/{$subPath}";
             $origLocal = FCPATH . $origRel;
 
+            // Check if there's a corresponding video or original with different extension
+            if (!file_exists($origLocal)) {
+                $dir = dirname($origLocal);
+                $stem = pathinfo($origLocal, PATHINFO_FILENAME);
+                $relDir = dirname($origRel);
+                foreach (['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'heic', 'heif', 'jpg', 'jpeg', 'png'] as $candidateExt) {
+                    $candidateRel = "{$relDir}/{$stem}.{$candidateExt}";
+                    $candidateLocal = FCPATH . $candidateRel;
+                    if (file_exists($candidateLocal)) {
+                        $origRel = $candidateRel;
+                        $origLocal = $candidateLocal;
+                        break;
+                    }
+                }
+            }
+
             // If original upload not local, try downloading original from GCP
             if (!file_exists($origLocal) && $gcp->isConfigured()) {
                 $gcp->downloadFile($origRel, $origLocal);
@@ -95,14 +111,37 @@ class MediaFallback extends BaseController
                 }
 
                 $thumbGenerated = false;
-                try {
-                    \Config\Services::image()
-                        ->withFile($origLocal)
-                        ->resize(400, 400, true, 'height')
-                        ->save($localPath);
-                    $thumbGenerated = file_exists($localPath);
-                } catch (\Throwable $e) {
-                    $thumbGenerated = @copy($origLocal, $localPath);
+                $origExt = strtolower(pathinfo($origLocal, PATHINFO_EXTENSION));
+                $isVideo = in_array($origExt, ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi']);
+                $isHeic = in_array($origExt, ['heic', 'heif']);
+
+                if ($isVideo) {
+                    $thumbGenerated = \App\Controllers\Photos::generateVideoThumbnail($origLocal, $localPath);
+                } elseif ($isHeic) {
+                    $tmpJpg = sys_get_temp_dir() . '/' . uniqid('heic_fallback_', true) . '.jpg';
+                    @exec(sprintf('heif-convert %s %s 2>&1', escapeshellarg($origLocal), escapeshellarg($tmpJpg)));
+                    if (file_exists($tmpJpg) && filesize($tmpJpg) > 0) {
+                        try {
+                            \Config\Services::image()
+                                ->withFile($tmpJpg)
+                                ->resize(400, 400, true, 'height')
+                                ->save($localPath);
+                            $thumbGenerated = file_exists($localPath);
+                        } catch (\Throwable $e) {
+                            $thumbGenerated = @copy($tmpJpg, $localPath);
+                        }
+                        @unlink($tmpJpg);
+                    }
+                } else {
+                    try {
+                        \Config\Services::image()
+                            ->withFile($origLocal)
+                            ->resize(400, 400, true, 'height')
+                            ->save($localPath);
+                        $thumbGenerated = file_exists($localPath);
+                    } catch (\Throwable $e) {
+                        $thumbGenerated = @copy($origLocal, $localPath);
+                    }
                 }
 
                 if ($thumbGenerated && file_exists($localPath)) {
