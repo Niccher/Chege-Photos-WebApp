@@ -93,6 +93,9 @@ $routes->group('', ['filter' => 'chain'], function ($routes) {
     $routes->post('vault/move', 'Vault::move');
     $routes->post('vault/restore', 'Vault::restore');
     $routes->post('vault/delete', 'Vault::delete');
+    $routes->post('vault/unflag', 'Vault::unflag');
+    $routes->post('vault/bulk-unflag', 'Vault::bulkUnflag');
+    $routes->get('vault/photo-reason/(:num)', 'Vault::photoReason/$1');
     $routes->post('vault/hide-person', 'Vault::hidePerson');
     $routes->post('vault/restore-person', 'Vault::restorePerson');
     $routes->get('vault/persons', 'Vault::persons');

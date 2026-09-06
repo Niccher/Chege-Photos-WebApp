@@ -223,6 +223,9 @@
             <div class="d-flex align-items-center gap-3">
                 <span class="small fw-bold"><span id="vaultSelectedCount">0</span> selected</span>
                 <div class="vr bg-white opacity-25" style="height: 20px;"></div>
+                <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark" id="btnVaultUnflagSelected">
+                    <i class="bi bi-shield-check me-1"></i> Mark Safe &amp; Restore
+                </button>
                 <button type="button" class="btn btn-success btn-sm rounded-pill px-3 py-1 fw-bold" id="btnVaultRestoreSelected">
                     <i class="bi bi-unlock me-1"></i> Restore to Library
                 </button>
@@ -248,17 +251,28 @@
                             </div>
                         </div>
 
-                        <!-- Intimate / Sensitive Badge -->
+                        <!-- Intimate / Sensitive Badge (Clickable for Analysis) -->
                         <?php if (!empty($photo['is_nsfw'])): ?>
                             <div class="position-absolute top-0 end-0 p-2 z-2">
-                                <span class="badge bg-danger rounded-pill small shadow-sm" title="Detected as Sensitive/Intimate (Score: <?= round(($photo['nsfw_score'] ?? 0) * 100) ?>%)">
+                                <button type="button" class="btn btn-sm btn-danger py-0 px-2 rounded-pill small shadow-sm fw-bold border-0 btn-show-nsfw-reason" 
+                                        data-id="<?= $photo['id'] ?>"
+                                        data-filename="<?= esc($photo['filename']) ?>"
+                                        data-score="<?= round(($photo['nsfw_score'] ?? 0) * 100) ?>"
+                                        data-details='<?= esc(json_encode($photo['nsfw_info'] ?? []), 'attr') ?>'
+                                        title="Click to view AI classification analysis">
                                     <i class="bi bi-shield-slash-fill me-1"></i> <?= round(($photo['nsfw_score'] ?? 0) * 100) ?>%
-                                </span>
+                                </button>
                             </div>
                         <?php endif; ?>
 
                         <!-- Media Thumbnail (Served via protected vault proxy) -->
-                        <div class="ratio ratio-1x1 vault-thumb-wrapper" style="cursor: pointer;" data-full-url="<?= esc($photo['full_url']) ?>" data-filename="<?= esc($photo['filename']) ?>" data-id="<?= $photo['id'] ?>">
+                        <div class="ratio ratio-1x1 vault-thumb-wrapper" style="cursor: pointer;" 
+                             data-full-url="<?= esc($photo['full_url']) ?>" 
+                             data-filename="<?= esc($photo['filename']) ?>" 
+                             data-id="<?= $photo['id'] ?>"
+                             data-is-nsfw="<?= !empty($photo['is_nsfw']) ? '1' : '0' ?>"
+                             data-nsfw-score="<?= round(($photo['nsfw_score'] ?? 0) * 100) ?>"
+                             data-details='<?= esc(json_encode($photo['nsfw_info'] ?? []), 'attr') ?>'>
                             <img src="<?= esc($photo['thumb_url']) ?>" class="object-fit-cover w-100 h-100 rounded-4 vault-img" alt="<?= esc($photo['filename']) ?>" loading="lazy">
                         </div>
 
@@ -270,6 +284,11 @@
                                     <i class="bi bi-three-dots-vertical"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 small">
+                                    <?php if (!empty($photo['is_nsfw'])): ?>
+                                        <li><a class="dropdown-item text-warning fw-semibold btn-unflag-single" href="#" data-id="<?= $photo['id'] ?>"><i class="bi bi-shield-check me-2"></i>Mark Safe &amp; Restore</a></li>
+                                        <li><a class="dropdown-item btn-show-nsfw-reason" href="#" data-id="<?= $photo['id'] ?>" data-filename="<?= esc($photo['filename']) ?>" data-score="<?= round(($photo['nsfw_score'] ?? 0) * 100) ?>" data-details='<?= esc(json_encode($photo['nsfw_info'] ?? []), 'attr') ?>'><i class="bi bi-info-circle me-2"></i>View Classification Reason</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                    <?php endif; ?>
                                     <li><a class="dropdown-item btn-restore-single" href="#" data-id="<?= $photo['id'] ?>"><i class="bi bi-unlock text-success me-2"></i>Restore to Library</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item text-danger btn-delete-single" href="#" data-id="<?= $photo['id'] ?>"><i class="bi bi-trash me-2"></i>Permanently Delete</a></li>
@@ -291,8 +310,16 @@
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content bg-black border-0">
             <div class="modal-header border-0 p-3 position-absolute top-0 start-0 w-100 d-flex justify-content-between align-items-center z-3" style="background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);">
-                <span class="text-white small font-monospace" id="vaultLightboxTitle"></span>
                 <div class="d-flex align-items-center gap-2">
+                    <span class="text-white small font-monospace" id="vaultLightboxTitle"></span>
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2.5 py-0.5 small d-none" id="btnVaultLightboxReason">
+                        <i class="bi bi-shield-slash-fill me-1"></i><span id="vaultLightboxReasonScore"></span> Sensitive
+                    </button>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark d-none" id="btnVaultLightboxUnflag">
+                        <i class="bi bi-shield-check me-1"></i> Mark Safe &amp; Restore
+                    </button>
                     <button type="button" class="btn btn-outline-success btn-sm rounded-pill px-3 py-1" id="btnVaultLightboxRestore">
                         <i class="bi bi-unlock me-1"></i> Restore
                     </button>
@@ -306,6 +333,68 @@
             </div>
             <div class="modal-body p-0 d-flex align-items-center justify-content-center h-100">
                 <img id="vaultLightboxImg" src="" class="img-fluid" style="max-height: 92vh; object-fit: contain;" alt="Vault Photo">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: AI Classification Analysis & Reasoning -->
+<div class="modal fade" id="modalNsfwClassificationReason" tabindex="-1" aria-labelledby="modalNsfwClassificationReasonLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4" style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color) !important;">
+            <div class="modal-header border-bottom border-secondary border-opacity-10 pb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle p-2 bg-danger bg-opacity-10 text-danger">
+                        <i class="bi bi-shield-slash fs-4"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold mb-0" id="modalNsfwClassificationReasonLabel">AI Classification Analysis</h5>
+                        <p class="text-muted extra-small mb-0" id="nsfwReasonFilename">photo.jpg</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold">Confidence Score:</span>
+                        <span class="badge bg-danger fs-6 px-3 py-1" id="nsfwReasonScoreBadge">0%</span>
+                    </div>
+                    <div class="progress rounded-pill" style="height: 8px;">
+                        <div class="progress-bar bg-danger" id="nsfwReasonProgressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-3 mb-3" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color);">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted extra-small">MODEL</span>
+                        <span class="fw-bold extra-small text-uppercase" id="nsfwReasonModel">OpenNSFW2</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted extra-small">THRESHOLD</span>
+                        <span class="fw-semibold extra-small" id="nsfwReasonThreshold">70.0%</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted extra-small">SCANNED AT</span>
+                        <span class="text-muted extra-small" id="nsfwReasonTimestamp">-</span>
+                    </div>
+                </div>
+
+                <div class="alert alert-secondary border-0 mb-3 small" id="nsfwReasonExplanationBox">
+                    <i class="bi bi-info-circle me-1 text-primary"></i> <span id="nsfwReasonExplanationText">Loading classification details...</span>
+                </div>
+
+                <div id="nsfwReasonDetailsSection" class="d-none">
+                    <label class="extra-small text-muted text-uppercase fw-bold mb-2">Detailed Breakdown</label>
+                    <div class="p-2 rounded bg-black bg-opacity-25 small font-monospace" id="nsfwReasonBreakdownText" style="font-size: 0.75rem; max-height: 120px; overflow-y: auto;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary border-opacity-10 py-3">
+                <button type="button" class="btn btn-outline-secondary rounded-pill btn-sm px-3" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning rounded-pill btn-sm px-3 fw-bold text-dark" id="btnModalUnflagPhoto">
+                    <i class="bi bi-shield-check me-1"></i> Mark as Safe &amp; Restore
+                </button>
             </div>
         </div>
     </div>
@@ -737,6 +826,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ── Unflag (Mark Safe & Restore) Handler ──────────────────────────
+    async function executeUnflagAction(photoIds, restore = true) {
+        if (!photoIds || photoIds.length === 0) return;
+        const msg = restore
+            ? `Mark ${photoIds.length} photo(s) as safe and restore them back to your main photo library?`
+            : `Remove ${photoIds.length} photo(s) from sensitive classification?`;
+
+        if (!confirm(msg)) return;
+
+        try {
+            const formData = new FormData();
+            photoIds.forEach(id => formData.append('photo_ids[]', id));
+            formData.append('restore_to_library', restore ? '1' : '0');
+
+            const resp = await fetch('<?= base_url("vault/bulk-unflag") ?>', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            });
+            const res = await resp.json();
+            if (res.status === 'success') {
+                alert(res.message);
+                window.location.reload();
+            } else {
+                alert(res.message || 'Failed to unflag photo(s).');
+            }
+        } catch (err) {
+            alert('A network error occurred while unflagging.');
+        }
+    }
+
+    document.getElementById('btnVaultUnflagSelected')?.addEventListener('click', () => {
+        const ids = Array.from(document.querySelectorAll('.vault-select-chk:checked')).map(c => c.value);
+        executeUnflagAction(ids, true);
+    });
+
+    document.querySelectorAll('.btn-unflag-single').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            executeUnflagAction([btn.getAttribute('data-id')], true);
+        });
+    });
+
     document.getElementById('btnVaultRestoreSelected')?.addEventListener('click', () => {
         const ids = Array.from(document.querySelectorAll('.vault-select-chk:checked')).map(c => c.value);
         executeVaultAction('restore', ids);
@@ -761,12 +893,77 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // ── 7. Vault Lightbox Preview ─────────────────────────────────────
+    // ── 7. AI Classification Reasoning Modal ─────────────────────────
+    let activeReasonPhotoId = null;
+    const reasonModalEl = document.getElementById('modalNsfwClassificationReason');
+    const reasonModal = reasonModalEl ? new bootstrap.Modal(reasonModalEl) : null;
+
+    function populateAndShowReasonModal(id, filename, score, details) {
+        activeReasonPhotoId = id;
+        let parsed = details;
+        if (typeof details === 'string' && details.trim() !== '') {
+            try { parsed = JSON.parse(details); } catch (e) { parsed = {}; }
+        } else if (!details) {
+            parsed = {};
+        }
+
+        document.getElementById('nsfwReasonFilename').textContent = filename || `Photo #${id}`;
+        document.getElementById('nsfwReasonScoreBadge').textContent = `${score}%`;
+        document.getElementById('nsfwReasonProgressBar').style.width = `${score}%`;
+
+        document.getElementById('nsfwReasonModel').textContent = (parsed.model || 'OpenNSFW2').toUpperCase();
+        document.getElementById('nsfwReasonThreshold').textContent = parsed.threshold ? `${(parsed.threshold * 100).toFixed(1)}%` : '70.0%';
+        document.getElementById('nsfwReasonTimestamp').textContent = parsed.scanned_at || 'Recorded';
+
+        const defaultExplanation = score >= 70 
+            ? 'Exceeded sensitive content threshold via machine learning classifier.'
+            : 'Classified within safe boundaries.';
+        document.getElementById('nsfwReasonExplanationText').textContent = parsed.reason || defaultExplanation;
+
+        const breakdownSec = document.getElementById('nsfwReasonDetailsSection');
+        const breakdownText = document.getElementById('nsfwReasonBreakdownText');
+        if (parsed.details && Object.keys(parsed.details).length > 0) {
+            breakdownSec.classList.remove('d-none');
+            breakdownText.textContent = JSON.stringify(parsed.details, null, 2);
+        } else {
+            breakdownSec.classList.add('d-none');
+        }
+
+        reasonModal?.show();
+    }
+
+    document.querySelectorAll('.btn-show-nsfw-reason').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            const filename = btn.getAttribute('data-filename');
+            const score = btn.getAttribute('data-score');
+            const details = btn.getAttribute('data-details');
+            populateAndShowReasonModal(id, filename, score, details);
+        });
+    });
+
+    document.getElementById('btnModalUnflagPhoto')?.addEventListener('click', () => {
+        if (activeReasonPhotoId) {
+            reasonModal?.hide();
+            executeUnflagAction([activeReasonPhotoId], true);
+        }
+    });
+
+    // ── 8. Vault Lightbox Preview ─────────────────────────────────────
     let activeLightboxPhotoId = null;
+    let activeLightboxFilename = null;
+    let activeLightboxScore = null;
+    let activeLightboxDetails = null;
+
     const vaultModalEl = document.getElementById('vaultLightboxModal');
     const vaultModal = vaultModalEl ? new bootstrap.Modal(vaultModalEl) : null;
     const lightboxImg = document.getElementById('vaultLightboxImg');
     const lightboxTitle = document.getElementById('vaultLightboxTitle');
+    const lightboxReasonBtn = document.getElementById('btnVaultLightboxReason');
+    const lightboxReasonScore = document.getElementById('vaultLightboxReasonScore');
+    const lightboxUnflagBtn = document.getElementById('btnVaultLightboxUnflag');
 
     document.querySelectorAll('.vault-thumb-wrapper').forEach(wrapper => {
         wrapper.addEventListener('click', (e) => {
@@ -774,12 +971,42 @@ document.addEventListener('DOMContentLoaded', () => {
             const fullUrl = wrapper.getAttribute('data-full-url');
             const filename = wrapper.getAttribute('data-filename');
             const id = wrapper.getAttribute('data-id');
+            const isNsfw = wrapper.getAttribute('data-is-nsfw') === '1';
+            const score = wrapper.getAttribute('data-nsfw-score');
+            const details = wrapper.getAttribute('data-details');
 
             activeLightboxPhotoId = id;
+            activeLightboxFilename = filename;
+            activeLightboxScore = score;
+            activeLightboxDetails = details;
+
             if (lightboxImg) lightboxImg.src = fullUrl;
             if (lightboxTitle) lightboxTitle.textContent = filename;
+
+            if (isNsfw) {
+                if (lightboxReasonScore) lightboxReasonScore.textContent = `${score}%`;
+                lightboxReasonBtn?.classList.remove('d-none');
+                lightboxUnflagBtn?.classList.remove('d-none');
+            } else {
+                lightboxReasonBtn?.classList.add('d-none');
+                lightboxUnflagBtn?.classList.add('d-none');
+            }
+
             vaultModal?.show();
         });
+    });
+
+    lightboxReasonBtn?.addEventListener('click', () => {
+        if (activeLightboxPhotoId) {
+            populateAndShowReasonModal(activeLightboxPhotoId, activeLightboxFilename, activeLightboxScore, activeLightboxDetails);
+        }
+    });
+
+    lightboxUnflagBtn?.addEventListener('click', () => {
+        if (activeLightboxPhotoId) {
+            vaultModal?.hide();
+            executeUnflagAction([activeLightboxPhotoId], true);
+        }
     });
 
     document.getElementById('btnVaultLightboxRestore')?.addEventListener('click', () => {

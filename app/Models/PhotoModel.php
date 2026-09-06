@@ -12,7 +12,7 @@ class PhotoModel extends Model
     protected $returnType       = 'array';
     protected $useSoftDeletes   = true;
     protected $protectFields    = true;
-    protected $allowedFields    = ['user_id', 'device_id', 'device_uuid', 'upload_source', 'filename', 'path', 'thumbnail_path', 'taken_at', 'width', 'height', 'size', 'storage_driver', 'gcp_synced', 'gcp_synced_at', 'file_hash', 'mime_type', 'latitude', 'longitude', 'exif_data', 'ocr_text', 'is_archived', 'is_favorite', 'scanned_face', 'scanned_tag', 'scanned_clip', 'scanned_ocr', 'scanned_nsfw', 'is_vault', 'is_nsfw', 'nsfw_score', 'vault_locked_at'];
+    protected $allowedFields    = ['user_id', 'device_id', 'device_uuid', 'upload_source', 'filename', 'path', 'thumbnail_path', 'taken_at', 'width', 'height', 'size', 'storage_driver', 'gcp_synced', 'gcp_synced_at', 'file_hash', 'mime_type', 'latitude', 'longitude', 'exif_data', 'ocr_text', 'is_archived', 'is_favorite', 'scanned_face', 'scanned_tag', 'scanned_clip', 'scanned_ocr', 'scanned_nsfw', 'is_vault', 'is_nsfw', 'nsfw_score', 'nsfw_details', 'vault_locked_at'];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;

@@ -87,6 +87,11 @@ class Vault extends BaseController
             foreach ($photos as &$p) {
                 $p['thumb_url'] = base_url("vault/media/{$p['id']}?type=thumb");
                 $p['full_url']  = base_url("vault/media/{$p['id']}?type=full");
+                if (!empty($p['nsfw_details'])) {
+                    $p['nsfw_info'] = is_string($p['nsfw_details']) ? json_decode($p['nsfw_details'], true) : $p['nsfw_details'];
+                } else {
+                    $p['nsfw_info'] = null;
+                }
             }
             unset($p);
 
@@ -611,6 +616,139 @@ class Vault extends BaseController
             'status'    => 'success',
             'available' => $available,
             'vaulted'   => $vaulted,
+        ]);
+    }
+
+    public function unflag()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked'])->setStatusCode(403);
+        }
+
+        $userId  = auth()->id();
+        $photoId = (int) $this->request->getPost('photo_id');
+        $restore = $this->request->getPost('restore_to_library') !== '0'; // default true
+
+        if ($photoId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid photo selected'])->setStatusCode(400);
+        }
+
+        $photoModel = new PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($photoId);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found'])->setStatusCode(404);
+        }
+
+        $updateData = [
+            'is_nsfw'      => 0,
+            'nsfw_score'   => 0.0,
+            'nsfw_details' => json_encode([
+                'override'     => 'user_unflagged_safe',
+                'unflagged_at' => date('Y-m-d H:i:s'),
+                'prior_score'  => (float) ($photo['nsfw_score'] ?? 0.0),
+            ]),
+        ];
+
+        if ($restore) {
+            $updateData['is_vault'] = 0;
+            $updateData['vault_locked_at'] = null;
+        }
+
+        $photoModel->update($photoId, $updateData);
+
+        $msg = $restore 
+            ? 'Photo unflagged as safe and restored to your main library.' 
+            : 'Photo removed from sensitive classification and kept in manual vault.';
+
+        return $this->response->setJSON([
+            'status'   => 'success',
+            'message'  => $msg,
+            'photo_id' => $photoId,
+            'restored' => $restore,
+        ]);
+    }
+
+    public function bulkUnflag()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked'])->setStatusCode(403);
+        }
+
+        $userId   = auth()->id();
+        $photoIds = (array) $this->request->getPost('photo_ids');
+        $restore  = $this->request->getPost('restore_to_library') !== '0';
+
+        $photoIds = array_filter(array_map('intval', $photoIds));
+        if (empty($photoIds)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'No photos selected'])->setStatusCode(400);
+        }
+
+        $photoModel = new PhotoModel();
+        $updateData = [
+            'is_nsfw'      => 0,
+            'nsfw_score'   => 0.0,
+            'nsfw_details' => json_encode([
+                'override'     => 'user_bulk_unflagged_safe',
+                'unflagged_at' => date('Y-m-d H:i:s'),
+            ]),
+        ];
+
+        if ($restore) {
+            $updateData['is_vault'] = 0;
+            $updateData['vault_locked_at'] = null;
+        }
+
+        $photoModel->where('user_id', $userId)
+                   ->whereIn('id', $photoIds)
+                   ->set($updateData)
+                   ->update();
+
+        $count = count($photoIds);
+        $msg = $restore 
+            ? "{$count} photo(s) unflagged as safe and restored to your main library." 
+            : "{$count} photo(s) unflagged and moved to manually locked.";
+
+        return $this->response->setJSON([
+            'status'   => 'success',
+            'message'  => $msg,
+            'count'    => $count,
+            'restored' => $restore,
+        ]);
+    }
+
+    public function photoReason(int $photoId)
+    {
+        if (! auth()->loggedIn() || ! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $photo = $photoModel->where('user_id', $userId)->find($photoId);
+        if (!$photo) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found'])->setStatusCode(404);
+        }
+
+        $details = null;
+        if (!empty($photo['nsfw_details'])) {
+            $details = is_string($photo['nsfw_details']) ? json_decode($photo['nsfw_details'], true) : $photo['nsfw_details'];
+        }
+
+        return $this->response->setJSON([
+            'status'     => 'success',
+            'photo_id'   => $photoId,
+            'filename'   => $photo['filename'],
+            'is_nsfw'    => (int) $photo['is_nsfw'],
+            'nsfw_score' => (float) $photo['nsfw_score'],
+            'details'    => $details,
         ]);
     }
 }
