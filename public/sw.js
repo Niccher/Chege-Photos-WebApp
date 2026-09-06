@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chege-photos-shell-v1';
+const CACHE_NAME = 'chege-photos-shell-v2';
 const STATIC_ASSETS = [
     '/css/bootstrap.min.css',
     '/js/bootstrap.bundle.min.js',
@@ -43,6 +43,18 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // Skip all media streams, Range requests, videos, direct uploads, thumbnails, and vault streaming proxy
+    // Letting the native browser network stack handle these prevents AbortError and Range 206 interception issues
+    if (
+        req.headers.has('range') ||
+        url.pathname.match(/\.(mp4|webm|mov|mkv|avi|m4v|ogg|mp3|m4a|bin)$/i) ||
+        url.pathname.startsWith('/uploads/') ||
+        url.pathname.startsWith('/thumbnails/') ||
+        url.pathname.startsWith('/vault/media/')
+    ) {
+        return;
+    }
+
     // Cache-first for core static icons and fonts
     if (url.pathname.startsWith('/icons/') || url.pathname.endsWith('.woff2') || url.pathname.endsWith('.ttf')) {
         event.respondWith(
@@ -59,9 +71,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Network-first for dynamic navigation and media
+    // Network-first for dynamic navigation and HTML pages
     event.respondWith(
-        fetch(req).catch(() => {
+        fetch(req).catch((err) => {
+            // If the user aborted the request (e.g. paused/scrubbed video or navigated away), ignore cleanly
+            if (err && err.name === 'AbortError') {
+                return new Response(null, { status: 499, statusText: 'Client Closed Request' });
+            }
             return caches.match(req);
         })
     );

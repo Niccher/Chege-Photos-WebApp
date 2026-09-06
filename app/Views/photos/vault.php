@@ -163,6 +163,11 @@
                 <span class="small text-warning fw-semibold">Auto-locking in <span id="sessionCountdown" data-seconds="<?= (int)$unlockedRemaining ?>">5:00</span></span>
             </div>
 
+            <!-- Hide Face / Person Button -->
+            <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1.5 fw-bold" data-bs-toggle="modal" data-bs-target="#modalHidePersonFace">
+                <i class="bi bi-person-x-fill me-1"></i> Hide a Face to Vault
+            </button>
+
             <!-- Lock Now Button -->
             <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1.5 fw-bold" id="btnLockVaultNow">
                 <i class="bi bi-lock-fill me-1"></i> Lock Now
@@ -301,6 +306,120 @@
             </div>
             <div class="modal-body p-0 d-flex align-items-center justify-content-center h-100">
                 <img id="vaultLightboxImg" src="" class="img-fluid" style="max-height: 92vh; object-fit: contain;" alt="Vault Photo">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Hide Face/Person to Vault -->
+<div class="modal fade" id="modalHidePersonFace" tabindex="-1" aria-labelledby="modalHidePersonFaceLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4" style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color) !important;">
+            <div class="modal-header border-bottom border-secondary border-opacity-10 pb-3">
+                <div>
+                    <h5 class="modal-title fw-bold mb-1" id="modalHidePersonFaceLabel">
+                        <i class="bi bi-person-x-fill text-warning me-2"></i>Person &amp; Face Privacy Shield
+                    </h5>
+                    <p class="text-muted small mb-0">
+                        Isolate an entire person's photos in your Private Locked Vault, or restore previously hidden faces.
+                    </p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Navigation Tabs inside Modal -->
+                <ul class="nav nav-pills gap-2 mb-3 p-1 rounded-pill" style="background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); width: fit-content;">
+                    <li class="nav-item">
+                        <button class="nav-link active rounded-pill py-1 px-3 small fw-bold" id="tabHideFaceBtn" data-bs-toggle="pill" data-bs-target="#tabHideFacePane" type="button">
+                            <i class="bi bi-shield-lock me-1"></i> Hide a Person (<?= count($availablePersons ?? []) ?>)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link rounded-pill py-1 px-3 small fw-bold" id="tabVaultedFaceBtn" data-bs-toggle="pill" data-bs-target="#tabVaultedFacePane" type="button">
+                            <i class="bi bi-unlock me-1"></i> Hidden Faces in Vault (<?= count($vaultedPersons ?? []) ?>)
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Tab 1: Hide Available Person -->
+                    <div class="tab-pane fade show active" id="tabHideFacePane" role="tabpanel">
+                        <div class="input-group input-group-sm mb-3">
+                            <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" class="form-control border-start-0" id="searchAvailablePerson" placeholder="Search person by name...">
+                        </div>
+
+                        <div class="overflow-auto pe-1" style="max-height: 380px;" id="listAvailablePersons">
+                            <?php if (empty($availablePersons)): ?>
+                                <div class="text-center py-4 text-muted small">
+                                    <i class="bi bi-people fs-2 d-block mb-2 opacity-50"></i>
+                                    No identified people with unvaulted photos found in your library.
+                                </div>
+                            <?php else: ?>
+                                <div class="list-group list-group-flush gap-2">
+                                    <?php foreach ($availablePersons as $ap): ?>
+                                        <div class="list-group-item d-flex align-items-center justify-content-between p-2 rounded-3 border person-item" style="background: rgba(255,255,255,0.02); border-color: var(--border-color) !important;" data-name="<?= esc(strtolower($ap['name'] ?: 'person #' . $ap['id'])) ?>">
+                                            <div class="d-flex align-items-center gap-3">
+                                                <?php if (!empty($ap['avatar_url'])): ?>
+                                                    <img src="<?= esc($ap['avatar_url']) ?>" alt="Avatar" class="rounded-circle object-fit-cover shadow-sm" style="width: 44px; height: 44px;">
+                                                <?php else: ?>
+                                                    <div class="rounded-circle bg-secondary bg-opacity-25 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                                                        <i class="bi bi-person-fill text-muted fs-5"></i>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <div class="fw-bold small person-label"><?= esc($ap['name'] ?: 'Person #' . $ap['id']) ?></div>
+                                                    <span class="text-muted extra-small"><i class="bi bi-images me-1"></i><?= (int)$ap['face_count'] ?> photo<?= (int)$ap['face_count'] !== 1 ? 's' : '' ?> in gallery</span>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-semibold btn-action-hide-person" data-id="<?= $ap['id'] ?>" data-name="<?= esc($ap['name'] ?: 'Person #' . $ap['id']) ?>" data-count="<?= (int)$ap['face_count'] ?>">
+                                                <i class="bi bi-lock-fill me-1"></i> Hide to Vault
+                                            </button>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Restore Vaulted Person -->
+                    <div class="tab-pane fade" id="tabVaultedFacePane" role="tabpanel">
+                        <div class="overflow-auto pe-1" style="max-height: 380px;">
+                            <?php if (empty($vaultedPersons)): ?>
+                                <div class="text-center py-4 text-muted small">
+                                    <i class="bi bi-shield-check fs-2 d-block mb-2 text-success opacity-75"></i>
+                                    No faces are currently hidden in your vault.
+                                </div>
+                            <?php else: ?>
+                                <div class="list-group list-group-flush gap-2">
+                                    <?php foreach ($vaultedPersons as $vp): ?>
+                                        <div class="list-group-item d-flex align-items-center justify-content-between p-2 rounded-3 border" style="background: rgba(255,255,255,0.02); border-color: var(--border-color) !important;">
+                                            <div class="d-flex align-items-center gap-3">
+                                                <?php if (!empty($vp['avatar_url'])): ?>
+                                                    <img src="<?= esc($vp['avatar_url']) ?>" alt="Avatar" class="rounded-circle object-fit-cover shadow-sm" style="width: 44px; height: 44px;">
+                                                <?php else: ?>
+                                                    <div class="rounded-circle bg-warning bg-opacity-25 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+                                                        <i class="bi bi-lock-fill text-warning fs-5"></i>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <div class="fw-bold small"><?= esc($vp['name'] ?: 'Person #' . $vp['id']) ?></div>
+                                                    <span class="text-warning extra-small"><i class="bi bi-shield-lock me-1"></i><?= (int)$vp['vault_photo_count'] ?> photo<?= (int)$vp['vault_photo_count'] !== 1 ? 's' : '' ?> in vault</span>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3 fw-semibold btn-action-restore-person" data-id="<?= $vp['id'] ?>" data-name="<?= esc($vp['name'] ?: 'Person #' . $vp['id']) ?>" data-count="<?= (int)$vp['vault_photo_count'] ?>">
+                                                <i class="bi bi-unlock me-1"></i> Restore to Library
+                                            </button>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary border-opacity-10 py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -675,6 +794,86 @@ document.addEventListener('DOMContentLoaded', () => {
             vaultModal?.hide();
             executeVaultAction('delete', [activeLightboxPhotoId]);
         }
+    });
+
+    // ── 8. Person / Face Privacy Handlers ────────────────────────────
+    const searchInput = document.getElementById('searchAvailablePerson');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            document.querySelectorAll('#listAvailablePersons .person-item').forEach(item => {
+                const name = item.dataset.name || '';
+                item.classList.toggle('d-none', query !== '' && !name.includes(query));
+            });
+        });
+    }
+
+    document.querySelectorAll('.btn-action-hide-person').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const personId = btn.dataset.id;
+            const personName = btn.dataset.name;
+            const count = btn.dataset.count;
+
+            if (!confirm(`Move all ${count} photo(s) of ${personName} to your Private Locked Vault? They will be hidden from all public views, albums, and searches.`)) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Hiding...';
+
+            try {
+                const res = await fetch(BASE_URL + 'vault/hide-person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ person_id: personId })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to hide person.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-lock-fill me-1"></i> Hide to Vault';
+                }
+            } catch (err) {
+                alert('Network error hiding person.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-lock-fill me-1"></i> Hide to Vault';
+            }
+        });
+    });
+
+    document.querySelectorAll('.btn-action-restore-person').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const personId = btn.dataset.id;
+            const personName = btn.dataset.name;
+            const count = btn.dataset.count;
+
+            if (!confirm(`Restore all ${count} photo(s) of ${personName} from the Locked Vault back to your public library?`)) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Restoring...';
+
+            try {
+                const res = await fetch(BASE_URL + 'vault/restore-person', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ person_id: personId })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.message || 'Failed to restore person.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-unlock me-1"></i> Restore to Library';
+                }
+            } catch (err) {
+                alert('Network error restoring person.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-unlock me-1"></i> Restore to Library';
+            }
+        });
     });
 });
 </script>

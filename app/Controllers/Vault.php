@@ -89,6 +89,56 @@ class Vault extends BaseController
                 $p['full_url']  = base_url("vault/media/{$p['id']}?type=full");
             }
             unset($p);
+
+            // Fetch persons for "Hide a Face to Vault" feature
+            $personModel = new \App\Models\PersonModel();
+            $availablePersons = $personModel->getPersonsWithFaceCountForUser($user->id);
+            $vaultedPersons   = $personModel->getPersonsWithVaultCountForUser($user->id);
+
+            $db = \Config\Database::connect();
+            if (!empty($availablePersons)) {
+                $pIds = array_column($availablePersons, 'id');
+                $faceRows = $db->table('tbl_face_encodings fe')
+                    ->select('fe.person_id, p.path, p.thumbnail_path')
+                    ->join('tbl_photos p', 'p.id = fe.photo_id')
+                    ->whereIn('fe.person_id', $pIds)
+                    ->where('p.is_vault', 0)
+                    ->orderBy('fe.id', 'ASC')
+                    ->get()
+                    ->getResultArray();
+                $faceMap = [];
+                foreach ($faceRows as $fr) {
+                    if (!isset($faceMap[$fr['person_id']])) {
+                        $faceMap[$fr['person_id']] = !empty($fr['thumbnail_path']) ? base_url($fr['thumbnail_path']) : base_url($fr['path']);
+                    }
+                }
+                foreach ($availablePersons as &$ap) {
+                    $ap['avatar_url'] = $faceMap[$ap['id']] ?? null;
+                }
+                unset($ap);
+            }
+
+            if (!empty($vaultedPersons)) {
+                $vpIds = array_column($vaultedPersons, 'id');
+                $vFaceRows = $db->table('tbl_face_encodings fe')
+                    ->select('fe.person_id, p.id AS photo_id')
+                    ->join('tbl_photos p', 'p.id = fe.photo_id')
+                    ->whereIn('fe.person_id', $vpIds)
+                    ->where('p.is_vault', 1)
+                    ->orderBy('fe.id', 'ASC')
+                    ->get()
+                    ->getResultArray();
+                $vFaceMap = [];
+                foreach ($vFaceRows as $vfr) {
+                    if (!isset($vFaceMap[$vfr['person_id']])) {
+                        $vFaceMap[$vfr['person_id']] = base_url("vault/media/{$vfr['photo_id']}?type=thumb");
+                    }
+                }
+                foreach ($vaultedPersons as &$vp) {
+                    $vp['avatar_url'] = $vFaceMap[$vp['id']] ?? null;
+                }
+                unset($vp);
+            }
         }
 
         $data = [
@@ -100,6 +150,8 @@ class Vault extends BaseController
             'photos'             => $photos,
             'stats'              => $stats,
             'currentTab'         => $currentTab,
+            'availablePersons'   => $availablePersons ?? [],
+            'vaultedPersons'     => $vaultedPersons ?? [],
             'counts'             => $this->getSidebarCounts(),
         ];
 
@@ -396,5 +448,169 @@ class Vault extends BaseController
             ->setHeader('Pragma', 'no-cache')
             ->setHeader('Expires', '0')
             ->setBody(file_get_contents($fullPath));
+    }
+
+    public function hidePerson()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked to hide faces'])->setStatusCode(403);
+        }
+
+        $userId = auth()->id();
+        $personId = (int) $this->request->getPost('person_id');
+        if ($personId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid person selected'])->setStatusCode(400);
+        }
+
+        $personModel = new \App\Models\PersonModel();
+        $person = $personModel->find($personId);
+        $personName = !empty($person['name']) ? $person['name'] : "Person #{$personId}";
+
+        // Get all photos of this user containing this person's face that are NOT currently in vault
+        $photoIds = $personModel->getPersonPhotoIds($personId, $userId, 0);
+
+        if (empty($photoIds)) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => "No unvaulted photos found for {$personName}."
+            ])->setStatusCode(404);
+        }
+
+        $photoModel = new PhotoModel();
+        $photoModel->where('user_id', $userId)
+                   ->whereIn('id', $photoIds)
+                   ->set([
+                       'is_vault'        => 1,
+                       'vault_locked_at' => date('Y-m-d H:i:s'),
+                   ])
+                   ->update();
+
+        // Privacy Shield: revoke any existing shares and album associations
+        $db = \Config\Database::connect();
+        if ($db->tableExists('tbl_photo_shares')) {
+            $db->table('tbl_photo_shares')->whereIn('photo_id', $photoIds)->delete();
+        }
+        if ($db->tableExists('tbl_album_photos')) {
+            $db->table('tbl_album_photos')->whereIn('photo_id', $photoIds)->delete();
+        }
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "All " . count($photoIds) . " photo(s) of {$personName} have been safely moved to the Private Locked Vault.",
+            'count'   => count($photoIds),
+        ]);
+    }
+
+    public function restorePerson()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked to restore faces'])->setStatusCode(403);
+        }
+
+        $userId = auth()->id();
+        $personId = (int) $this->request->getPost('person_id');
+        if ($personId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid person selected'])->setStatusCode(400);
+        }
+
+        $personModel = new \App\Models\PersonModel();
+        $person = $personModel->find($personId);
+        $personName = !empty($person['name']) ? $person['name'] : "Person #{$personId}";
+
+        // Get all vaulted photos of this user containing this person's face
+        $photoIds = $personModel->getPersonPhotoIds($personId, $userId, 1);
+
+        if (empty($photoIds)) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => "No vaulted photos found for {$personName}."
+            ])->setStatusCode(404);
+        }
+
+        $photoModel = new PhotoModel();
+        $photoModel->where('user_id', $userId)
+                   ->whereIn('id', $photoIds)
+                   ->set([
+                       'is_vault'        => 0,
+                       'vault_locked_at' => null,
+                   ])
+                   ->update();
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => "All " . count($photoIds) . " photo(s) of {$personName} have been restored from your Private Locked Vault.",
+            'count'   => count($photoIds),
+        ]);
+    }
+
+    public function persons()
+    {
+        if (! auth()->loggedIn() || ! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $userId = auth()->id();
+        $personModel = new \App\Models\PersonModel();
+        $available = $personModel->getPersonsWithFaceCountForUser($userId);
+        $vaulted   = $personModel->getPersonsWithVaultCountForUser($userId);
+
+        $db = \Config\Database::connect();
+        if (!empty($available)) {
+            $pIds = array_column($available, 'id');
+            $faceRows = $db->table('tbl_face_encodings fe')
+                ->select('fe.person_id, p.path, p.thumbnail_path')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->whereIn('fe.person_id', $pIds)
+                ->where('p.is_vault', 0)
+                ->orderBy('fe.id', 'ASC')
+                ->get()
+                ->getResultArray();
+            $faceMap = [];
+            foreach ($faceRows as $fr) {
+                if (!isset($faceMap[$fr['person_id']])) {
+                    $faceMap[$fr['person_id']] = !empty($fr['thumbnail_path']) ? base_url($fr['thumbnail_path']) : base_url($fr['path']);
+                }
+            }
+            foreach ($available as &$ap) {
+                $ap['avatar_url'] = $faceMap[$ap['id']] ?? null;
+            }
+            unset($ap);
+        }
+
+        if (!empty($vaulted)) {
+            $vpIds = array_column($vaulted, 'id');
+            $vFaceRows = $db->table('tbl_face_encodings fe')
+                ->select('fe.person_id, p.id AS photo_id')
+                ->join('tbl_photos p', 'p.id = fe.photo_id')
+                ->whereIn('fe.person_id', $vpIds)
+                ->where('p.is_vault', 1)
+                ->orderBy('fe.id', 'ASC')
+                ->get()
+                ->getResultArray();
+            $vFaceMap = [];
+            foreach ($vFaceRows as $vfr) {
+                if (!isset($vFaceMap[$vfr['person_id']])) {
+                    $vFaceMap[$vfr['person_id']] = base_url("vault/media/{$vfr['photo_id']}?type=thumb");
+                }
+            }
+            foreach ($vaulted as &$vp) {
+                $vp['avatar_url'] = $vFaceMap[$vp['id']] ?? null;
+            }
+            unset($vp);
+        }
+
+        return $this->response->setJSON([
+            'status'    => 'success',
+            'available' => $available,
+            'vaulted'   => $vaulted,
+        ]);
     }
 }

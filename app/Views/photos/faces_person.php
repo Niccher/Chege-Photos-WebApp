@@ -11,6 +11,9 @@
     <button class="btn btn-outline-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#renamePersonModal">
         <i class="bi bi-pencil me-1"></i>Rename
     </button>
+    <button class="btn btn-outline-warning btn-sm ms-auto fw-semibold" id="btnVaultPerson" data-id="<?= $person['id'] ?>" data-name="<?= esc($label) ?>" data-count="<?= count($photos) ?>">
+        <i class="bi bi-shield-lock-fill me-1"></i>Move Person to Vault
+    </button>
 </div>
 
 <?php if (!empty($photos)): ?>
@@ -74,6 +77,30 @@ $(function() {
                 showToast('Rename failed: ' + (res.message || 'Error'), 'danger');
             }
         }, 'json').always(() => btn.prop('disabled', false));
+    });
+
+    $('#btnVaultPerson').on('click', function() {
+        const pid = $(this).data('id');
+        const name = $(this).data('name');
+        const count = $(this).data('count');
+
+        if (!confirm(`Move all ${count} photo(s) of ${name} to your Private Locked Vault? They will be hidden from all public views, albums, and searches.`)) return;
+
+        const btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Moving...');
+
+        $.post(BASE_URL + 'vault/hide-person', { person_id: pid }, function(res) {
+            if (res.status === 'success') {
+                alert(res.message);
+                window.location.href = BASE_URL + 'faces';
+            } else {
+                alert(res.message || 'Failed to move person to vault.');
+                btn.prop('disabled', false).html('<i class="bi bi-shield-lock-fill me-1"></i>Move Person to Vault');
+            }
+        }).fail(function(xhr) {
+            const err = xhr.responseJSON ? xhr.responseJSON.message : 'Error moving person to vault. Ensure vault is unlocked.';
+            alert(err);
+            btn.prop('disabled', false).html('<i class="bi bi-shield-lock-fill me-1"></i>Move Person to Vault');
+        });
     });
 });
 </script>
