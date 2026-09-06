@@ -11,7 +11,7 @@ Self-hosted personal photo and video management platform featuring automated ML 
 
 | Piece | URL / How to open | Port | Purpose / Default Credential |
 |---|---|---|---|
-| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | Web UI & Admin (`admin@example.com` / `SuperAdmin@2024!`) |
+| **Web Application** | [http://localhost:9005](http://localhost:9005) | `9005` | Web UI & Admin (`admin@example.com` / `admin_password`) |
 | **MySQL 8.4** | `localhost:9306` | `9306` | Database (`db_chege_photos` / `root_password`) |
 | **REST Health Check**| `GET http://localhost:9005/api/v1/health` | `9005` | Returns `200 OK` JSON |
 | **Android Client** | Companion APK | — | Connects to WebApp at `http://10.0.2.2:9005` (emulator) or LAN IP |

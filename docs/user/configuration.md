@@ -58,5 +58,5 @@ Used on initial database provisioning by `SystemDefaultSeeder`:
 | Variable | Default | Description |
 |---|---|---|
 | `SUPERADMIN_EMAIL` | `superadmin@example.com` | Root admin email. |
-| `SUPERADMIN_PASSWORD` | `SuperAdmin@2024!` | Root admin initial password. |
+| `SUPERADMIN_PASSWORD` | `admin_password` | Root admin initial password. |
 | `SUPERADMIN_USERNAME` | `superadmin` | Root admin username. |
