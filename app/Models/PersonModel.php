@@ -38,6 +38,7 @@ class PersonModel extends Model
             ->join('tbl_face_encodings fe', 'fe.person_id = p.id', 'left')
             ->join('tbl_photos ph', 'ph.id = fe.photo_id', 'left')
             ->where('ph.user_id', $userId)
+            ->where('ph.is_vault', 0)
             ->groupBy('p.id')
             ->having('face_count >', 0)
             ->orderBy('p.id')

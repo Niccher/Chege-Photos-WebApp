@@ -28,7 +28,8 @@ class Photos extends BaseController
 
         // 2. Build the main query afresh
         $query = $photoModel->where('user_id', $userId)
-                            ->where('is_archived', false);
+                            ->where('is_archived', false)
+                            ->where('is_vault', 0);
 
         $sort = $this->request->getGet('sort') ?? 'date_desc';
         switch ($sort) {
@@ -171,7 +172,7 @@ class Photos extends BaseController
         // 1. General Metrics
         $totalBytes = $photoModel->where('user_id', $userId)->selectSum('size')->first()['size'] ?? 0;
         $counts = $this->getSidebarCounts();
-        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
+        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->countAllResults();
 
         // 2. Hub 1: People & Pets (Top recognized faces)
         $personModel = new \App\Models\PersonModel();
@@ -183,6 +184,7 @@ class Photos extends BaseController
                 ->join('tbl_photos p', 'p.id = fe.photo_id')
                 ->whereIn('fe.person_id', $personIds)
                 ->where('p.user_id', $userId)
+                ->where('p.is_vault', 0)
                 ->orderBy('fe.id', 'ASC')
                 ->get()
                 ->getResultArray();
@@ -209,7 +211,8 @@ class Photos extends BaseController
         $geoQuery = $photoModel->where('user_id', $userId)
                                ->where('latitude IS NOT NULL')
                                ->where('longitude IS NOT NULL')
-                               ->where('is_archived', false);
+                               ->where('is_archived', false)
+                               ->where('is_vault', 0);
         if ($q) {
             $geoQuery = $this->applySearchQuery($geoQuery, $q);
         }
@@ -280,28 +283,28 @@ class Photos extends BaseController
                 'name'  => 'Videos',
                 'icon'  => 'bi-camera-video',
                 'color' => '#e63946',
-                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->like('mime_type', 'video/', 'after')->countAllResults(),
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->like('mime_type', 'video/', 'after')->countAllResults(),
                 'filter'=> 'video',
             ],
             'favorites' => [
                 'name'  => 'Favorites',
                 'icon'  => 'bi-heart-fill',
                 'color' => '#d62828',
-                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_favorite', true)->countAllResults(),
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->where('is_favorite', true)->countAllResults(),
                 'filter'=> 'favorite',
             ],
             'panoramas' => [
                 'name'  => 'Panoramas',
                 'icon'  => 'bi-aspect-ratio',
                 'color' => '#457b9d',
-                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('(width / height) >=', 2.0)->countAllResults(),
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->where('(width / height) >=', 2.0)->countAllResults(),
                 'filter'=> 'panorama',
             ],
             'people' => [
                 'name'  => 'People Photos',
                 'icon'  => 'bi-people-fill',
                 'color' => '#2a9d8f',
-                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('scanned_face', 1)->countAllResults(),
+                'count' => $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->where('scanned_face', 1)->countAllResults(),
                 'filter'=> 'people',
             ],
         ];
@@ -314,6 +317,7 @@ class Photos extends BaseController
                 ->join('tbl_photos p', 'p.id = fe.photo_id')
                 ->where('p.user_id', $userId)
                 ->where('p.is_archived', false)
+                ->where('p.is_vault', 0)
                 ->where('fe.emotion IS NOT NULL')
                 ->where("fe.emotion != ''")
                 ->groupBy('fe.emotion')
@@ -383,6 +387,7 @@ class Photos extends BaseController
                                ->where('latitude IS NOT NULL')
                                ->where('longitude IS NOT NULL')
                                ->where('is_archived', false)
+                               ->where('is_vault', 0)
                                ->orderBy('taken_at', 'DESC');
 
         if ($q) {
@@ -449,7 +454,7 @@ class Photos extends BaseController
         usort($placeClusters, fn($a, $b) => $b['count'] <=> $a['count']);
         $topClusters = array_slice($placeClusters, 0, 12);
 
-        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->countAllResults();
+        $totalPhotos = $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0)->countAllResults();
 
         $data = [
             'counts'         => $counts,
@@ -907,6 +912,9 @@ class Photos extends BaseController
         if (! $photo) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found']);
         }
+        if (! empty($photo['is_vault'])) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vaulted photos cannot be shared'])->setStatusCode(400);
+        }
 
         $userModel = new \App\Models\UserModel();
         $target = $userModel->find($targetId);
@@ -1215,6 +1223,7 @@ class Photos extends BaseController
         $query = $photoModel->where('user_id', $userId)
                             ->where('is_favorite', true)
                             ->where('is_archived', false)
+                            ->where('is_vault', 0)
                             ->orderBy('taken_at', 'DESC');
 
         $q = $this->request->getGet('q');
@@ -1261,7 +1270,7 @@ class Photos extends BaseController
                 FROM tbl_face_encodings fe
                 JOIN tbl_photos ph ON ph.id = fe.photo_id
                 LEFT JOIN tbl_people p ON p.id = fe.person_id
-                WHERE ph.user_id = ?
+                WHERE ph.user_id = ? AND ph.is_vault = 0
                 GROUP BY fe.photo_id
                 HAVING COUNT(fe.id) > 0 AND SUM(CASE WHEN p.name IS NOT NULL AND p.name != '' THEN 1 ELSE 0 END) = 0
             ", [$userId])->getResultArray();
@@ -1272,7 +1281,7 @@ class Photos extends BaseController
 
         // Helper query builder
         $baseQuery = function() use ($photoModel, $userId, $excludedPhotoIds) {
-            $q = $photoModel->where('user_id', $userId)->where('is_archived', false);
+            $q = $photoModel->where('user_id', $userId)->where('is_archived', false)->where('is_vault', 0);
             if (!empty($excludedPhotoIds)) {
                 $q->whereNotIn('id', $excludedPhotoIds);
             }
@@ -1484,6 +1493,7 @@ class Photos extends BaseController
             $query = $photoModel->select('tbl_photos.*, tbl_album_photos.added_at as album_added_at')
                 ->join('tbl_album_photos', 'tbl_album_photos.photo_id = tbl_photos.id')
                 ->where('tbl_album_photos.album_id', $id)
+                ->where('tbl_photos.is_vault', 0)
                 ->orderBy('tbl_album_photos.added_at', 'DESC');
         }
 
@@ -2296,7 +2306,8 @@ class Photos extends BaseController
             $faceQuery = $db->table('tbl_face_encodings fe')
                 ->select('fe.photo_id')
                 ->join('tbl_photos p', 'p.id = fe.photo_id')
-                ->where('p.user_id', $userId);
+                ->where('p.user_id', $userId)
+                ->where('p.is_vault', 0);
 
             $faceQuery->groupStart();
             foreach ($emotionTerms as $term) {
@@ -2365,6 +2376,8 @@ class Photos extends BaseController
         }
         $query->groupEnd();
 
+        $query->where('is_vault', 0);
+
         return $query;
     }
 
@@ -2372,7 +2385,7 @@ class Photos extends BaseController
     {
         $userId = auth()->id() ?: 0;
         $photoModel = new \App\Models\PhotoModel();
-        $targetPhoto = $photoModel->where('user_id', $userId)->find($photoId);
+        $targetPhoto = $photoModel->where('user_id', $userId)->where('is_vault', 0)->find($photoId);
 
         if (! $targetPhoto) {
             return $this->response->setJSON([
@@ -2423,6 +2436,7 @@ class Photos extends BaseController
             ->whereIn('id', $similarIds)
             ->where('user_id', $userId)
             ->where('deleted_at', null)
+            ->where('is_vault', 0)
             ->findAll();
 
         $photosOut = [];

@@ -245,6 +245,9 @@ class Admin extends BaseController
                 'scanned_faces'   => $photoModel->where('scanned_face', 1)->countAllResults(),
                 'scanned_tags'    => $photoModel->where('scanned_tag', 1)->countAllResults(),
                 'scanned_clips'   => $photoModel->where('scanned_clip', 1)->countAllResults(),
+                'scanned_nsfw'    => $photoModel->where('scanned_nsfw', 1)->countAllResults(),
+                'vault_photos'    => $photoModel->where('is_vault', 1)->countAllResults(),
+                'nsfw_photos'     => $photoModel->where('is_nsfw', 1)->countAllResults(),
             ],
             'settings' => [
                 'faceModelPack'     => setting('ML.faceModelPack') ?? 'buffalo_l',
@@ -254,6 +257,9 @@ class Admin extends BaseController
                 'hdbscanMinSamples' => setting('ML.hdbscanMinSamples') ?? 1,
                 'clipModelName'     => setting('ML.clipModelName') ?? 'openai/clip-vit-base-patch32',
                 'objectDetThresh'   => setting('ML.objectDetThresh') ?? 0.5,
+                'nsfwModel'         => setting('ML.nsfw_model') ?? 'opennsfw2',
+                'nsfwThreshold'     => setting('ML.nsfw_threshold') ?? 0.70,
+                'autoVaultNsfw'     => setting('ML.auto_vault_nsfw') ?? true,
             ],
             'apiKey'         => $this->getMlApiKey(),
             'mlUrlSetting'   => setting('ML.url') ?: '',
@@ -361,6 +367,9 @@ class Admin extends BaseController
                 'scanned_faces'   => $photoModel->where('scanned_face', 1)->countAllResults(),
                 'scanned_tags'    => $photoModel->where('scanned_tag', 1)->countAllResults(),
                 'scanned_clips'   => $photoModel->where('scanned_clip', 1)->countAllResults(),
+                'scanned_nsfw'    => $photoModel->where('scanned_nsfw', 1)->countAllResults(),
+                'vault_photos'    => $photoModel->where('is_vault', 1)->countAllResults(),
+                'nsfw_photos'     => $photoModel->where('is_nsfw', 1)->countAllResults(),
             ]
         ]);
     }
@@ -386,6 +395,9 @@ class Admin extends BaseController
             'hdbscanMinSamples' => 'required|integer|greater_than_equal_to[1]',
             'clipModelName'     => 'required|string',
             'objectDetThresh'   => 'required|numeric|greater_than_equal_to[0.1]|less_than_equal_to[1.0]',
+            'nsfwModel'         => 'permit_empty|in_list[opennsfw2,falconsai,nudenet]',
+            'nsfwThreshold'     => 'permit_empty|numeric|greater_than_equal_to[0.1]|less_than_equal_to[1.0]',
+            'autoVaultNsfw'     => 'permit_empty',
         ];
 
         if (! $this->validate($rules)) {
@@ -402,6 +414,12 @@ class Admin extends BaseController
         $hdbscanMinSamples = $this->request->getPost('hdbscanMinSamples');
         $clipModelName     = trim($this->request->getPost('clipModelName') ?? 'openai/clip-vit-base-patch32');
         $objectDetThresh   = $this->request->getPost('objectDetThresh');
+        $nsfwModel         = trim($this->request->getPost('nsfwModel') ?? 'opennsfw2');
+        if (! in_array($nsfwModel, ['opennsfw2', 'falconsai', 'nudenet'], true)) {
+            $nsfwModel = 'opennsfw2';
+        }
+        $nsfwThreshold     = (float) ($this->request->getPost('nsfwThreshold') ?? 0.70);
+        $autoVaultNsfw     = (bool) $this->request->getPost('autoVaultNsfw');
 
         // Dimension safety check: prevent 768-d models from colliding with Qdrant's 512-d collection
         $incompatibleModels = ['clip-vit-large', 'vit-l', 'siglip-so400m'];
@@ -436,6 +454,9 @@ class Admin extends BaseController
         setting()->set('ML.hdbscanMinSamples', (int) $hdbscanMinSamples);
         setting()->set('ML.clipModelName', $clipModelName);
         setting()->set('ML.objectDetThresh', (float) $objectDetThresh);
+        setting()->set('ML.nsfw_model', $nsfwModel);
+        setting()->set('ML.nsfw_threshold', $nsfwThreshold);
+        setting()->set('ML.auto_vault_nsfw', $autoVaultNsfw);
 
         helper('audit');
         log_security_action('ML_SETTINGS_CHANGE', 'SUCCESS', [
@@ -446,7 +467,10 @@ class Admin extends BaseController
             'hdbscanMinCluster' => $hdbscanMinCluster,
             'hdbscanMinSamples' => $hdbscanMinSamples,
             'clipModelName'     => $clipModelName,
-            'objectDetThresh'   => $objectDetThresh
+            'objectDetThresh'   => $objectDetThresh,
+            'nsfwModel'         => $nsfwModel,
+            'nsfwThreshold'     => $nsfwThreshold,
+            'autoVaultNsfw'     => $autoVaultNsfw,
         ]);
 
         // Tell FastAPI service to reload models dynamically
@@ -469,6 +493,19 @@ class Admin extends BaseController
 
             $response = $client->post($url);
 
+            // Also notify ML container about NSFW model and threshold updates
+            try {
+                $client->post($this->getMlUrl() . '/api/v1/config/nsfw', [
+                    'json' => [
+                        'nsfw_model_name' => $nsfwModel,
+                        'nsfw_threshold'  => $nsfwThreshold,
+                        'auto_vault_nsfw' => $autoVaultNsfw,
+                    ],
+                ]);
+            } catch (\Exception $ne) {
+                log_message('warning', 'Failed to update ML NSFW config: ' . $ne->getMessage());
+            }
+
             if ($response->getStatusCode() === 200) {
                 return $this->response->setJSON([
                     'status'  => 'success',
@@ -483,6 +520,27 @@ class Admin extends BaseController
             'status'  => 'success',
             'message' => 'ML parameters saved successfully (FastAPI background reload pending container restart).'
         ]);
+    }
+
+    public function triggerNsfwScan()
+    {
+        try {
+            $phpBin  = PHP_BINARY;
+            $spark   = ROOTPATH . 'spark';
+            $logFile = WRITEPATH . 'logs/ml-sweep-bg.log';
+            $cmd     = escapeshellarg($phpBin) . ' ' . escapeshellarg($spark) . ' ml:sweep > ' . escapeshellarg($logFile) . ' 2>&1 &';
+            pclose(popen($cmd, 'r'));
+
+            return $this->response->setJSON([
+                'status'  => 'success',
+                'message' => 'Sensitive media scan sweep dispatched in background.',
+            ]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'Failed to dispatch scan sweep: ' . $e->getMessage(),
+            ])->setStatusCode(500);
+        }
     }
 
     public function autotuneMl()
@@ -1367,10 +1425,10 @@ class Admin extends BaseController
 
     public function rescan()
     {
-        $type = $this->request->getPost('type'); // 'faces', 'tags', 'clip'
+        $type = $this->request->getPost('type'); // 'faces', 'tags', 'clip', 'nsfw'
         $mode = $this->request->getPost('mode'); // 'all', 'missing'
 
-        if (!in_array($type, ['faces', 'tags', 'clip'])) {
+        if (!in_array($type, ['faces', 'tags', 'clip', 'nsfw'])) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Invalid scan type.']);
         }
 
@@ -1384,6 +1442,8 @@ class Admin extends BaseController
                 $query->where('scanned_tag', 0);
             } elseif ($type === 'clip') {
                 $query->where('scanned_clip', 0);
+            } elseif ($type === 'nsfw') {
+                $query->where('scanned_nsfw', 0);
             }
         }
 
@@ -1396,7 +1456,7 @@ class Admin extends BaseController
 
         if ($mode === 'all') {
             $db = \Config\Database::connect();
-            $col = $type === 'faces' ? 'scanned_face' : ($type === 'tags' ? 'scanned_tag' : 'scanned_clip');
+            $col = $type === 'faces' ? 'scanned_face' : ($type === 'tags' ? 'scanned_tag' : ($type === 'clip' ? 'scanned_clip' : 'scanned_nsfw'));
             $db->table('tbl_photos')->update([$col => 0]);
         }
 
@@ -1422,6 +1482,7 @@ class Admin extends BaseController
                         'scan_faces'  => $type === 'faces' ? 1 : 0,
                         'scan_tags'   => $type === 'tags' ? 1 : 0,
                         'scan_clip'   => $type === 'clip' ? 1 : 0,
+                        'scan_nsfw'   => $type === 'nsfw' ? 1 : 0,
                         'webapp_url'  => $webappUrl,
                     ]
                 ]);
@@ -1438,6 +1499,7 @@ class Admin extends BaseController
                                 'scan_faces' => $type === 'faces' ? 1 : 0,
                                 'scan_tags'  => $type === 'tags' ? 1 : 0,
                                 'scan_clip'  => $type === 'clip' ? 1 : 0,
+                                'scan_nsfw'  => $type === 'nsfw' ? 1 : 0,
                                 'async_task' => 1,
                                 'webapp_url' => $webappUrl,
                             ]
@@ -2361,6 +2423,7 @@ class Admin extends BaseController
                 'models'     => $body['models_loaded'] ?? false,
                 'clip'       => $body['clip_loaded'] ?? false,
                 'yolo'       => $body['yolo_loaded'] ?? false,
+                'nsfw'       => $body['nsfw_loaded'] ?? false,
                 'error'      => null,
             ];
         }
@@ -2380,6 +2443,7 @@ class Admin extends BaseController
                     'models'     => $body['models_loaded'] ?? false,
                     'clip'       => $body['clip_loaded'] ?? false,
                     'yolo'       => $body['yolo_loaded'] ?? false,
+                    'nsfw'       => $body['nsfw_loaded'] ?? false,
                     'error'      => null,
                 ];
             }

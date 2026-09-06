@@ -34,7 +34,8 @@ class AlbumModel extends Model
         foreach ($albums as &$album) {
             $isSmart = ! empty($album['is_smart']);
             if ($album['cover_photo_id']) {
-                $photo = $db->table('photos')->where('id', $album['cover_photo_id'])->get()->getRowArray();
+                $photoTable = $db->tableExists('tbl_photos') ? 'tbl_photos' : 'photos';
+                $photo = $db->table($photoTable)->where('id', $album['cover_photo_id'])->where('is_vault', 0)->get()->getRowArray();
                 $album['thumbnail'] = $photo['thumbnail_path'] ?? null;
             } elseif ($isSmart) {
                 $rules = SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
@@ -47,6 +48,7 @@ class AlbumModel extends Model
                 $photo = $db->table('tbl_album_photos')
                             ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
                             ->where('album_id', $album['id'])
+                            ->where('tbl_photos.is_vault', 0)
                             ->orderBy('added_at', 'DESC')
                             ->get()->getRowArray();
                 $album['thumbnail'] = $photo['thumbnail_path'] ?? null;
@@ -61,10 +63,12 @@ class AlbumModel extends Model
                 $total = $db->table('tbl_album_photos')
                     ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
                     ->where('tbl_album_photos.album_id', $album['id'])
+                    ->where('tbl_photos.is_vault', 0)
                     ->countAllResults();
                 $videos = $db->table('tbl_album_photos')
                     ->join('tbl_photos', 'tbl_photos.id = tbl_album_photos.photo_id')
                     ->where('tbl_album_photos.album_id', $album['id'])
+                    ->where('tbl_photos.is_vault', 0)
                     ->where('tbl_photos.mime_type LIKE', 'video/%')
                     ->countAllResults();
                 $album['photo_count'] = (string) ($total - $videos);

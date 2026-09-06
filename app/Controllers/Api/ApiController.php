@@ -55,7 +55,8 @@ class ApiController extends BaseController
 
             $q = trim($this->request->getGet('q') ?? '');
             $query = $photoModel->where('user_id', $userId)
-                                ->where('is_archived', false);
+                                ->where('is_archived', false)
+                                ->where('is_vault', 0);
 
             if ($q !== '') {
                 $db = \Config\Database::connect();
@@ -90,7 +91,8 @@ class ApiController extends BaseController
                     $faceQuery = $db->table('tbl_face_encodings fe')
                         ->select('fe.photo_id')
                         ->join('tbl_photos p', 'p.id = fe.photo_id')
-                        ->where('p.user_id', $userId);
+                        ->where('p.user_id', $userId)
+                        ->where('p.is_vault', 0);
 
                     $faceQuery->groupStart();
                     foreach ($emotionTerms as $term) {
@@ -270,7 +272,7 @@ class ApiController extends BaseController
             if (! empty($album['is_smart'])) {
                 $rules      = \App\Libraries\SmartAlbumRules::fromJson($album['smart_rules'] ?? null);
                 $photoModel = new \App\Models\PhotoModel();
-                $photoModel->where('user_id', $userId);
+                $photoModel->where('user_id', $userId)->where('is_vault', 0);
                 \App\Libraries\SmartAlbumRules::apply($photoModel, $rules);
                 $photos = $photoModel->orderBy('taken_at', 'DESC')->findAll();
             } else {
@@ -281,6 +283,7 @@ class ApiController extends BaseController
                     ->where('tbl_album_photos.album_id', $albumId)
                     ->where('tbl_photos.user_id', $userId)
                     ->where('tbl_photos.is_archived', false)
+                    ->where('tbl_photos.is_vault', 0)
                     ->orderBy('tbl_photos.taken_at', 'DESC')
                     ->get()->getResultArray();
             }
@@ -434,7 +437,7 @@ class ApiController extends BaseController
                 return $this->response->setJSON(['status' => 'error', 'message' => 'User not authenticated'])->setStatusCode(401);
             }
 
-            $query = $photoModel->where('user_id', $userId);
+            $query = $photoModel->where('user_id', $userId)->where('is_vault', 0);
 
             if ($field === 'memories') {
                 $today        = date('m-d');
@@ -446,6 +449,7 @@ class ApiController extends BaseController
                 $builder = (new \App\Models\PhotoModel())
                     ->where('user_id', $userId)
                     ->where('is_archived', false)
+                    ->where('is_vault', 0)
                     ->where("DATE_FORMAT(taken_at, '%m-%d') =", $today)
                     ->where('YEAR(taken_at) <', $thisYear);
 
@@ -456,6 +460,7 @@ class ApiController extends BaseController
                     $builder2 = (new \App\Models\PhotoModel())
                         ->where('user_id', $userId)
                         ->where('is_archived', false)
+                        ->where('is_vault', 0)
                         ->where("DATE_FORMAT(taken_at, '%m-%d') >=", $threeDaysAgo)
                         ->where("DATE_FORMAT(taken_at, '%m-%d') <=", $threeDaysFut)
                         ->where('YEAR(taken_at) <', $thisYear);
@@ -466,6 +471,7 @@ class ApiController extends BaseController
                         // Tier 3: Same month in previous years
                         $month = date('m');
                         $query->where('is_archived', false)
+                              ->where('is_vault', 0)
                               ->where("DATE_FORMAT(taken_at, '%m') =", $month)
                               ->where('YEAR(taken_at) <', $thisYear)
                               ->orderBy('is_favorite', 'DESC')

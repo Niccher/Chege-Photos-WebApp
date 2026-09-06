@@ -58,6 +58,7 @@ class Faces extends BaseController
         $unassignedCount = (int) $db->table('tbl_face_encodings fe')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
+            ->where('p.is_vault', 0)
             ->where('fe.person_id IS NULL')
             ->countAllResults();
 
@@ -68,6 +69,7 @@ class Faces extends BaseController
                 ->select('fe.person_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, p.path, p.thumbnail_path, p.width, p.height')
                 ->join('tbl_photos p', 'p.id = fe.photo_id')
                 ->whereIn('fe.person_id', $personIds)
+                ->where('p.is_vault', 0)
                 ->orderBy('fe.id', 'ASC')
                 ->get()
                 ->getResultArray();
@@ -111,6 +113,7 @@ class Faces extends BaseController
             ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, fe.detection_score, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
+            ->where('p.is_vault', 0)
             ->where('fe.person_id IS NULL')
             ->orderBy('fe.id', 'DESC')
             ->limit(48)
@@ -168,6 +171,7 @@ class Faces extends BaseController
             $photos = $photoModel->whereIn('id', $photoIds)
                 ->where('user_id', auth()->id())
                 ->where('is_archived', false)
+                ->where('is_vault', 0)
                 ->orderBy('taken_at', 'DESC')
                 ->findAll();
         }
@@ -185,7 +189,7 @@ class Faces extends BaseController
     public function photo(int $photoId)
     {
         $photoModel = new \App\Models\PhotoModel();
-        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        $photo = $photoModel->where('user_id', auth()->id())->where('is_vault', 0)->find($photoId);
         if (!$photo) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
@@ -210,6 +214,7 @@ class Faces extends BaseController
                 $personPhotos = $photoModel->whereIn('id', $allPhotoIds)
                     ->where('user_id', auth()->id())
                     ->where('is_archived', false)
+                    ->where('is_vault', 0)
                     ->orderBy('taken_at', 'DESC')
                     ->findAll();
                 foreach ($personPhotos as $idx => $p) {
@@ -241,7 +246,7 @@ class Faces extends BaseController
     public function apiFaces(int $photoId): ResponseInterface
     {
         $photoModel = new \App\Models\PhotoModel();
-        $photo = $photoModel->where('user_id', auth()->id())->find($photoId);
+        $photo = $photoModel->where('user_id', auth()->id())->where('is_vault', 0)->find($photoId);
         if (!$photo) {
             return $this->response->setJSON(['status' => 'error', 'message' => 'Photo not found'])->setStatusCode(404);
         }
@@ -297,7 +302,7 @@ class Faces extends BaseController
                 $thumb = null;
                 $firstFace = $faceModel->where('person_id', $p['id'])->orderBy('id', 'ASC')->first();
                 if ($firstFace) {
-                    $photo = $photoModel->find($firstFace['photo_id']);
+                    $photo = $photoModel->where('is_vault', 0)->find($firstFace['photo_id']);
                     if ($photo) {
                         $thumb = [
                             'path' => $photo['path'],
@@ -337,6 +342,7 @@ class Faces extends BaseController
             ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, fe.detection_score, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
+            ->where('p.is_vault', 0)
             ->where('fe.person_id IS NULL')
             ->orderBy('fe.id', 'DESC')
             ->limit(100)
@@ -382,6 +388,7 @@ class Faces extends BaseController
             $photos = $photoModel->whereIn('id', $photoIds)
                 ->where('user_id', auth()->id())
                 ->where('is_archived', false)
+                ->where('is_vault', 0)
                 ->orderBy('taken_at', 'DESC')
                 ->findAll();
         }
@@ -633,6 +640,7 @@ class Faces extends BaseController
                     ->join('tbl_face_encodings fe', 'fe.person_id = p.id')
                     ->join('tbl_photos ph', 'ph.id = fe.photo_id')
                     ->where('ph.user_id', $userId)
+                    ->where('ph.is_vault', 0)
                     ->where('LOWER(p.name)', strtolower($personName))
                     ->get()->getRowArray();
 
@@ -730,6 +738,7 @@ class Faces extends BaseController
             ->select('fe.id')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
+            ->where('p.is_vault', 0)
             ->whereIn('fe.id', array_map('intval', $faceIds))
             ->get()->getResultArray();
         $validFaceIds = array_column($ownedFaces, 'id');

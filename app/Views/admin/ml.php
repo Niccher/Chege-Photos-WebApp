@@ -67,6 +67,53 @@
                         <span class="text-muted small">Object &amp; Scene Tagging Confidence: Minimum certainty required to auto-assign searchable COCO labels (vehicles, animals, food, nature, electronics) during upload.</span>
                     </div>
 
+                    <!-- Sensitive Content & Moderation (NSFW) Section -->
+                    <div class="p-3 mb-4 rounded border" style="border-color: var(--border-color) !important; background: rgba(0,0,0,0.02);">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <div>
+                                <h6 class="fw-bold mb-0 text-dark">
+                                    <i class="bi bi-shield-lock-fill text-warning me-1"></i> Sensitive Content &amp; Moderation (NSFW)
+                                </h6>
+                                <span class="text-muted small">Computer vision moderation for intimate photo detection and automatic Private Locked Vault isolation.</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1 fw-bold" id="btnTriggerNsfwSweep">
+                                <i class="bi bi-shield-check me-1"></i> Scan Existing Photos
+                            </button>
+                        </div>
+
+                        <!-- NSFW Model Pack Selector -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold d-block">NSFW Detection Model</label>
+                            <select name="nsfwModel" id="selectNsfwModel" class="form-select bg-light border-0 py-2">
+                                <option value="opennsfw2" <?= ($settings['nsfwModel'] ?? 'opennsfw2') === 'opennsfw2' ? 'selected' : '' ?>>opennsfw2 (Default • Ultra-lightweight Yahoo ResNet-50, ~6MB weights, <50MB RAM, CPU-optimized)</option>
+                                <option value="falconsai" <?= ($settings['nsfwModel'] ?? '') === 'falconsai' ? 'selected' : '' ?>>Falconsai/nsfw_image_detection (HuggingFace Vision Transformer ViT, ~300MB weights, high precision)</option>
+                                <option value="nudenet" <?= ($settings['nsfwModel'] ?? '') === 'nudenet' ? 'selected' : '' ?>>NudeNet (Anatomical part detector, ~150MB weights, detects exposed body parts)</option>
+                            </select>
+                            <span class="text-muted small">Hot-swappable at runtime: Changing the active model automatically evicts previous weights from RAM and loads the selected architecture.</span>
+                        </div>
+
+                        <!-- Sensitivity Threshold Slider -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small fw-bold mb-0">Sensitivity Confidence Threshold</label>
+                                <span class="badge bg-warning text-dark rounded-pill" id="nsfwThreshValue"><?= number_format((float)($settings['nsfwThreshold'] ?? 0.70), 2) ?></span>
+                            </div>
+                            <input type="range" class="form-range" name="nsfwThreshold" min="0.10" max="1.00" step="0.05" value="<?= esc($settings['nsfwThreshold'] ?? 0.70) ?>" id="nsfwThreshSlider">
+                            <span class="text-muted small">Confidence Threshold: Photos scored at or above this threshold are classified as sensitive. Recommended: <strong>0.70</strong>. Lowering below 0.50 may flag swimwear, costumes, or artistic sculpture.</span>
+                        </div>
+
+                        <!-- Auto-Vault Toggle -->
+                        <div class="mb-1">
+                            <div class="form-check form-switch p-0 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <label class="form-label small fw-bold mb-0 d-block">Automatic Vault Quarantine</label>
+                                    <span class="text-muted small">When flagged as sensitive, immediately isolate the photo into the user's Private Locked Vault, revoking shares and hiding it from public views, albums, and facial recognition.</span>
+                                </div>
+                                <input class="form-check-input ms-0 fs-4" type="checkbox" name="autoVaultNsfw" value="1" <?= (!empty($settings['autoVaultNsfw'])) ? 'checked' : '' ?>>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- HDBSCAN Section with Auto-Tuner & Advisory -->
                     <div class="p-3 mb-4 rounded border" style="border-color: var(--border-color) !important; background: rgba(0,0,0,0.02);">
                         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -240,12 +287,20 @@
                             <span class="badge bg-danger text-white rounded-pill px-3 py-1">UNLOADED</span>
                         <?php endif; ?>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2" style="border-color: var(--border-color) !important;">
                         <span class="text-muted">YOLOv8 ONNX Model:</span>
                         <?php if ($mlHealth['yolo']): ?>
                             <span class="badge bg-success text-white rounded-pill px-3 py-1">LOADED</span>
                         <?php else: ?>
                             <span class="badge bg-danger text-white rounded-pill px-3 py-1">UNLOADED</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center" style="border-color: var(--border-color) !important;">
+                        <span class="text-muted">NSFW Detector Model:</span>
+                        <?php if (!empty($mlHealth['nsfw'])): ?>
+                            <span class="badge bg-success text-white rounded-pill px-3 py-1">LOADED</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary text-white rounded-pill px-3 py-1">ON DEMAND</span>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -348,6 +403,26 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Rescan Sensitive Media (NSFW) -->
+                    <div class="border rounded p-3" style="border-color: var(--border-color) !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold">Sensitive Media (NSFW)</span>
+                            <span class="badge bg-warning text-dark rounded-pill" id="badgeScannedNsfw"><?= esc($mlStats['scanned_nsfw'] ?? 0) ?> / <?= esc($mlStats['total_photos']) ?></span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 extra-small text-muted">
+                            <span><i class="bi bi-shield-exclamation text-danger me-1"></i><?= esc($mlStats['nsfw_photos'] ?? 0) ?> Flagged</span>
+                            <span><i class="bi bi-lock-fill text-warning me-1"></i><?= esc($mlStats['vault_photos'] ?? 0) ?> In Vault</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-warning btn-sm rounded-pill w-50 btn-rescan text-dark fw-semibold" data-type="nsfw" data-mode="missing">
+                                <i class="bi bi-play-fill me-1"></i> Missing Only
+                            </button>
+                            <button class="btn btn-danger btn-sm rounded-pill w-50 btn-rescan" data-type="nsfw" data-mode="all">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Force All
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -359,7 +434,8 @@
                     <p class="mb-2"><strong>Face Extractor:</strong> RetinaFace running Mobilenet0.25 framework for landmarks estimation.</p>
                     <p class="mb-2"><strong>Vector Space DB:</strong> Qdrant vector engine indexes alignments utilizing HNSW (Hierarchical Navigable Small World) metrics for real-time cosine-similarity searches.</p>
                     <p class="mb-2"><strong>Object Detector (YOLOv8):</strong> YOLOv8n (Nano) ONNX model running inside OpenCV DNN to classify images into 80 COCO objects with user-defined confidence thresholds.</p>
-                    <p class="mb-0"><strong>Semantic Search (CLIP):</strong> Contrastive Language-Image Pre-training (ViT-B/32) multimodal transformer generates 512-dimensional vector projections to power natural-language queries.</p>
+                    <p class="mb-2"><strong>Semantic Search (CLIP):</strong> Contrastive Language-Image Pre-training (ViT-B/32) multimodal transformer generates 512-dimensional vector projections to power natural-language queries.</p>
+                    <p class="mb-0"><strong>Sensitive Media Moderation (NSFW):</strong> Specialized computer vision moderation (opennsfw2 ResNet-50 / Falconsai ViT / NudeNet) assigning intimate probability scores and quarantining flagged photos into the Private Locked Vault.</p>
                 </div>
             </div>
         </div>
@@ -764,6 +840,36 @@
             $('#objThreshValue').text($(this).val());
         });
 
+        $('#nsfwThreshSlider').on('input', function() {
+            $('#nsfwThreshValue').text(parseFloat($(this).val()).toFixed(2));
+        });
+
+        // Trigger NSFW Background Sweep
+        $('#btnTriggerNsfwSweep').on('click', function() {
+            var btn = $(this);
+            var originalHtml = btn.html();
+            promptConfirmation(
+                "Scan Existing Photos for Sensitive Content?",
+                "This will dispatch a background sweep to scan all photos for sensitive/intimate media and isolate flagged items into the Private Locked Vault.",
+                function() {
+                    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span> Queuing...');
+                    $.post(BASE_URL + 'admin/ml/scan-nsfw', function(res) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        if (res.status === 'success') {
+                            showToast(res.message, 'success');
+                            startStatsPolling();
+                        } else {
+                            showToast(res.message, 'danger');
+                        }
+                    }).fail(function(xhr) {
+                        btn.prop('disabled', false).html(originalHtml);
+                        var err = xhr.responseJSON ? xhr.responseJSON.message : 'HTTP error ' + xhr.status;
+                        showToast('Failed to dispatch scan sweep: ' + err, 'danger');
+                    });
+                }
+            );
+        });
+
         // Save ML Parameters
         $('#formAdminMl').on('submit', function(e) {
             e.preventDefault();
@@ -1015,8 +1121,9 @@
             var scannedFaces = parseInt(stats.scanned_faces) || 0;
             var scannedTags = parseInt(stats.scanned_tags) || 0;
             var scannedClips = parseInt(stats.scanned_clips) || 0;
-            var totalOps = total * 3;
-            var completedOps = scannedFaces + scannedTags + scannedClips;
+            var scannedNsfw = parseInt(stats.scanned_nsfw) || 0;
+            var totalOps = total * 4;
+            var completedOps = scannedFaces + scannedTags + scannedClips + scannedNsfw;
             var remainingOps = Math.max(0, totalOps - completedOps);
             var pct = totalOps > 0 ? Math.min(100, Math.round((completedOps / totalOps) * 100)) : 100;
 
@@ -1069,6 +1176,9 @@
                         $('#badgeScannedFaces').text(stats.scanned_faces + ' / ' + stats.total_photos);
                         $('#badgeScannedTags').text(stats.scanned_tags + ' / ' + stats.total_photos);
                         $('#badgeScannedClips').text(stats.scanned_clips + ' / ' + stats.total_photos);
+                        if (stats.scanned_nsfw !== undefined) {
+                            $('#badgeScannedNsfw').text(stats.scanned_nsfw + ' / ' + stats.total_photos);
+                        }
                         
                         // Update Operational Badges
                         $('#badgeUnassignedFaces').text('Unassigned Faces: ' + stats.unassigned);
@@ -1083,8 +1193,9 @@
                         var facesDone = parseInt(stats.scanned_faces) >= total;
                         var tagsDone = parseInt(stats.scanned_tags) >= total;
                         var clipsDone = parseInt(stats.scanned_clips) >= total;
+                        var nsfwDone = (stats.scanned_nsfw !== undefined) ? parseInt(stats.scanned_nsfw) >= total : true;
                         
-                        if (facesDone && tagsDone && clipsDone && !res.is_processing && (res.queue_size || 0) === 0) {
+                        if (facesDone && tagsDone && clipsDone && nsfwDone && !res.is_processing && (res.queue_size || 0) === 0) {
                             clearInterval(pollInterval);
                             pollInterval = null;
                         }
@@ -1098,14 +1209,16 @@
         var initFaces = parseInt('<?= $mlStats['scanned_faces'] ?>') || 0;
         var initTags = parseInt('<?= $mlStats['scanned_tags'] ?>') || 0;
         var initClips = parseInt('<?= $mlStats['scanned_clips'] ?>') || 0;
+        var initNsfw = parseInt('<?= $mlStats['scanned_nsfw'] ?? 0 ?>') || 0;
         updateScanProgressUI({
             total_photos: initTotal,
             scanned_faces: initFaces,
             scanned_tags: initTags,
-            scanned_clips: initClips
+            scanned_clips: initClips,
+            scanned_nsfw: initNsfw
         }, false, 0);
 
-        if (initFaces < initTotal || initTags < initTotal || initClips < initTotal) {
+        if (initFaces < initTotal || initTags < initTotal || initClips < initTotal || initNsfw < initTotal) {
             startStatsPolling();
         }
 

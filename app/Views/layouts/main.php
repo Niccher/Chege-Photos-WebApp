@@ -434,6 +434,11 @@
                         <span class="badge rounded-pill sidebar-count sidebar-count--trash"><?= (int) ($counts['trash'] ?? 0) ?></span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link sidebar-nav-tone sidebar-nav-tone--vault <?= (url_is('vault') || str_starts_with(uri_string() ?? '', 'vault')) ? 'active' : '' ?> d-flex justify-content-between align-items-center" href="<?= base_url('vault') ?>">
+                        <span><i class="bi bi-lock-fill text-warning"></i> Locked Vault</span>
+                    </a>
+                </li>
                 <?php if (auth()->loggedIn() && auth()->user()->inGroup('superadmin')): ?>
                 <!-- ADMINISTRATION SECTION -->
                 <li class="sidebar-section-title">Administration</li>
@@ -494,6 +499,9 @@
             <button class="btn btn-link text-white p-0" id="bulkTrash" title="Move Selected to Trash">
                 <i class="bi bi-recycle fs-5"></i>
             </button>
+            <button class="btn btn-link text-white p-0" id="bulkVault" title="Move Selected to Locked Vault">
+                <i class="bi bi-lock-fill fs-5 text-warning"></i>
+            </button>
             <button class="btn btn-link text-white p-0" id="bulkDownload" title="Download Selected">
                 <i class="bi bi-download fs-5"></i>
             </button>
@@ -539,6 +547,9 @@
                     </button>
                     <button type="button" class="btn btn-link text-white p-2" id="btnArchive" title="Archive/Unarchive">
                         <i class="bi bi-archive fs-5"></i>
+                    </button>
+                    <button type="button" class="btn btn-link text-white p-2" id="btnVault" title="Move to Locked Vault">
+                        <i class="bi bi-lock-fill fs-5 text-warning"></i>
                     </button>
                     <button type="button" class="btn btn-link text-white p-2" id="btnDelete" title="Delete">
                         <i class="bi bi-trash fs-5"></i>

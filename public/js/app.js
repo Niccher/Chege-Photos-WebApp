@@ -725,6 +725,26 @@ $(document).ready(function () {
         });
     });
 
+    $('#btnVault').on('click', function () {
+        if (!currentPhotoId) return;
+        if (!confirm('Move this photo to the Private Locked Vault? It will be hidden from all albums, faces, and searches.')) return;
+
+        const targetPhotoId = currentPhotoId;
+        $.post(BASE_URL + 'vault/move', {
+            photo_ids: [targetPhotoId]
+        }, function (res) {
+            if (res.status === 'success') {
+                $lightboxModal.hide();
+                $(`[data-id="${targetPhotoId}"]`).fadeOut(300, function () { $(this).remove(); });
+            } else {
+                alert(res.message || 'Failed to move photo to vault.');
+            }
+        }).fail(function (xhr) {
+            const err = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred while moving photo to vault.';
+            alert(err);
+        });
+    });
+
     // Favorites Logic
     $('#btnFavorite').on('click', function () {
         if (!currentPhotoId) return;
@@ -1144,6 +1164,24 @@ $(document).ready(function () {
             if (res.status === 'success') {
                 location.reload();
             }
+        });
+    });
+
+    $('#bulkVault').on('click', function () {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`Move ${selectedIds.size} selected photo(s) to the Private Locked Vault? They will be hidden from all public views, albums, faces, and searches.`)) return;
+
+        $.post(BASE_URL + 'vault/move', {
+            photo_ids: Array.from(selectedIds)
+        }, function (res) {
+            if (res.status === 'success') {
+                location.reload();
+            } else {
+                alert(res.message || 'Failed to move photos to vault.');
+            }
+        }).fail(function (xhr) {
+            const err = xhr.responseJSON ? xhr.responseJSON.message : 'An error occurred while moving photos to vault.';
+            alert(err);
         });
     });
 

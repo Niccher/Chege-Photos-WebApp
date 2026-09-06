@@ -192,6 +192,7 @@ class SmartAlbumRules
     public static function apply(Model $photoModel, array $rules): void
     {
         $photoModel->where('is_archived', false);
+        $photoModel->where('is_vault', 0);
 
         if (! empty($rules['date_from'])) {
             $photoModel->where('taken_at >=', $rules['date_from'] . ' 00:00:00');

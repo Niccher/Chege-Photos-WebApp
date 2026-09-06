@@ -76,10 +76,25 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api'], function ($rout
     $routes->post('faces/assign-face',         '\App\Controllers\Faces::apiAssignFaceToPerson', ['filter' => 'tokens:faces:write']);
     $routes->post('faces/update-metadata',     '\App\Controllers\Faces::apiUpdateFaceMetadata', ['filter' => 'tokens:faces:write']);
     $routes->post('faces/bulk-scan',   '\App\Controllers\Faces::apiBulkScan', ['filter' => 'tokens:faces:write']);
+
+    // Mobile Vault endpoints (Token auth)
+    $routes->post('vault/unlock',      '\App\Controllers\Vault::unlock',  ['filter' => 'tokens:photos:read']);
+    $routes->post('vault/move',        '\App\Controllers\Vault::move',    ['filter' => 'tokens:photos:write']);
+    $routes->post('vault/restore',     '\App\Controllers\Vault::restore', ['filter' => 'tokens:photos:write']);
 });
 
 // All app routes require an authenticated session or token
 $routes->group('', ['filter' => 'chain'], function ($routes) {
+    // Private Locked Vault routes
+    $routes->get('vault', 'Vault::index');
+    $routes->post('vault/setup-pin', 'Vault::setupPin');
+    $routes->post('vault/unlock', 'Vault::unlock');
+    $routes->post('vault/lock', 'Vault::lock');
+    $routes->post('vault/move', 'Vault::move');
+    $routes->post('vault/restore', 'Vault::restore');
+    $routes->post('vault/delete', 'Vault::delete');
+    $routes->get('vault/media/(:num)', 'Vault::media/$1');
+
     $routes->get('photos', 'Photos::index');
     $routes->get('backfill-exif', 'Photos::backfillExif');
     $routes->get('faces',          'Faces::index');
@@ -211,6 +226,7 @@ $routes->group('admin', ['filter' => 'group:superadmin'], function ($routes) {
     $routes->get('ml/diagnostics',      'Admin::mlDiagnostics');
     $routes->post('ml/reap-stale',      'Admin::reapStaleScans');
     $routes->post('ml/retry-failed',    'Admin::retryFailedScans');
+    $routes->post('ml/scan-nsfw',       'Admin::triggerNsfwScan');
 
     // Storage Configs
     $routes->get('storage', 'Admin::storage');

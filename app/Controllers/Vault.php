@@ -1,0 +1,400 @@
+<?php
+
+namespace App\Controllers;
+
+use App\Models\PhotoModel;
+use App\Models\UserModel;
+use CodeIgniter\HTTP\ResponseInterface;
+
+class Vault extends BaseController
+{
+    private function isVaultUnlocked(): bool
+    {
+        $unlockedUntil = (int) (session()->get('vault_unlocked_until') ?? 0);
+        return $unlockedUntil > time();
+    }
+
+    public function index()
+    {
+        if (! auth()->loggedIn()) {
+            return redirect()->to(url_to('login'));
+        }
+
+        $user = auth()->user();
+        $db   = \Config\Database::connect();
+        $usersTable = $db->tableExists('users') ? 'users' : 'tbl_users';
+
+        // Fetch fresh user record for PIN and lockout state
+        $userRow = $db->table($usersTable)->where('id', $user->id)->get()->getRowArray();
+        $hasPin  = ! empty($userRow['vault_pin_hash']);
+
+        // Check lockout
+        $isLockedOut = false;
+        $lockoutRemaining = 0;
+        if (! empty($userRow['vault_locked_until'])) {
+            $lockoutTs = strtotime($userRow['vault_locked_until']);
+            if ($lockoutTs > time()) {
+                $isLockedOut = true;
+                $lockoutRemaining = $lockoutTs - time();
+            }
+        }
+
+        $isUnlocked = $this->isVaultUnlocked() && ! $isLockedOut;
+        $unlockedRemaining = $isUnlocked ? max(0, ((int) session()->get('vault_unlocked_until')) - time()) : 0;
+
+        $photoModel = new PhotoModel();
+        $photos     = [];
+        $stats      = [
+            'total'   => 0,
+            'nsfw'    => 0,
+            'manual'  => 0,
+            'storage' => '0 B',
+        ];
+
+        $currentTab = $this->request->getGet('tab') ?? 'all';
+        if (! in_array($currentTab, ['all', 'nsfw', 'manual'], true)) {
+            $currentTab = 'all';
+        }
+
+        if ($isUnlocked) {
+            // Compute counts
+            $baseQuery = $photoModel->where('user_id', $user->id)->where('is_vault', 1);
+            $totalCount = (clone $baseQuery)->countAllResults();
+            $nsfwCount  = (clone $baseQuery)->where('is_nsfw', 1)->countAllResults();
+            $manualCount = max(0, $totalCount - $nsfwCount);
+            $totalBytes = (clone $baseQuery)->selectSum('size')->first()['size'] ?? 0;
+
+            $stats = [
+                'total'   => $totalCount,
+                'nsfw'    => $nsfwCount,
+                'manual'  => $manualCount,
+                'storage' => $this->formatBytes($totalBytes),
+            ];
+
+            // Filtered photo list
+            $listQuery = $photoModel->where('user_id', $user->id)->where('is_vault', 1);
+            if ($currentTab === 'nsfw') {
+                $listQuery->where('is_nsfw', 1);
+            } elseif ($currentTab === 'manual') {
+                $listQuery->where('is_nsfw', 0);
+            }
+
+            $photos = $listQuery->orderBy('vault_locked_at', 'DESC')
+                                ->orderBy('taken_at', 'DESC')
+                                ->findAll();
+
+            // Decorate URLs to use protected vault streaming proxy
+            foreach ($photos as &$p) {
+                $p['thumb_url'] = base_url("vault/media/{$p['id']}?type=thumb");
+                $p['full_url']  = base_url("vault/media/{$p['id']}?type=full");
+            }
+            unset($p);
+        }
+
+        $data = [
+            'hasPin'             => $hasPin,
+            'isUnlocked'         => $isUnlocked,
+            'isLockedOut'        => $isLockedOut,
+            'lockoutRemaining'   => $lockoutRemaining,
+            'unlockedRemaining'  => $unlockedRemaining,
+            'photos'             => $photos,
+            'stats'              => $stats,
+            'currentTab'         => $currentTab,
+            'counts'             => $this->getSidebarCounts(),
+        ];
+
+        return view('photos/vault', $data);
+    }
+
+    public function setupPin()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $pin = trim($this->request->getPost('pin') ?? '');
+        if (! preg_match('/^[0-9]{4,8}$/', $pin)) {
+            return $this->response->setJSON([
+                'status'  => 'error',
+                'message' => 'PIN must be between 4 and 8 numeric digits.',
+            ])->setStatusCode(400);
+        }
+
+        $userId = auth()->id();
+        $db     = \Config\Database::connect();
+        $table  = $db->tableExists('users') ? 'users' : 'tbl_users';
+
+        $db->table($table)->where('id', $userId)->update([
+            'vault_pin_hash'        => password_hash($pin, PASSWORD_DEFAULT),
+            'vault_failed_attempts' => 0,
+            'vault_locked_until'    => null,
+        ]);
+
+        // Auto-unlock vault upon creation for 5 minutes
+        session()->set('vault_unlocked_until', time() + 300);
+
+        return $this->response->setJSON([
+            'status'   => 'success',
+            'message'  => 'Private Vault PIN configured successfully!',
+            'redirect' => base_url('vault'),
+        ]);
+    }
+
+    public function unlock()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $userId = auth()->id();
+        $user   = auth()->user();
+        $db     = \Config\Database::connect();
+        $table  = $db->tableExists('users') ? 'users' : 'tbl_users';
+        $userRow = $db->table($table)->where('id', $userId)->get()->getRowArray();
+
+        // 1. Check Lockout
+        if (! empty($userRow['vault_locked_until'])) {
+            $lockoutTs = strtotime($userRow['vault_locked_until']);
+            if ($lockoutTs > time()) {
+                $seconds = $lockoutTs - time();
+                return $this->response->setJSON([
+                    'status'  => 'error',
+                    'message' => "Vault is temporarily locked due to too many failed attempts. Try again in {$seconds} seconds.",
+                ])->setStatusCode(429);
+            }
+        }
+
+        $pin      = trim($this->request->getPost('pin') ?? '');
+        $password = trim($this->request->getPost('password') ?? '');
+        $isValid  = false;
+
+        // 2. Validate PIN
+        if ($pin !== '' && ! empty($userRow['vault_pin_hash'])) {
+            if (password_verify($pin, $userRow['vault_pin_hash'])) {
+                $isValid = true;
+            }
+        }
+
+        // 3. Fallback: Validate master account password
+        if (! $isValid && $password !== '') {
+            $auth = service('auth');
+            $authCheck = $auth->check([
+                'email'    => $user->email,
+                'password' => $password,
+            ]);
+            if ($authCheck->isOK()) {
+                $isValid = true;
+            }
+        }
+
+        if ($isValid) {
+            // Reset failure counter
+            $db->table($table)->where('id', $userId)->update([
+                'vault_failed_attempts' => 0,
+                'vault_locked_until'    => null,
+            ]);
+
+            // Set 5-minute unlock timer
+            session()->set('vault_unlocked_until', time() + 300);
+
+            return $this->response->setJSON([
+                'status'   => 'success',
+                'message'  => 'Vault unlocked successfully.',
+                'redirect' => base_url('vault'),
+            ]);
+        }
+
+        // Failed attempt: increment counter
+        $attempts = ((int) ($userRow['vault_failed_attempts'] ?? 0)) + 1;
+        $updates = ['vault_failed_attempts' => $attempts];
+
+        if ($attempts >= 5) {
+            $updates['vault_locked_until'] = date('Y-m-d H:i:s', time() + 900); // 15-minute lock
+            $msg = 'Too many failed attempts. Vault locked for 15 minutes.';
+        } else {
+            $remaining = 5 - $attempts;
+            $msg = "Incorrect PIN or password. {$remaining} attempt(s) remaining before temporary lockout.";
+        }
+
+        $db->table($table)->where('id', $userId)->update($updates);
+
+        return $this->response->setJSON([
+            'status'  => 'error',
+            'message' => $msg,
+        ])->setStatusCode(401);
+    }
+
+    public function lock()
+    {
+        session()->remove('vault_unlocked_until');
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'status'   => 'success',
+                'message'  => 'Vault locked.',
+                'redirect' => base_url('vault'),
+            ]);
+        }
+
+        return redirect()->to(base_url('vault'));
+    }
+
+    public function move()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $userId = auth()->id();
+        $rawIds = $this->request->getPost('photo_ids');
+        $photoIds = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+        $photoIds = array_filter(array_map('intval', $photoIds));
+
+        if (empty($photoIds)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'No photos specified'])->setStatusCode(400);
+        }
+
+        $photoModel = new PhotoModel();
+        $updated = $photoModel->where('user_id', $userId)
+                              ->whereIn('id', $photoIds)
+                              ->set([
+                                  'is_vault'        => 1,
+                                  'vault_locked_at' => date('Y-m-d H:i:s'),
+                              ])
+                              ->update();
+
+        // Privacy Shield: revoke any existing shares and album associations
+        $db = \Config\Database::connect();
+        if ($db->tableExists('tbl_photo_shares')) {
+            $db->table('tbl_photo_shares')->whereIn('photo_id', $photoIds)->delete();
+        }
+        if ($db->tableExists('tbl_album_photos')) {
+            $db->table('tbl_album_photos')->whereIn('photo_id', $photoIds)->delete();
+        }
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Photo(s) safely moved into the Private Locked Vault.',
+            'count'   => count($photoIds),
+        ]);
+    }
+
+    public function restore()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked to restore photos'])->setStatusCode(403);
+        }
+
+        $userId = auth()->id();
+        $rawIds = $this->request->getPost('photo_ids');
+        $photoIds = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+        $photoIds = array_filter(array_map('intval', $photoIds));
+
+        if (empty($photoIds)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'No photos specified'])->setStatusCode(400);
+        }
+
+        $photoModel = new PhotoModel();
+        $photoModel->where('user_id', $userId)
+                   ->whereIn('id', $photoIds)
+                   ->set([
+                       'is_vault'        => 0,
+                       'is_nsfw'         => 0,
+                       'vault_locked_at' => null,
+                   ])
+                   ->update();
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Photo(s) restored back to the main library.',
+            'count'   => count($photoIds),
+        ]);
+    }
+
+    public function delete()
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'Vault must be unlocked to delete photos'])->setStatusCode(403);
+        }
+
+        $userId = auth()->id();
+        $rawIds = $this->request->getPost('photo_ids');
+        $photoIds = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+        $photoIds = array_filter(array_map('intval', $photoIds));
+
+        if (empty($photoIds)) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'No photos selected'])->setStatusCode(400);
+        }
+
+        $photoModel = new PhotoModel();
+        $photos = $photoModel->where('user_id', $userId)->whereIn('id', $photoIds)->findAll();
+
+        foreach ($photos as $p) {
+            // Remove physical files
+            if (! empty($p['path']) && file_exists(FCPATH . $p['path'])) {
+                @unlink(FCPATH . $p['path']);
+            }
+            if (! empty($p['thumbnail_path']) && file_exists(FCPATH . $p['thumbnail_path'])) {
+                @unlink(FCPATH . $p['thumbnail_path']);
+            }
+            $photoModel->delete($p['id'], true); // Hard permanent delete
+        }
+
+        return $this->response->setJSON([
+            'status'  => 'success',
+            'message' => 'Selected photo(s) permanently deleted.',
+        ]);
+    }
+
+    public function media(int $photoId)
+    {
+        if (! auth()->loggedIn()) {
+            return $this->response->setStatusCode(403)->setBody('Forbidden');
+        }
+
+        if (! $this->isVaultUnlocked()) {
+            return $this->response->setStatusCode(403)->setBody('Vault is locked. Please unlock to view media.');
+        }
+
+        $userId = auth()->id();
+        $photoModel = new PhotoModel();
+        $photo = $photoModel->where('id', $photoId)->where('user_id', $userId)->first();
+
+        if (! $photo) {
+            return $this->response->setStatusCode(404)->setBody('Media not found.');
+        }
+
+        $type = $this->request->getGet('type') ?? 'full';
+        $relPath = ($type === 'thumb' && ! empty($photo['thumbnail_path']))
+            ? $photo['thumbnail_path']
+            : $photo['path'];
+
+        $fullPath = FCPATH . ltrim($relPath, '/');
+        if (! file_exists($fullPath)) {
+            // Fallback to original path if thumbnail missing
+            $fullPath = FCPATH . ltrim($photo['path'], '/');
+        }
+
+        if (! file_exists($fullPath)) {
+            return $this->response->setStatusCode(404)->setBody('File not found on storage.');
+        }
+
+        $mime = $photo['mime_type'] ?: mime_content_type($fullPath) ?: 'image/jpeg';
+
+        return $this->response
+            ->setHeader('Content-Type', $mime)
+            ->setHeader('Content-Length', (string) filesize($fullPath))
+            ->setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate')
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('Expires', '0')
+            ->setBody(file_get_contents($fullPath));
+    }
+}
