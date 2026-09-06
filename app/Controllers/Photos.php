@@ -236,7 +236,7 @@ class Photos extends BaseController
 
         // 4. Hub 3: Things & Scenes (Aggregated AI tags from YOLO and objects)
         $tagRows = $db->table('tbl_photo_tags pt')
-            ->select('pt.tag, COUNT(DISTINCT pt.photo_id) as photo_count, MIN(p.id) as sample_photo_id, p.thumbnail_path, p.path')
+            ->select('pt.tag, COUNT(DISTINCT pt.photo_id) as photo_count, MIN(pt.photo_id) as sample_photo_id')
             ->join('tbl_photos p', 'p.id = pt.photo_id')
             ->where('p.user_id', $userId)
             ->where('p.is_archived', false)
@@ -248,13 +248,29 @@ class Photos extends BaseController
             ->get()
             ->getResultArray();
 
+        $samplePhotoIds = array_filter(array_column($tagRows, 'sample_photo_id'));
+        $samplePhotos   = [];
+        if (!empty($samplePhotoIds)) {
+            $photoRows = $photoModel->select('id, path, thumbnail_path')
+                ->whereIn('id', $samplePhotoIds)
+                ->findAll();
+            foreach ($photoRows as $pr) {
+                $samplePhotos[$pr['id']] = $pr;
+            }
+        }
+
         $thingsCategories = [];
         foreach ($tagRows as $tr) {
+            $sample   = $samplePhotos[$tr['sample_photo_id']] ?? null;
+            $coverUrl = null;
+            if ($sample) {
+                $coverUrl = !empty($sample['thumbnail_path']) ? base_url($sample['thumbnail_path']) : base_url($sample['path']);
+            }
             $thingsCategories[] = [
                 'tag'       => $tr['tag'],
                 'name'      => ucfirst(str_replace('_', ' ', $tr['tag'])),
                 'count'     => (int) $tr['photo_count'],
-                'cover_url' => !empty($tr['thumbnail_path']) ? base_url($tr['thumbnail_path']) : base_url($tr['path']),
+                'cover_url' => $coverUrl,
             ];
         }
 
