@@ -119,9 +119,11 @@
                                 </div>
                             <?php endif; ?>
                         </a>
-                        <div class="small fw-medium" style="pointer-events:none;">score: <?= round($face['detection_score'], 2) ?></div>
-                        <?php if ($face['age'] || $face['gender']): ?>
-                            <div class="small text-muted" style="pointer-events:none;"><?= $face['age'] ? '~' . $face['age'] . 'y' : '' ?><?= $face['age'] && $face['gender'] ? ', ' : '' ?><?= $face['gender'] ? ucfirst($face['gender']) : '' ?></div>
+                        <?php if (isset($face['detection_score']) && $face['detection_score'] !== null): ?>
+                            <div class="small fw-medium" style="pointer-events:none;">score: <?= round((float) $face['detection_score'], 2) ?></div>
+                        <?php endif; ?>
+                        <?php if (!empty($face['age']) || !empty($face['gender'])): ?>
+                            <div class="small text-muted" style="pointer-events:none;"><?= !empty($face['age']) ? '~' . $face['age'] . 'y' : '' ?><?= !empty($face['age']) && !empty($face['gender']) ? ', ' : '' ?><?= !empty($face['gender']) ? ucfirst($face['gender']) : '' ?></div>
                         <?php endif; ?>
                     </div>
                 </div>

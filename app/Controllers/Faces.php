@@ -108,7 +108,7 @@ class Faces extends BaseController
 
         // Attach thumbnail data for unassigned faces scoped to user (single JOIN, capped at 48 for fast DOM rendering)
         $unassignedRows = $db->table('tbl_face_encodings fe')
-            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, p.path, p.thumbnail_path, p.width, p.height')
+            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, fe.detection_score, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
@@ -330,7 +330,7 @@ class Faces extends BaseController
 
         $db = \Config\Database::connect();
         $faces = $db->table('tbl_face_encodings fe')
-            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, p.path, p.thumbnail_path, p.width, p.height')
+            ->select('fe.id, fe.photo_id, fe.bbox_x, fe.bbox_y, fe.bbox_w, fe.bbox_h, fe.age, fe.gender, fe.detection_score, p.path, p.thumbnail_path, p.width, p.height')
             ->join('tbl_photos p', 'p.id = fe.photo_id')
             ->where('p.user_id', $userId)
             ->where('fe.person_id IS NULL')
@@ -343,17 +343,20 @@ class Faces extends BaseController
         foreach ($faces as $f) {
             $thumbUrl = !empty($f['thumbnail_path']) ? base_url($f['thumbnail_path']) : base_url($f['path']);
             $result[] = [
-                'face_id'      => (int) $f['id'],
-                'photo_id'     => (int) $f['photo_id'],
-                'photo_path'   => $thumbUrl,
-                'bbox'         => [
+                'face_id'         => (int) $f['id'],
+                'photo_id'        => (int) $f['photo_id'],
+                'photo_path'      => $thumbUrl,
+                'bbox'            => [
                     'x' => (float) $f['bbox_x'],
                     'y' => (float) $f['bbox_y'],
                     'w' => (float) $f['bbox_w'],
                     'h' => (float) $f['bbox_h'],
                 ],
-                'photo_width'  => (float) ($f['width'] ?: 800),
-                'photo_height' => (float) ($f['height'] ?: 600),
+                'detection_score' => isset($f['detection_score']) && $f['detection_score'] !== null ? (float) $f['detection_score'] : null,
+                'age'             => isset($f['age']) && $f['age'] !== null ? (int) $f['age'] : null,
+                'gender'          => $f['gender'] ?? null,
+                'photo_width'     => (float) ($f['width'] ?: 800),
+                'photo_height'    => (float) ($f['height'] ?: 600),
             ];
         }
 
